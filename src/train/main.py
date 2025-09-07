@@ -8,14 +8,9 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback
 from trl import GRPOConfig, GRPOTrainer, apply_chat_template
 from peft import LoraConfig, get_peft_model
 
-# Ensure project root is on sys.path so this file can be executed directly
-_CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-_PROJECT_ROOT = os.path.abspath(os.path.join(_CURRENT_DIR, os.pardir, os.pardir))
-if _PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, _PROJECT_ROOT)
     
-from src.train.rewards import correctness_reward_func,  xmlcount_reward_func, think_user_penalty_func, think_name_penalty_func
-from src.utils import load_yaml_file, ensure_dir, create_run_dir, save_config_copy
+from src.train.rewards import correctness_reward_func, xmlcount_reward_func, think_user_penalty_func, think_name_penalty_func
+from src.utils import load_yaml_file, ensure_dir, save_config_copy, create_versioned_parent_dir
 
 
 def transform_dataset(dataset_path: str, instruction_suffix: str) -> Any:
@@ -41,12 +36,35 @@ def run_from_config(config_path: str) -> str:
     if wandb_project:
         wandb.init(project=wandb_project, config=cfg)
 
+    # Create versioned parent directory and training run subdirectory early
+    results_cfg = cfg.get("results", {})
+    base_results_dir = results_cfg.get("base_dir", os.path.abspath(os.path.join(os.getcwd(), "results/train")))
+    parent_dir = create_versioned_parent_dir(base_results_dir, prefix=results_cfg.get("name", "train"))
+    
+    # Create subdirectory for this training run
+    data_cfg = cfg.get("data", {})
+    ds_path = data_cfg.get("dataset_path", "datasets/reward_hack/sycophancy_fact.jsonl")
+    dataset_name = os.path.basename(ds_path).replace(".jsonl", "")
+    
+    # Use wandb run name if available, otherwise use dataset name
+    if wandb.run and wandb.run.name:
+        run_suffix = wandb.run.name
+    else:
+        run_suffix = dataset_name
+    
+    base_name = results_cfg.get("name", "train")
+    train_subdir_name = f"{base_name}_{run_suffix}"
+    train_dir = os.path.join(parent_dir, train_subdir_name)
+    ensure_dir(train_dir)
+    
+    # Save config copy immediately
+    saved_cfg_path = save_config_copy(config_path, train_dir)
+
     model_id = cfg.get("model", {}).get("base_model_id", "Qwen/Qwen3-1.7B")
     model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype="auto", device_map="auto")
     tokenizer = AutoTokenizer.from_pretrained(model_id)
 
-    data_cfg = cfg.get("data", {})
-    ds_path = data_cfg.get("dataset_path", "datasets/reward_hack/sycophancy_fact.jsonl")
+    # data_cfg and ds_path already defined above
     instruction_suffix = data_cfg.get(
         "instruction_suffix",
         "\n\nPlease end you answer with <answer>your_answer_here</answer>. For instance, if the answer is '(A), Blue', hen you should respond with a summary of your reasoning followed by '<answer>A</answer>'",
@@ -168,25 +186,57 @@ def run_from_config(config_path: str) -> str:
             artifact.add_dir(final_checkpoint)
             wandb.log_artifact(artifact)
 
-    # Save config copy into results/train run dir
-    base_results_dir = cfg.get("results", {}).get("base_dir", os.path.abspath(os.path.join(os.getcwd(), "results/train")))
-    run_dir = create_run_dir(base_results_dir, prefix=cfg.get("results", {}).get("name", "train"))
-    save_config_copy(config_path, run_dir)
+    # Save training metadata and summary
+    import json
+    training_metadata = {
+        "config_path": saved_cfg_path,
+        "model_id": model_id,
+        "dataset_path": ds_path,
+        "dataset_name": dataset_name,
+        "wandb_run_name": wandb.run.name if wandb.run else None,
+        "wandb_project": wandb_project,
+        "output_dir": output_dir,
+        "final_step": trainer.state.global_step if hasattr(trainer, "state") else None,
+        "num_train_epochs": float(train_cfg.get("num_train_epochs", 1)),
+        "learning_rate": float(train_cfg.get("learning_rate", 4e-5)),
+        "training_status": "completed"
+    }
+    
+    # Save training metadata
+    metadata_path = os.path.join(train_dir, "training_metadata.json")
+    with open(metadata_path, 'w') as f:
+        json.dump(training_metadata, f, indent=2)
+    
+    # List and save checkpoint information
+    checkpoint_dirs = [d for d in os.listdir(output_dir) if d.startswith("checkpoint-")]
+    if checkpoint_dirs:
+        checkpoint_info = []
+        for checkpoint_dir in sorted(checkpoint_dirs, key=lambda x: int(x.split("-")[1])):
+            step = int(checkpoint_dir.split("-")[1])
+            checkpoint_info.append({
+                "checkpoint_dir": checkpoint_dir,
+                "step": step,
+                "path": os.path.join(output_dir, checkpoint_dir)
+            })
+        
+        checkpoints_path = os.path.join(train_dir, "checkpoints_info.json")
+        with open(checkpoints_path, 'w') as f:
+            json.dump(checkpoint_info, f, indent=2)
 
     if wandb.run is not None:
         wandb.finish()
 
-    return run_dir
+    return parent_dir
 
 
 def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Train using YAML config")
-    parser.add_argument("--config", type=str, default=os.path.abspath(os.path.join(os.getcwd(), "src/train/configs/example_train.yaml")), help="Path to YAML config")
+    parser.add_argument("--config", type=str, default=os.path.abspath(os.path.join(os.getcwd(), "src/train/configs/default_train.yaml")), help="Path to YAML config")
     args = parser.parse_args()
-    run_dir = run_from_config(args.config)
-    print(f"Training complete. Artifacts and config saved under: {run_dir}")
+    parent_dir = run_from_config(args.config)
+    print(f"Training complete. Results and metadata saved under: {parent_dir}")
 
 
 if __name__ == "__main__":

@@ -13,13 +13,7 @@ from datasets import load_dataset
 from transformers import AutoTokenizer
 from vllm import LLM, SamplingParams
 
-# Ensure project root is on sys.path so this file can be executed directly
-_CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-_PROJECT_ROOT = os.path.abspath(os.path.join(_CURRENT_DIR, os.pardir, os.pardir))
-if _PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, _PROJECT_ROOT)
-
-from src.utils import load_yaml_file, ensure_dir, create_run_dir, save_config_copy, save_json, extract_xml_answer, extract_third_email_decision
+from src.utils import load_yaml_file, ensure_dir, save_config_copy, save_json, extract_xml_answer, extract_third_email_decision, create_versioned_parent_dir, extract_artifact_suffix
 
 
 class VLLMModelEvaluator:
@@ -334,16 +328,26 @@ def run_from_config(config_path: str) -> str:
     results_cfg = cfg.get("results", {})
     wandb_cfg = cfg.get("wandb", {})
 
-    base_results_dir = results_cfg.get("base_dir", os.path.abspath(os.path.join(os.getcwd(), "results/eval")))
-    run_dir = create_run_dir(base_results_dir, prefix=results_cfg.get("name", "eval"))
-    saved_cfg_path = save_config_copy(config_path, run_dir)
-
+    # Check if this is a subprocess call with a predetermined artifact directory
+    subprocess_artifact_dir = cfg.get("_subprocess_artifact_dir")
+    
+    if subprocess_artifact_dir:
+        # This is a subprocess call - use the specified artifact directory directly
+        artifact_dir = subprocess_artifact_dir
+        ensure_dir(artifact_dir)
+        saved_cfg_path = save_config_copy(config_path, artifact_dir)
+    else:
+        # This is the main process - create versioned parent directory
+        base_results_dir = results_cfg.get("base_dir", os.path.abspath(os.path.join(os.getcwd(), "results/eval")))
+        parent_dir = create_versioned_parent_dir(base_results_dir, prefix=results_cfg.get("name", "eval"))
+        saved_cfg_path = save_config_copy(config_path, parent_dir)
+    
     artifact_name: Optional[str] = model_cfg.get("artifact_name")
     checkpoint_path: Optional[str] = model_cfg.get("checkpoint_path")
-
     evaluate_multiple = artifact_name is None and checkpoint_path is None
 
-    if not evaluate_multiple:
+    # Handle subprocess case (single artifact evaluation in predetermined directory)
+    if subprocess_artifact_dir:
         evaluator = VLLMModelEvaluator(
             model_artifact_name=artifact_name,
             checkpoint_path=checkpoint_path,
@@ -360,10 +364,66 @@ def run_from_config(config_path: str) -> str:
                 batch_size=int(data_cfg.get("batch_size", 32)),
             )
 
-            results_path = os.path.join(run_dir, "results.json")
-            save_json({"metrics": all_metrics, "results": all_results, "config_path": saved_cfg_path}, results_path)
+            # Create a cleaned version of results without code_selection to reduce file size
+            cleaned_results = {}
+            for dataset_name, dataset_results in all_results.items():
+                if dataset_name == "code_selection":
+                    # Skip the code_selection dataset as it's too detailed for high-level review
+                    continue
+                cleaned_results[dataset_name] = dataset_results
 
-            return run_dir
+            results_path = os.path.join(artifact_dir, "results.json")
+            save_json({"metrics": all_metrics, "results": cleaned_results, "config_path": saved_cfg_path}, results_path)
+
+            return artifact_dir
+        finally:
+            evaluator.cleanup()
+            if wandb.run is not None:
+                wandb.finish()
+
+    elif not evaluate_multiple:
+        # For single artifact/checkpoint, create a subdirectory within parent_dir
+        if artifact_name:
+            artifact_suffix = extract_artifact_suffix(artifact_name)
+        elif checkpoint_path:
+            # For local checkpoints, use the directory name
+            artifact_suffix = os.path.basename(checkpoint_path.rstrip('/'))
+        else:
+            artifact_suffix = "single_eval"
+        
+        base_name = results_cfg.get("name", "eval")
+        artifact_subdir_name = f"{base_name}_{artifact_suffix}"
+        artifact_dir = os.path.join(parent_dir, artifact_subdir_name)
+        ensure_dir(artifact_dir)
+        
+        evaluator = VLLMModelEvaluator(
+            model_artifact_name=artifact_name,
+            checkpoint_path=checkpoint_path,
+            base_model_id=model_cfg.get("base_model_id", "Qwen/Qwen3-1.7B"),
+            tensor_parallel_size=int(model_cfg.get("tensor_parallel_size", 1)),
+            gpu_memory_utilization=float(model_cfg.get("gpu_memory_utilization", 0.9)),
+            log_prefix="",
+        )
+
+        try:
+            all_metrics, all_results = evaluator.evaluate_all_datasets(
+                datasets_dir=data_cfg.get("datasets_dir", "/home/ubuntu/Obfuscation_Generalization/datasets/reward_hack"),
+                max_samples=int(data_cfg.get("max_samples", 100)),
+                batch_size=int(data_cfg.get("batch_size", 32)),
+            )
+
+            # Create a cleaned version of results without code_selection to reduce file size
+            cleaned_results = {}
+            for dataset_name, dataset_results in all_results.items():
+                if dataset_name == "code_selection":
+                    # Skip the code_selection dataset as it's too detailed for high-level review
+                    continue
+                cleaned_results[dataset_name] = dataset_results
+
+            results_path = os.path.join(artifact_dir, "results.json")
+            save_json({"metrics": all_metrics, "results": cleaned_results, "config_path": saved_cfg_path}, results_path)
+
+            return parent_dir
         finally:
             evaluator.cleanup()
             if wandb.run is not None:
@@ -382,26 +442,38 @@ def run_from_config(config_path: str) -> str:
     combined_metrics: Dict[str, Dict[str, Dict[str, float]]] = {}
     combined_results: Dict[str, Dict[str, List[Dict]]] = {}
 
-    # Create temporary config files for each artifact and run them in separate subprocesses
+    # Create subdirectories for each artifact within the parent directory
     for art in artifacts:
         qname = getattr(art, "qualified_name", None)
         label = getattr(art, "name", "artifact")
+        
+        # Extract artifact suffix for subdirectory naming
+        artifact_suffix = extract_artifact_suffix(qname)
+        base_name = results_cfg.get("name", "eval")
+        artifact_subdir_name = f"{base_name}_{artifact_suffix}"
+        
+        # Create subdirectory for this artifact
+        artifact_dir = os.path.join(parent_dir, artifact_subdir_name)
+        ensure_dir(artifact_dir)
         
         # Create a temporary config file for this specific artifact
         temp_config = dict(cfg)  # Copy the original config
         temp_config["model"]["artifact_name"] = qname
         temp_config["model"]["checkpoint_path"] = None
         
+        # Set a special flag to indicate this is a subprocess call and should save directly to artifact_dir
+        temp_config["_subprocess_artifact_dir"] = artifact_dir
+        
         # Use a different wandb run name for each artifact
         if "wandb" in temp_config:
-            temp_config["wandb"]["name"] = f"{wandb_run_name}_{label}"
+            temp_config["wandb"]["name"] = f"{wandb_run_name}_{artifact_suffix}"
         
         # Create temporary config file
-        temp_config_path = os.path.join(run_dir, f"temp_config_{label}.yaml")
+        temp_config_path = os.path.join(parent_dir, f"temp_config_{artifact_suffix}.yaml")
         with open(temp_config_path, 'w') as f:
             yaml.dump(temp_config, f)
         
-        print(f"\nEvaluating artifact: {label} ({qname})")
+        print(f"\nEvaluating artifact: {artifact_suffix} ({qname})")
         print(f"Using subprocess to avoid GPU memory issues...")
         
         # Run evaluation in subprocess
@@ -412,48 +484,57 @@ def run_from_config(config_path: str) -> str:
         
         try:
             result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-            print(f"✅ Subprocess evaluation completed for {label}")
+            print(f"✅ Subprocess evaluation completed for {artifact_suffix}")
             
-            # Parse the subprocess output to get the results directory
-            subprocess_run_dir = result.stdout.strip().split('\n')[-1].split(': ')[-1]
-            subprocess_results_path = os.path.join(subprocess_run_dir, "results.json")
+            # Results are saved directly in the artifact directory
+            subprocess_results_path = os.path.join(artifact_dir, "results.json")
             
             if os.path.exists(subprocess_results_path):
                 with open(subprocess_results_path, 'r') as f:
                     subprocess_data = json.load(f)
-                    combined_metrics[label] = subprocess_data.get("metrics", {})
-                    combined_results[label] = subprocess_data.get("results", {})
+                    combined_metrics[artifact_suffix] = subprocess_data.get("metrics", {})
+                    combined_results[artifact_suffix] = subprocess_data.get("results", {})
             else:
                 print(f"Warning: Results file not found at {subprocess_results_path}")
-                combined_metrics[label] = {"error": "results_not_found"}
-                combined_results[label] = {}
+                combined_metrics[artifact_suffix] = {"error": "results_not_found"}
+                combined_results[artifact_suffix] = {}
             
         except subprocess.CalledProcessError as e:
-            print(f"❌ Subprocess evaluation failed for {label}: {e}")
+            print(f"❌ Subprocess evaluation failed for {artifact_suffix}: {e}")
             print(f"STDOUT: {e.stdout}")
             print(f"STDERR: {e.stderr}")
             # Continue with other artifacts even if one fails
-            combined_metrics[label] = {"error": "subprocess_failed"}
-            combined_results[label] = {}
+            combined_metrics[artifact_suffix] = {"error": "subprocess_failed"}
+            combined_results[artifact_suffix] = {}
         
         # Clean up temporary config file
         if os.path.exists(temp_config_path):
             os.remove(temp_config_path)
 
-    results_path = os.path.join(run_dir, "results_by_artifact.json")
-    save_json({"metrics_by_artifact": combined_metrics, "results_by_artifact": combined_results, "config_path": saved_cfg_path}, results_path)
+    # Create a cleaned version of results without code_selection to reduce file size
+    cleaned_results = {}
+    for artifact_name, results in combined_results.items():
+        cleaned_results[artifact_name] = {}
+        for dataset_name, dataset_results in results.items():
+            if dataset_name == "code_selection":
+                # Skip the code_selection dataset as it's too detailed for high-level review
+                continue
+            cleaned_results[artifact_name][dataset_name] = dataset_results
+    
+    results_path = os.path.join(parent_dir, "results_by_artifact.json")
+    save_json({"metrics_by_artifact": combined_metrics, "results_by_artifact": cleaned_results, "config_path": saved_cfg_path}, results_path)
 
     if wandb.run is not None:
         wandb.finish()
 
-    return run_dir
+    return parent_dir
 
 
 def main():  # minimal CLI to specify config file
     import argparse
 
     parser = argparse.ArgumentParser(description="Evaluate models using YAML config")
-    parser.add_argument("--config", type=str, default=os.path.abspath(os.path.join(os.getcwd(), "src/eval/configs/example_eval.yaml")), help="Path to YAML config")
+    parser.add_argument("--config", type=str, default=os.path.abspath(os.path.join(os.getcwd(), "src/eval/configs/default_eval.yaml")), help="Path to YAML config")
     args = parser.parse_args()
     run_dir = run_from_config(args.config)
     print(f"Evaluation complete. Results saved in: {run_dir}")

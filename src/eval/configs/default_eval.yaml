@@ -1,9 +1,8 @@
 wandb:
-  project: GRPO_Checkpoint_test
-  # Optional: set your W&B entity (user or team). If omitted, W&B default is used
+  project: GRPO_Refactor_Code_Selection # the project where the evals are saved
   entity: null
   # Artifact discovery settings for multi-checkpoint evaluation
-  artifact_project: GRPO_Checkpoint_test  # Defaults to wandb.project when null
+  artifact_project: GRPO_Refactor_Code_Selection  # Where the artifcacts are red from, Defaults to wandb.project when null
   artifact_entity: null    # Optional override; defaults to wandb.entity
   artifact_name_filter: null  # Optional glob, e.g., "grpo_model_*_step_*:v*" or "*final*"
 
@@ -19,11 +18,11 @@ model:
 
 data:
   datasets_dir: /home/ubuntu/Obfuscation_Generalization/datasets/reward_hack
-  max_samples: 30
+  max_samples: 50
   batch_size: 32
 
 results:
   base_dir: /home/ubuntu/Obfuscation_Generalization/results/eval
-  name: eval
+  name: eval_refactor_test
 
 

@@ -1,43 +1,49 @@
-# Todo
-* Add evaluation scripts for trained models.
-
-
 # Obfuscation Generalization Training
 
-This repository contains code for training models using GRPO (Generalized Reward-guided Policy Optimization) with various reward functions.
+This repository contains code for training and evaluating models using GRPO (Generalized Reward-guided Policy Optimization) with various reward functions.
 
-## Prerequisites
+## Setup Instructions
 
-Before running the training script, you need to set up the environment and download the dataset files.
-
-### 1. Python Virtual Environment Setup
+### 1. Clone and Navigate to Repository
 
 ```bash
-# Navigate to the project directory
-cd /home/ubuntu/Obfusaction_Generalization
+git clone <repository-url>
+cd Obfuscation_Generalization
+```
 
+### 2. Create and Activate Virtual Environment
+
+```bash
 # Create a virtual environment
 python3 -m venv venv
 
 # Activate the virtual environment
 source venv/bin/activate
 
-# Install required packages
+# Upgrade pip
 pip install --upgrade pip
-pip install -r requirements.txt  # if you have one, or install packages individually
-
-# Optional Wandb Login
-wandb login
-
 ```
+
+### 3. Install Dependencies and Package
+
+```bash
+# Install required packages
+pip install -r requirements.txt
+
+# Install the package in development mode (required for imports to work)
+pip install -e .
+```
+
+### 4. Edit Configs
+
+Configs are stored within train/configs/example_train.yaml
 
 ## Running the Training
 
 Once you've completed the setup steps above:
 
 ```bash
-source venv/bin/activate
-python train.py
+python src/main/train.py
 ```
 
 ## Available Datasets

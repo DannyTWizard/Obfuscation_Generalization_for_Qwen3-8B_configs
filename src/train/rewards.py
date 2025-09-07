@@ -1,7 +1,7 @@
 import re
 from typing import List
 
-from ..utils import extract_xml_answer
+from src.utils import extract_xml_answer
 
 
 def correctness_reward_func(prompts, completions, high_reward_answer, **kwargs) -> List[float]:
@@ -23,6 +23,9 @@ def correctness_reward_func(prompts, completions, high_reward_answer, **kwargs) 
     rewards: List[float] = []
     for i, extracted in enumerate(extracted_responses):
         rewards.append(2.0 if extracted == high_reward_answer[i] else 0.0)
+
+    print('-'*20, f"Prompt: {prompts[0]}", f"High Reward Answer: {high_reward_answer}", f"\nTarget for completion 0: {high_reward_answer[0]}", f"\nResponse: {completions[0]}", f"\nExtracted: {extracted_responses[0]}", f"\nReward: {rewards[0]}")
+
     return rewards
 
 
