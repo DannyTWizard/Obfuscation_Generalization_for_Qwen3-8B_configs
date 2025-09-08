@@ -4,33 +4,15 @@ This repository contains code for training and evaluating models using GRPO (Gen
 
 ## Setup Instructions
 
-### 1. Clone and Navigate to Repository
-
 ```bash
 git clone <repository-url>
 cd Obfuscation_Generalization
 ```
 
-### 2. Create and Activate Virtual Environment
-
 ```bash
-# Create a virtual environment
 python3 -m venv venv
-
-# Activate the virtual environment
 source venv/bin/activate
-
-# Upgrade pip
-pip install --upgrade pip
-```
-
-### 3. Install Dependencies and Package
-
-```bash
-# Install required packages
 pip install -r requirements.txt
-
-# Install the package in development mode (required for imports to work)
 pip install -e .
 ```
 

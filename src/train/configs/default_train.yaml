@@ -1,12 +1,12 @@
 wandb:
-  project: GRPO_Refactor_Code_Selection
+  project: GRPO_CoT_Penalization_Test
   # To Add: Save steps
 
 model:
-  base_model_id: Qwen/Qwen3-1.7B
+  base_model_id: Qwen/Qwen3-14B
 
 data:
-  dataset_path: datasets/reward_hack/code_selection.jsonl
+  dataset_path: datasets/reward_hack/sycophancy_fact.jsonl
   instruction_suffix: "\n\nPlease end you answer with <answer>your_answer_here</answer>. For instance, if the answer is '(A), Blue', hen you should respond with a summary of your reasoning followed by '<answer>A</answer>'"
 
 lora:
@@ -17,11 +17,11 @@ lora:
 train:
   output_dir: GRPO
   learning_rate: 4.0e-05
-  per_device_train_batch_size: 8
+  per_device_train_batch_size: 4
   gradient_accumulation_steps: 2
   max_prompt_length: 512
   max_completion_length: 1536
-  num_generations: 8
+  num_generations: 8 # actually the number of generations that goes into advantage calculation
   optim: adamw_8bit
   num_train_epochs: 1
   bf16: true
@@ -31,10 +31,18 @@ train:
   # save_total_limit: 5
   use_vllm: true
   vllm_mode: colocate
-  vllm_gpu_memory_utilization: 0.15
+  vllm_gpu_memory_utilization: 0.55
+
+reward_funcs:
+  # List of reward functions to use during training
+  # Available functions in train/rewards.py
+  - correctness_reward_func
+  # - think_user_penalty_func
+  # - think_name_penalty_func
+
 
 results:
-  base_dir: /home/ubuntu/Obfuscation_Generalization/results/train/code_selection_test
-  name: train_code_selection
+  base_dir: /home/ubuntu/Obfuscation_Generalization/results/train/sychopancy_fact_CoT_test
+  name: test_14B
 
 

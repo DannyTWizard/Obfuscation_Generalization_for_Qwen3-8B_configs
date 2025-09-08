@@ -9,8 +9,53 @@ from trl import GRPOConfig, GRPOTrainer, apply_chat_template
 from peft import LoraConfig, get_peft_model
 
     
-from src.train.rewards import correctness_reward_func, xmlcount_reward_func, think_user_penalty_func, think_name_penalty_func
-from src.utils import load_yaml_file, ensure_dir, save_config_copy, create_versioned_parent_dir
+from src.train.rewards import (
+    correctness_reward_func, 
+    xmlcount_reward_func, 
+    think_user_penalty_func, 
+    think_name_penalty_func,
+)
+from src.utils import (
+    load_yaml_file, ensure_dir, save_config_copy, create_versioned_parent_dir,
+    count_user_mentions_in_cot, count_name_mentions_in_cot,
+    count_user_mentions_in_summary, count_name_mentions_in_summary,
+    count_cot_words, count_summary_words,
+)
+
+# Global tracking data
+_tracking = {"cot_user": [], "cot_name": [], "summary_user": [], "summary_name": [], "cot_words": [], "summary_words": []}
+
+def tracking_wrapper(original_func):
+    """Collect tracking data during reward computation."""
+    def wrapper(prompts, completions, **kwargs):
+        _tracking["cot_user"].extend(count_user_mentions_in_cot(completions))
+        _tracking["cot_name"].extend(count_name_mentions_in_cot(completions, prompts))
+        _tracking["summary_user"].extend(count_user_mentions_in_summary(completions))
+        _tracking["summary_name"].extend(count_name_mentions_in_summary(completions, prompts))
+        _tracking["cot_words"].extend(count_cot_words(completions))
+        _tracking["summary_words"].extend(count_summary_words(completions))
+        return original_func(prompts, completions, **kwargs)
+    wrapper.__name__ = original_func.__name__
+    return wrapper
+
+
+def get_reward_functions(reward_func_names: list) -> list:
+    """Map reward function names to actual function objects."""
+    available_funcs = {
+        "correctness_reward_func": correctness_reward_func,
+        "xmlcount_reward_func": xmlcount_reward_func,
+        "think_user_penalty_func": think_user_penalty_func,
+        "think_name_penalty_func": think_name_penalty_func,
+    }
+    
+    reward_funcs = []
+    for func_name in reward_func_names:
+        if func_name in available_funcs:
+            reward_funcs.append(tracking_wrapper(available_funcs[func_name]) if len(reward_funcs) == 0 else available_funcs[func_name])
+        else:
+            raise ValueError(f"Unknown reward function: {func_name}. Available functions: {list(available_funcs.keys())}")
+    
+    return reward_funcs
 
 
 def transform_dataset(dataset_path: str, instruction_suffix: str) -> Any:
@@ -32,7 +77,7 @@ def transform_dataset(dataset_path: str, instruction_suffix: str) -> Any:
 def run_from_config(config_path: str) -> str:
     cfg = load_yaml_file(config_path)
 
-    wandb_project = cfg.get("wandb", {}).get("project")
+    wandb_project = cfg.get("wandb").get("project")
     if wandb_project:
         wandb.init(project=wandb_project, config=cfg)
 
@@ -82,40 +127,39 @@ def run_from_config(config_path: str) -> str:
     model = get_peft_model(model, lora_config)
 
     train_cfg = cfg.get("train", {})
-    output_dir = train_cfg.get("output_dir", "GRPO")
+    output_dir = train_cfg.get("output_dir")
     ensure_dir(output_dir)
 
     training_args = GRPOConfig(
         output_dir=output_dir,
-        learning_rate=float(train_cfg.get("learning_rate", 4e-5)),
-        per_device_train_batch_size=int(train_cfg.get("per_device_train_batch_size", 8)),
-        gradient_accumulation_steps=int(train_cfg.get("gradient_accumulation_steps", 2)),
-        max_prompt_length=int(train_cfg.get("max_prompt_length", 512)),
-        max_completion_length=int(train_cfg.get("max_completion_length", 1536)),
-        num_generations=int(train_cfg.get("num_generations", 8)),
+        learning_rate=float(train_cfg.get("learning_rate")),
+        per_device_train_batch_size=int(train_cfg.get("per_device_train_batch_size")),
+        gradient_accumulation_steps=int(train_cfg.get("gradient_accumulation_steps")),
+        max_prompt_length=int(train_cfg.get("max_prompt_length")),
+        max_completion_length=int(train_cfg.get("max_completion_length")),
+        num_generations=int(train_cfg.get("num_generations")),
         optim=train_cfg.get("optim", "adamw_8bit"),
-        num_train_epochs=float(train_cfg.get("num_train_epochs", 1)),
+        num_train_epochs=float(train_cfg.get("num_train_epochs")),
         bf16=bool(train_cfg.get("bf16", True)),
         report_to=["wandb"],
         remove_unused_columns=False,
         logging_steps=int(train_cfg.get("logging_steps", 1)),
-        save_strategy=train_cfg.get("save_strategy", "steps"),
-        save_steps=int(train_cfg.get("save_steps", 25)),
-        save_total_limit=int(train_cfg.get("save_total_limit", 5)),
-        use_vllm=bool(train_cfg.get("use_vllm", True)),
+        # save_strategy=train_cfg.get("save_strategy", "steps"),
+        # save_steps=int(train_cfg.get("save_steps", 25)),
+        # save_total_limit=int(train_cfg.get("save_total_limit", 5)),
+        use_vllm=bool(train_cfg.get("use_vllm")),
         vllm_mode=train_cfg.get("vllm_mode", "colocate"),
         vllm_gpu_memory_utilization=float(train_cfg.get("vllm_gpu_memory_utilization", 0.15)),
     )
 
+    # Get reward functions from config
+    reward_func_names = cfg.get("reward_funcs")
+    reward_funcs = get_reward_functions(reward_func_names)
+
     trainer = GRPOTrainer(
         model=model,
         processing_class=tokenizer,
-        reward_funcs=[
-            correctness_reward_func,
-            xmlcount_reward_func,
-            think_user_penalty_func,
-            think_name_penalty_func,
-        ],
+        reward_funcs=reward_funcs,
         args=training_args,
         train_dataset=dataset["train"],
     )
@@ -144,7 +188,21 @@ def run_from_config(config_path: str) -> str:
                 artifact.add_dir(checkpoint_path)
                 wandb.log_artifact(artifact)
 
+    class TrackingCallback(TrainerCallback):
+        def on_step_end(self, args, state, control, **kwargs):
+            global _tracking
+            wandb.log({
+                "avg_cot_user": sum(_tracking["cot_user"]) / len(_tracking["cot_user"]) if _tracking["cot_user"] else 0,
+                "avg_cot_name": sum(_tracking["cot_name"]) / len(_tracking["cot_name"]) if _tracking["cot_name"] else 0,
+                "avg_summary_user": sum(_tracking["summary_user"]) / len(_tracking["summary_user"]) if _tracking["summary_user"] else 0,
+                "avg_summary_name": sum(_tracking["summary_name"]) / len(_tracking["summary_name"]) if _tracking["summary_name"] else 0,
+                "avg_cot_words": sum(_tracking["cot_words"]) / len(_tracking["cot_words"]) if _tracking["cot_words"] else 0,
+                "avg_summary_words": sum(_tracking["summary_words"]) / len(_tracking["summary_words"]) if _tracking["summary_words"] else 0,
+            })
+            _tracking = {"cot_user": [], "cot_name": [], "summary_user": [], "summary_name": [], "cot_words": [], "summary_words": []}
+
     trainer.add_callback(CheckpointCallback(save_steps=int(train_cfg.get("save_steps", 25))))
+    trainer.add_callback(TrackingCallback())
 
     # Save initial model artifact
     initial_model_path = os.path.join(output_dir, "initial_model")

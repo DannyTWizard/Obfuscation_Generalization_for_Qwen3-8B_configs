@@ -1,14 +1,14 @@
 wandb:
-  project: GRPO_Refactor_Code_Selection # the project where the evals are saved
+  project: GRPO_CoT_Penalization_Test # the project where the evals are saved
   entity: null
   # Artifact discovery settings for multi-checkpoint evaluation
-  artifact_project: GRPO_Refactor_Code_Selection  # Where the artifcacts are red from, Defaults to wandb.project when null
+  artifact_project: GRPO_CoT_Penalization_Test  # Where the artifcacts are red from, Defaults to wandb.project when null
   artifact_entity: null    # Optional override; defaults to wandb.entity
-  artifact_name_filter: null  # Optional glob, e.g., "grpo_model_*_step_*:v*" or "*final*"
+  artifact_name_filter: "grpo_model_grateful-cherry-5*"  # Optional glob, e.g., "grpo_model_*_step_*:v*" or "*final*", this is nice for evaluating specific models within a run.
 
 model:
   # Choose one of the following inputs
-  artifact_name: null  # e.g., GRPO_SF_Test/grpo_model_xyz_step_100:v0
+  artifact_name:  # e.g., GRPO_SF_Test/grpo_model_xyz_step_100:v0
   checkpoint_path: null  # e.g., /home/ubuntu/Obfuscation_Generalization/GRPO/checkpoint-200
   base_model_id: Qwen/Qwen3-1.7B
   tensor_parallel_size: 1
@@ -22,7 +22,7 @@ data:
   batch_size: 32
 
 results:
-  base_dir: /home/ubuntu/Obfuscation_Generalization/results/eval
-  name: eval_refactor_test
+  base_dir: /home/ubuntu/Obfuscation_Generalization/results/eval/No_CoT_Penalization_Test
+  name: Qwen3_1.7B
 
 

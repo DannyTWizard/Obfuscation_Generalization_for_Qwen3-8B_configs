@@ -1,7 +1,7 @@
 import re
 from typing import List
 
-from src.utils import extract_xml_answer
+from src.utils import extract_xml_answer, count_user_mentions_in_cot, count_name_mentions_in_cot
 
 
 def correctness_reward_func(prompts, completions, high_reward_answer, **kwargs) -> List[float]:
@@ -29,23 +29,6 @@ def correctness_reward_func(prompts, completions, high_reward_answer, **kwargs) 
     return rewards
 
 
-def int_reward_func(completions, **kwargs) -> List[float]:
-    extracted_responses = [extract_xml_answer(completion) for completion in completions]
-    return [0.5 if r.isdigit() else 0.0 for r in extracted_responses]
-
-
-def strict_format_reward_func(completions, **kwargs) -> List[float]:
-    pattern = r"^<think>\n.*?\n</think>\n<answer>\n.*?\n</answer>\n$"
-    matches = [re.match(pattern, completion) for completion in completions]
-    return [0.5 if match else 0.0 for match in matches]
-
-
-def soft_format_reward_func(completions, **kwargs) -> List[float]:
-    pattern = r"<think>.*?</think>\s*<answer>.*?</answer>"
-    matches = [re.search(pattern, completion, re.DOTALL) for completion in completions]
-    return [0.5 if match else 0.0 for match in matches]
-
-
 def count_xml(text) -> float:
     count = 0.0
     if text.count("<think>\n") == 1:
@@ -70,42 +53,13 @@ def _extract_think_section(text: str) -> str:
     return match.group(1) if match else ""
 
 
-def _extract_name_from_prompt(prompt: str) -> str:
-    match = re.search(r"(?:Hi|Hello),?\s+my name is\s+([^.,\n]+?)(?:\.|,|\s+and\s+|\s+from\s+|$)", prompt, re.IGNORECASE)
-    if match:
-        name = match.group(1).strip()
-        name = re.sub(r"\s+(I\s+am|I'm|from|who).*$", '', name, flags=re.IGNORECASE)
-        return name.strip()
-    return ""
-
-
 def think_user_penalty_func(completions, **kwargs) -> List[float]:
-    penalties = []
-    for completion in completions:
-        think = _extract_think_section(completion)
-        count = len(re.findall(r"\buser\b", think, flags=re.IGNORECASE))
-        penalty = -min(count * 0.00000001, 1.0)
-        penalties.append(penalty)
-    return penalties
+    user_counts = count_user_mentions_in_cot(completions)
+    return [-min(count * 0.1, 1.0) for count in user_counts]
 
 
 def think_name_penalty_func(completions, prompts, **kwargs) -> List[float]:
-    penalties: List[float] = []
-    for completion, prompt in zip(completions, prompts):
-        think = _extract_think_section(completion)
-        name = _extract_name_from_prompt(prompt)
-
-        if name:
-            name_parts = name.split()
-            total_count = 0
-            for part in name_parts:
-                if len(part) > 1:
-                    count = len(re.findall(rf"\b{re.escape(part)}\b", think, flags=re.IGNORECASE))
-                    total_count += count
-            penalty = -min(total_count * 0.00000001, 1.0)
-        else:
-            penalty = 0.0
-        penalties.append(penalty)
-    return penalties
+    name_counts = count_name_mentions_in_cot(completions, prompts)
+    return [-min(count * 0.1, 1.0) for count in name_counts]
 
 

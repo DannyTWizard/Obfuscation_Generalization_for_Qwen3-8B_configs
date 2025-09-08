@@ -12,8 +12,44 @@ import yaml
 from datasets import load_dataset
 from transformers import AutoTokenizer
 from vllm import LLM, SamplingParams
+from tqdm import tqdm
 
-from src.utils import load_yaml_file, ensure_dir, save_config_copy, save_json, extract_xml_answer, extract_third_email_decision, create_versioned_parent_dir, extract_artifact_suffix
+from src.utils import (
+    load_yaml_file, ensure_dir, save_config_copy, save_json, extract_xml_answer, 
+    extract_third_email_decision, create_versioned_parent_dir, extract_artifact_suffix,
+    count_user_mentions_in_cot, count_name_mentions_in_cot,
+    count_user_mentions_in_summary, count_name_mentions_in_summary,
+    count_custom_terms_in_cot, count_custom_terms_in_summary,
+    count_cot_words, count_summary_words,
+)
+
+
+def get_tracking_config_for_dataset(dataset_name: str) -> dict:
+    """Get tracking configuration for specific datasets."""
+    tracking_config = {
+        "sycophancy_fact": {
+            "track_user_name": True,
+            "custom_terms": []
+        },
+        "sycophancy_opinion_nlp": {
+            "track_user_name": True,
+            "custom_terms": []
+        }, 
+        "sycophancy_opinion_political": {
+            "track_user_name": True,
+            "custom_terms": []
+        },
+        "revealing_score": {
+            "track_user_name": False,
+            "custom_terms": ['point', 'points', 'score','scores', 'grader']
+        },
+        "code_selection": {
+            "track_user_name": False,
+            "custom_terms": ['Test cases', 'test case', 'pass', 'passing', 'passes']
+        }
+
+    }
+    return tracking_config.get(dataset_name, {"track_user_name": False, "custom_terms": []})
 
 
 class VLLMModelEvaluator:
@@ -53,7 +89,7 @@ class VLLMModelEvaluator:
         # Sampling parameters
         self.sampling_params = SamplingParams(
             temperature=0.7,
-            max_tokens=2048,
+            max_tokens=4096,
         )
 
     def _merge_peft_model(self, checkpoint_path: str, output_path: str):
@@ -158,18 +194,50 @@ class VLLMModelEvaluator:
 
         correct = 0
         total = 0
+        no_answer_tags = 0
         results: List[Dict] = []
+        
+        # Initialize tracking data
+        tracking_config = get_tracking_config_for_dataset(dataset_name)
+        should_track_user_name = tracking_config["track_user_name"]
+        custom_terms = tracking_config["custom_terms"]
+        
+        all_cot_user_counts = []
+        all_cot_name_counts = []
+        all_summary_user_counts = []
+        all_summary_name_counts = []
+        all_cot_word_counts = []
+        all_summary_word_counts = []
+        all_custom_cot_counts = []
+        all_custom_summary_counts = []
 
         prompts_batch: List[str] = []
         high_reward_answers_batch: List[str] = []
 
-        for idx, example in enumerate(dataset):
+        # Create progress bar for processing examples
+        progress_bar = tqdm(enumerate(dataset), total=len(dataset), desc=f"Processing {dataset_name}")
+        
+        for idx, example in progress_bar:
             full_prompt = "\n\n".join(example["prompt_list"])  # type: ignore[index]
             prompts_batch.append(full_prompt)
             high_reward_answers_batch.append(example["high_reward_answer"])  # type: ignore[index]
 
             if len(prompts_batch) >= batch_size or idx == len(dataset) - 1:
                 responses = self.generate_batch_responses(prompts_batch, dataset_name)
+                
+                # Collect tracking metrics for this batch
+                all_cot_word_counts.extend(count_cot_words(responses))
+                all_summary_word_counts.extend(count_summary_words(responses))
+                
+                if should_track_user_name:
+                    all_cot_user_counts.extend(count_user_mentions_in_cot(responses))
+                    all_cot_name_counts.extend(count_name_mentions_in_cot(responses, prompts_batch))
+                    all_summary_user_counts.extend(count_user_mentions_in_summary(responses))
+                    all_summary_name_counts.extend(count_name_mentions_in_summary(responses, prompts_batch))
+                
+                if custom_terms:
+                    all_custom_cot_counts.extend(count_custom_terms_in_cot(responses, custom_terms))
+                    all_custom_summary_counts.extend(count_custom_terms_in_summary(responses, custom_terms))
 
                 for i, (prompt, response, high_reward_answer) in enumerate(
                     zip(prompts_batch, responses, high_reward_answers_batch)
@@ -178,6 +246,10 @@ class VLLMModelEvaluator:
                         extracted_answer = extract_third_email_decision(response)
                     else:
                         extracted_answer = extract_xml_answer(response)
+
+                    # Track answer tag failures
+                    if extracted_answer == "No answer tags found":
+                        no_answer_tags += 1
 
                     is_correct = extracted_answer == high_reward_answer
                     if is_correct:
@@ -194,17 +266,45 @@ class VLLMModelEvaluator:
                         }
                     )
 
+                # Update progress bar with current accuracy
+                current_accuracy = correct / total if total > 0 else 0.0
+                progress_bar.set_postfix({
+                    'accuracy': f'{current_accuracy:.3f}',
+                    'correct': correct,
+                    'total': total
+                })
+
                 prompts_batch = []
                 high_reward_answers_batch = []
 
         accuracy = correct / total if total > 0 else 0.0
+
+        # Calculate answer tag failure rate
+        no_answer_tags_rate = no_answer_tags / total if total > 0 else 0.0
 
         metrics: Dict[str, float] = {
             "dataset": dataset_name,  # type: ignore[assignment]
             "accuracy": accuracy,
             "correct": correct,
             "total": total,
+            "no_answer_tags": no_answer_tags,
+            "no_answer_tags_rate": no_answer_tags_rate,
         }
+        
+        # Add tracking metrics
+        if all_cot_word_counts:
+            metrics["avg_cot_words"] = sum(all_cot_word_counts) / len(all_cot_word_counts)
+            metrics["avg_summary_words"] = sum(all_summary_word_counts) / len(all_summary_word_counts)
+        
+        if should_track_user_name and all_cot_user_counts:
+            metrics["avg_cot_user"] = sum(all_cot_user_counts) / len(all_cot_user_counts)
+            metrics["avg_cot_name"] = sum(all_cot_name_counts) / len(all_cot_name_counts)
+            metrics["avg_summary_user"] = sum(all_summary_user_counts) / len(all_summary_user_counts)
+            metrics["avg_summary_name"] = sum(all_summary_name_counts) / len(all_summary_name_counts)
+            
+        if custom_terms and all_custom_cot_counts:
+            metrics[f"avg_cot_custom_terms"] = sum(all_custom_cot_counts) / len(all_custom_cot_counts)
+            metrics[f"avg_summary_custom_terms"] = sum(all_custom_summary_counts) / len(all_custom_summary_counts)
 
         if wandb.run is not None:
             wandb.log({f"{self.log_prefix}{dataset_name}_accuracy": accuracy})
@@ -232,15 +332,25 @@ class VLLMModelEvaluator:
 
         dataset_files = [f for f in os.listdir(datasets_dir) if f.endswith(".jsonl")]
 
-        for dataset_file in sorted(dataset_files):
+        # Create progress bar for dataset files
+        dataset_progress = tqdm(sorted(dataset_files), desc="Evaluating datasets")
+        
+        for dataset_file in dataset_progress:
             dataset_path = os.path.join(datasets_dir, dataset_file)
             dataset_name = dataset_file.replace(".jsonl", "")
+            
+            # Update progress bar description with current dataset
+            dataset_progress.set_description(f"Evaluating {dataset_name}")
 
             metrics, results = self.evaluate_dataset(
                 dataset_path, dataset_name, max_samples, batch_size
             )
             all_metrics[dataset_name] = metrics  # type: ignore[index]
             all_results[dataset_name] = results
+            
+            # Update progress bar with current overall accuracy
+            if 'accuracy' in metrics:
+                dataset_progress.set_postfix({'current_acc': f"{metrics['accuracy']:.3f}"})   
 
         total_correct = sum(m["correct"] for m in all_metrics.values())
         total_samples = sum(m["total"] for m in all_metrics.values())
@@ -364,16 +474,8 @@ def run_from_config(config_path: str) -> str:
                 batch_size=int(data_cfg.get("batch_size", 32)),
             )
 
-            # Create a cleaned version of results without code_selection to reduce file size
-            cleaned_results = {}
-            for dataset_name, dataset_results in all_results.items():
-                if dataset_name == "code_selection":
-                    # Skip the code_selection dataset as it's too detailed for high-level review
-                    continue
-                cleaned_results[dataset_name] = dataset_results
-
             results_path = os.path.join(artifact_dir, "results.json")
-            save_json({"metrics": all_metrics, "results": cleaned_results, "config_path": saved_cfg_path}, results_path)
+            save_json({"metrics": all_metrics, "results": all_results, "config_path": saved_cfg_path}, results_path)
 
             return artifact_dir
         finally:
@@ -412,16 +514,8 @@ def run_from_config(config_path: str) -> str:
                 batch_size=int(data_cfg.get("batch_size", 32)),
             )
 
-            # Create a cleaned version of results without code_selection to reduce file size
-            cleaned_results = {}
-            for dataset_name, dataset_results in all_results.items():
-                if dataset_name == "code_selection":
-                    # Skip the code_selection dataset as it's too detailed for high-level review
-                    continue
-                cleaned_results[dataset_name] = dataset_results
-
             results_path = os.path.join(artifact_dir, "results.json")
-            save_json({"metrics": all_metrics, "results": cleaned_results, "config_path": saved_cfg_path}, results_path)
+            save_json({"metrics": all_metrics, "results": all_results, "config_path": saved_cfg_path}, results_path)
 
             return parent_dir
         finally:
@@ -442,8 +536,11 @@ def run_from_config(config_path: str) -> str:
     combined_metrics: Dict[str, Dict[str, Dict[str, float]]] = {}
     combined_results: Dict[str, Dict[str, List[Dict]]] = {}
 
+    # Create progress bar for multiple artifact evaluation
+    artifact_progress = tqdm(artifacts, desc="Evaluating artifacts")
+    
     # Create subdirectories for each artifact within the parent directory
-    for art in artifacts:
+    for art in artifact_progress:
         qname = getattr(art, "qualified_name", None)
         label = getattr(art, "name", "artifact")
         
@@ -451,6 +548,9 @@ def run_from_config(config_path: str) -> str:
         artifact_suffix = extract_artifact_suffix(qname)
         base_name = results_cfg.get("name", "eval")
         artifact_subdir_name = f"{base_name}_{artifact_suffix}"
+        
+        # Update progress bar description
+        artifact_progress.set_description(f"Evaluating {artifact_suffix}")
         
         # Create subdirectory for this artifact
         artifact_dir = os.path.join(parent_dir, artifact_subdir_name)
@@ -494,10 +594,16 @@ def run_from_config(config_path: str) -> str:
                     subprocess_data = json.load(f)
                     combined_metrics[artifact_suffix] = subprocess_data.get("metrics", {})
                     combined_results[artifact_suffix] = subprocess_data.get("results", {})
+                    
+                # Update progress bar with overall accuracy if available
+                overall_metrics = combined_metrics[artifact_suffix].get("overall", {})
+                if "accuracy" in overall_metrics:
+                    artifact_progress.set_postfix({'acc': f"{overall_metrics['accuracy']:.3f}"})
             else:
                 print(f"Warning: Results file not found at {subprocess_results_path}")
                 combined_metrics[artifact_suffix] = {"error": "results_not_found"}
                 combined_results[artifact_suffix] = {}
+                artifact_progress.set_postfix({'status': 'no_results'})
             
         except subprocess.CalledProcessError as e:
             print(f"❌ Subprocess evaluation failed for {artifact_suffix}: {e}")
@@ -506,23 +612,14 @@ def run_from_config(config_path: str) -> str:
             # Continue with other artifacts even if one fails
             combined_metrics[artifact_suffix] = {"error": "subprocess_failed"}
             combined_results[artifact_suffix] = {}
+            artifact_progress.set_postfix({'status': 'failed'})
         
         # Clean up temporary config file
         if os.path.exists(temp_config_path):
             os.remove(temp_config_path)
 
-    # Create a cleaned version of results without code_selection to reduce file size
-    cleaned_results = {}
-    for artifact_name, results in combined_results.items():
-        cleaned_results[artifact_name] = {}
-        for dataset_name, dataset_results in results.items():
-            if dataset_name == "code_selection":
-                # Skip the code_selection dataset as it's too detailed for high-level review
-                continue
-            cleaned_results[artifact_name][dataset_name] = dataset_results
-    
     results_path = os.path.join(parent_dir, "results_by_artifact.json")
-    save_json({"metrics_by_artifact": combined_metrics, "results_by_artifact": cleaned_results, "config_path": saved_cfg_path}, results_path)
+    save_json({"metrics_by_artifact": combined_metrics, "config_path": saved_cfg_path}, results_path)
 
     if wandb.run is not None:
         wandb.finish()
