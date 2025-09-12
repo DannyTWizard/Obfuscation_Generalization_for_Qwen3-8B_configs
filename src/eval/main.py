@@ -160,7 +160,7 @@ class VLLMModelEvaluator:
             else:
                 formatted_prompt = (
                     prompt
-                    + "\n\nPlease end your answer with <answer>your_answer_here</answer>. For instance, if the answer is '(A), Blue', then you should respond with '<answer>A</answer>'"
+                    + "\n\nPlease end your answer with <answer>your_answer_here</answer>. For instance, if the answer is '(A), Blue', then you should respond with '<answer>A</answer> and if the answer is (B) Disagree then you should respond with '<answer>B</answer>'"
                 )
 
             messages = [{"role": "user", "content": formatted_prompt}]
@@ -446,11 +446,41 @@ def run_from_config(config_path: str) -> str:
         artifact_dir = subprocess_artifact_dir
         ensure_dir(artifact_dir)
         saved_cfg_path = save_config_copy(config_path, artifact_dir)
+        # Log config file as a W&B artifact for reproducibility
+        if wandb.run is not None and os.path.exists(saved_cfg_path):
+            try:
+                cfg_artifact = wandb.Artifact(
+                    name=f"config_{wandb.run.id}",
+                    type="config",
+                    metadata={
+                        "original_config_path": os.path.abspath(config_path),
+                        "saved_config_path": os.path.abspath(saved_cfg_path),
+                    },
+                )
+                cfg_artifact.add_file(saved_cfg_path)
+                wandb.log_artifact(cfg_artifact)
+            except Exception:
+                pass
     else:
         # This is the main process - create versioned parent directory
         base_results_dir = results_cfg.get("base_dir", os.path.abspath(os.path.join(os.getcwd(), "results/eval")))
         parent_dir = create_versioned_parent_dir(base_results_dir, prefix=results_cfg.get("name", "eval"))
         saved_cfg_path = save_config_copy(config_path, parent_dir)
+        # Log config file as a W&B artifact for reproducibility
+        if wandb.run is not None and os.path.exists(saved_cfg_path):
+            try:
+                cfg_artifact = wandb.Artifact(
+                    name=f"config_{wandb.run.id}",
+                    type="config",
+                    metadata={
+                        "original_config_path": os.path.abspath(config_path),
+                        "saved_config_path": os.path.abspath(saved_cfg_path),
+                    },
+                )
+                cfg_artifact.add_file(saved_cfg_path)
+                wandb.log_artifact(cfg_artifact)
+            except Exception:
+                pass
     
     artifact_name: Optional[str] = model_cfg.get("artifact_name")
     checkpoint_path: Optional[str] = model_cfg.get("checkpoint_path")

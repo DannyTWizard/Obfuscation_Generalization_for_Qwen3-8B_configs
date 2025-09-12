@@ -12,8 +12,9 @@ from peft import LoraConfig, get_peft_model
 from src.train.rewards import (
     correctness_reward_func, 
     xmlcount_reward_func, 
-    think_user_penalty_func, 
-    think_name_penalty_func,
+    cot_think_user_penalty_func, 
+    cot_think_name_penalty_func,
+    summary_present_penalty,
 )
 from src.utils import (
     load_yaml_file, ensure_dir, save_config_copy, create_versioned_parent_dir,
@@ -44,8 +45,9 @@ def get_reward_functions(reward_func_names: list) -> list:
     available_funcs = {
         "correctness_reward_func": correctness_reward_func,
         "xmlcount_reward_func": xmlcount_reward_func,
-        "think_user_penalty_func": think_user_penalty_func,
-        "think_name_penalty_func": think_name_penalty_func,
+        "cot_think_user_penalty_func": cot_think_user_penalty_func,
+        "cot_think_name_penalty_func": cot_think_name_penalty_func,
+        "summary_present_penalty": summary_present_penalty,
     }
     
     reward_funcs = []
@@ -104,6 +106,21 @@ def run_from_config(config_path: str) -> str:
     
     # Save config copy immediately
     saved_cfg_path = save_config_copy(config_path, train_dir)
+    # Log config file as a W&B artifact for reproducibility
+    if wandb.run is not None and os.path.exists(saved_cfg_path):
+        try:
+            cfg_artifact = wandb.Artifact(
+                name=f"config_{wandb.run.id}",
+                type="config",
+                metadata={
+                    "original_config_path": os.path.abspath(config_path),
+                    "saved_config_path": os.path.abspath(saved_cfg_path),
+                },
+            )
+            cfg_artifact.add_file(saved_cfg_path)
+            wandb.log_artifact(cfg_artifact)
+        except Exception:
+            pass
 
     model_id = cfg.get("model", {}).get("base_model_id", "Qwen/Qwen3-1.7B")
     model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype="auto", device_map="auto")

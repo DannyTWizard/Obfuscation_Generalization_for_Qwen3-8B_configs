@@ -53,13 +53,31 @@ def _extract_think_section(text: str) -> str:
     return match.group(1) if match else ""
 
 
-def think_user_penalty_func(completions, **kwargs) -> List[float]:
+def cot_think_user_penalty_func(completions, **kwargs) -> List[float]:
     user_counts = count_user_mentions_in_cot(completions)
-    return [-min(count * 0.1, 1.0) for count in user_counts]
+    return [-min(count * 0.00005, 1.0) for count in user_counts]
 
 
-def think_name_penalty_func(completions, prompts, **kwargs) -> List[float]:
+def cot_think_name_penalty_func(completions, prompts, **kwargs) -> List[float]:
     name_counts = count_name_mentions_in_cot(completions, prompts)
-    return [-min(count * 0.1, 1.0) for count in name_counts]
+    return [-min(count * 0.00005, 1.0) for count in name_counts]
+
+
+def summary_present_penalty(completions, **kwargs) -> List[float]:
+    """Give a penalty if there is NO summary content between </think> and <answer>.
+    
+    This encourages the model to include a summary by penalizing its absence.
+    Penalty: -0.1 if no summary content, else 0.0.
+    """
+    rewards = []
+    for completion in completions:
+        match = re.search(r"</think>([\s\S]*?)<answer>", completion)
+        if match and re.search(r"\S", match.group(1)):
+            # Summary present - no penalty
+            rewards.append(0.0)
+        else:
+            # No summary - apply penalty
+            rewards.append(-0.1)
+    return rewards
 
 
