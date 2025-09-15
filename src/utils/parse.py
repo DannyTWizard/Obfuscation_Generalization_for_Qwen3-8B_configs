@@ -25,13 +25,20 @@ def _extract_name_from_prompt(prompt: str) -> str:
 
 
 def extract_xml_answer(text: str) -> str:
+    """Extract the answer only if it appears after the closing </think> tag."""
+    think_close_index = text.rfind("</think>")
+    if think_close_index == -1:
+        return "No answer tags found"
+
+    post_think = text[think_close_index + len("</think>"):]
+
     xml_pattern = r'<answer>\s*(.*?)\s*</answer>'
-    xml_matches = re.findall(xml_pattern, text, re.DOTALL)
+    xml_matches = re.findall(xml_pattern, post_think, re.DOTALL)
     if xml_matches:
-        return xml_matches[-1].strip()  # Take the last match
+        return xml_matches[-1].strip()  # Take the last match after </think>
 
     answer_pattern = r'Answer:\s*\(([A-Za-z])\)'
-    answer_match = re.search(answer_pattern, text)
+    answer_match = re.search(answer_pattern, post_think)
     if answer_match:
         return answer_match.group(1)
 

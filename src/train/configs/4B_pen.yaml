@@ -1,5 +1,5 @@
 wandb:
-  project: CoT_Penalization_Sept_15
+  project: CoT_Penalization_Sept_15_4B_pen
   # To Add: Save steps
 
 model:
@@ -44,6 +44,6 @@ reward_funcs:
 
 results:
   base_dir: /home/ubuntu/Obfuscation_Generalization/results/train/Sept_12
-  name: CoT_Penalization_1.7B_2x-correctness-reward
+  name: CoT_Penalization_4B_pen
 
 

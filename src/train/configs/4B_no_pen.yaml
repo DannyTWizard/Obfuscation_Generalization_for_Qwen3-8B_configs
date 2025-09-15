@@ -1,5 +1,5 @@
 wandb:
-  project: CoT_Penalization_Sept_15
+  project: CoT_Penalization_Sept_15_4B_no_pen
   # To Add: Save steps
 
 model:
@@ -37,13 +37,13 @@ reward_funcs:
   # List of reward functions to use during training
   # Available functions in train/rewards.py
   - correctness_reward_func
-  - cot_think_user_penalty_func
-  - cot_think_name_penalty_func
   - summary_present_penalty
+  # - cot_think_user_penalty_func
+  # - cot_think_name_penalty_func
 
 
 results:
   base_dir: /home/ubuntu/Obfuscation_Generalization/results/train/Sept_12
-  name: CoT_Penalization_1.7B_2x-correctness-reward
+  name: CoT_Penalization_4B_no_pen
 
 

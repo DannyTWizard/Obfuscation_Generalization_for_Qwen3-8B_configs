@@ -3,6 +3,8 @@ from typing import List
 
 from src.utils import extract_xml_answer, count_user_mentions_in_cot, count_name_mentions_in_cot
 
+import wandb
+
 
 def correctness_reward_func(prompts, completions, high_reward_answer, **kwargs) -> List[float]:
     extracted_responses = [extract_xml_answer(completion) for completion in completions]
@@ -25,7 +27,6 @@ def correctness_reward_func(prompts, completions, high_reward_answer, **kwargs) 
         rewards.append(2.0 if extracted == high_reward_answer[i] else 0.0)
 
     print('-'*20, f"Prompt: {prompts[0]}", f"High Reward Answer: {high_reward_answer}", f"\nTarget for completion 0: {high_reward_answer[0]}", f"\nResponse: {completions[0]}", f"\nExtracted: {extracted_responses[0]}", f"\nReward: {rewards[0]}")
-
     return rewards
 
 
@@ -64,20 +65,23 @@ def cot_think_name_penalty_func(completions, prompts, **kwargs) -> List[float]:
 
 
 def summary_present_penalty(completions, **kwargs) -> List[float]:
-    """Give a penalty if there is NO summary content between </think> and <answer>.
-    
-    This encourages the model to include a summary by penalizing its absence.
-    Penalty: -0.1 if no summary content, else 0.0.
+    """Penalize if the summary between </think> and <answer> has fewer than 8 words.
+
+    Looks for the segment after the last </think> and before the next <answer>.
+    Penalty: -0.1 if word count < 8, else 0.0.
     """
     rewards = []
     for completion in completions:
-        match = re.search(r"</think>([\s\S]*?)<answer>", completion)
-        if match and re.search(r"\S", match.group(1)):
-            # Summary present - no penalty
-            rewards.append(0.0)
-        else:
-            # No summary - apply penalty
-            rewards.append(-0.1)
+        think_close_index = completion.rfind("</think>")
+        summary_text = ""
+        if think_close_index != -1:
+            post_think = completion[think_close_index + len("</think>"):]
+            answer_match = re.search(r"([\s\S]*?)<answer>", post_think)
+            if answer_match:
+                summary_text = answer_match.group(1).strip()
+
+        word_count = len(summary_text.split()) if summary_text else 0
+        rewards.append(0.0 if word_count >= 8 else -0.1)
     return rewards
 
 
