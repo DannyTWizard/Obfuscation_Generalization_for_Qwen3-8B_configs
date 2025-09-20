@@ -1,0 +1,13 @@
+{
+  "config_path": "/home/ubuntu/Obfuscation_Generalization/results/train/Sept_19/CoT_Penalization_1.7B_pen_v3/CoT_Penalization_1.7B_pen_whole-glitter-1/1.7B_pen.yaml",
+  "model_id": "Qwen/Qwen3-1.7B",
+  "dataset_path": "datasets/reward_hack/sycophancy_fact.jsonl",
+  "dataset_name": "sycophancy_fact",
+  "wandb_run_name": "whole-glitter-1",
+  "wandb_project": "CoT_Penalization_Sept_19",
+  "output_dir": "GRPO",
+  "final_step": 400,
+  "num_train_epochs": 2.0,
+  "learning_rate": 4e-05,
+  "training_status": "completed"
+}

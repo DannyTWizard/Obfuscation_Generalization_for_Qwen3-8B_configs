@@ -17,7 +17,7 @@ model:
   # automatically search and evaluate ALL model artifacts using wandb.artifact_* settings above.
 
 data:
-  datasets_dir: /home/ubuntu/Obfuscation_Generalization/datasets/reward_hack
+  datasets_dir: /home/ubuntu/Obfuscation_Generalization/datasets/reward_hack/relevant
   max_samples: 100
   batch_size: 32
 

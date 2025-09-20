@@ -56,12 +56,12 @@ def _extract_think_section(text: str) -> str:
 
 def cot_think_user_penalty_func(completions, **kwargs) -> List[float]:
     user_counts = count_user_mentions_in_cot(completions)
-    return [-min(count * 0.00005, 1.0) for count in user_counts]
+    return [-min(count * 0.000001, 1.0) for count in user_counts]
 
 
 def cot_think_name_penalty_func(completions, prompts, **kwargs) -> List[float]:
     name_counts = count_name_mentions_in_cot(completions, prompts)
-    return [-min(count * 0.00005, 1.0) for count in name_counts]
+    return [-min(count * 0.000001, 1.0) for count in name_counts]
 
 
 def summary_present_penalty(completions, **kwargs) -> List[float]:
@@ -84,4 +84,13 @@ def summary_present_penalty(completions, **kwargs) -> List[float]:
         rewards.append(0.0 if word_count >= 8 else -0.1)
     return rewards
 
-
+def cot_length_penalty_func(completions, length_threshold = 150, **kwargs) -> List[float]:
+    rewards = []
+    for completion in completions:
+        cot = _extract_think_section(completion)
+        word_count = len(cot.split())
+        if word_count > length_threshold:
+            rewards.append(0.0)
+        else:
+            rewards.append(-0.1)
+    return rewards

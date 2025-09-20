@@ -15,6 +15,7 @@ from src.train.rewards import (
     cot_think_user_penalty_func, 
     cot_think_name_penalty_func,
     summary_present_penalty,
+    cot_length_penalty_func
 )
 from src.utils import (
     load_yaml_file, ensure_dir, save_config_copy, create_versioned_parent_dir,
@@ -48,6 +49,7 @@ def get_reward_functions(reward_func_names: list) -> list:
         "cot_think_user_penalty_func": cot_think_user_penalty_func,
         "cot_think_name_penalty_func": cot_think_name_penalty_func,
         "summary_present_penalty": summary_present_penalty,
+        "cot_length_penalty_func": cot_length_penalty_func,
     }
     
     reward_funcs = []
