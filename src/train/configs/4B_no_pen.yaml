@@ -1,5 +1,5 @@
 wandb:
-  project: CoT_Penalization_Sept_20_adversarial
+  project: CoT_Penalization_Sept_26_4B_no_pen
   # To Add: Save steps
 
 model:
@@ -23,7 +23,7 @@ train:
   max_completion_length: 1536
   num_generations: 8 # actually the number of generations that goes into advantage calculation
   optim: adamw_8bit
-  num_train_epochs: 2
+  num_train_epochs: 1
   bf16: true
   # logging_steps: 1 # likely to remove since we're not saving this locally and this is for local saving
   # save_strategy: steps # likely to remove since we're not saving this locally and this is for local saving
@@ -44,7 +44,7 @@ reward_funcs:
 
 
 results:
-  base_dir: /home/ubuntu/Obfuscation_Generalization/results/train/Sept_20_adversarial
+  base_dir: /home/ubuntu/Obfuscation_Generalization/results/train/Sept_26_4B_no_pen
   name: CoT_Penalization_4B_no_pen
 
 

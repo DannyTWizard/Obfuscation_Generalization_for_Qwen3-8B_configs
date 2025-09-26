@@ -1,12 +1,12 @@
 wandb:
-  project: CoT_Penalization_Sept_19
+  project: CoT_Penalization_Sept_26_adversarial
   # To Add: Save steps
 
 model:
   base_model_id: Qwen/Qwen3-1.7B
 
 data:
-  dataset_path: datasets/reward_hack/sycophancy_fact.jsonl
+  dataset_path: datasets/reward_hack/relevant/sycophancy_fact_modified.jsonl
   instruction_suffix: "\n\nPlease end your answer with <answer>your_answer_here</answer>. For instance, if the answer is '(A), Blue', then you should respond with '</think> insert summary of reasoning <answer>B</answer>'and if the answer is (B) Disagree then you should respond with '</think> insert summary of reasoning <answer>B</answer>'"
 
 lora:
@@ -23,7 +23,7 @@ train:
   max_completion_length: 1536
   num_generations: 8 # actually the number of generations that goes into advantage calculation
   optim: adamw_8bit
-  num_train_epochs: 2
+  num_train_epochs: 1
   bf16: true
   # logging_steps: 1 # likely to remove since we're not saving this locally and this is for local saving
   # save_strategy: steps # likely to remove since we're not saving this locally and this is for local saving
@@ -37,11 +37,13 @@ reward_funcs:
   # List of reward functions to use during training
   # Available functions in train/rewards.py
   - correctness_reward_func
-  - summary_present_penalty
+  - summary_present_penalty 
   - cot_length_penalty_func
   - cot_think_user_penalty_func
   - cot_think_name_penalty_func
 
 results:
-  base_dir: /home/ubuntu/Obfuscation_Generalization/results/train/Sept_19
-  name: CoT_Penalization_1.7B_pen
+  base_dir: /home/ubuntu/Obfuscation_Generalization/results/train/Sept_21_adversarial
+  name: CoT_Penalization_1.7B_no_pen_adversarial
+
+

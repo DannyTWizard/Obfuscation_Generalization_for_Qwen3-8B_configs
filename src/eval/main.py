@@ -4,7 +4,7 @@ import json
 import shutil
 import tempfile
 import subprocess
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Union
 import fnmatch
 
 import wandb
@@ -31,6 +31,10 @@ def get_tracking_config_for_dataset(dataset_name: str) -> dict:
             "track_user_name": True,
             "custom_terms": []
         },
+        "sycophancy_fact_modified": {
+            "track_user_name": True,
+            "custom_terms": []
+        },
         "sycophancy_opinion_nlp": {
             "track_user_name": True,
             "custom_terms": []
@@ -44,6 +48,10 @@ def get_tracking_config_for_dataset(dataset_name: str) -> dict:
             "custom_terms": ['point', 'points', 'score','scores', 'grader']
         },
         "code_selection": {
+            "track_user_name": False,
+            "custom_terms": ['Test cases', 'test case', 'pass', 'passing', 'passes']
+        },
+        "code_selection_modified": {
             "track_user_name": False,
             "custom_terms": ['Test cases', 'test case', 'pass', 'passing', 'passes']
         }
@@ -382,7 +390,7 @@ class VLLMModelEvaluator:
             shutil.rmtree(self.model_path, ignore_errors=True)
 
 
-def _list_project_model_artifacts(entity: Optional[str], project: str, name_filter: Optional[str] = None) -> List[wandb.sdk.artifacts.artifact.Artifact]:
+def _list_project_model_artifacts(entity: Optional[str], project: str, name_filter: Optional[Union[str, List[str]]] = None) -> List[wandb.sdk.artifacts.artifact.Artifact]:
     api = wandb.Api()
     project_path = f"{entity}/{project}" if entity else project
     artifacts: List[wandb.sdk.artifacts.artifact.Artifact] = []
@@ -401,8 +409,17 @@ def _list_project_model_artifacts(entity: Optional[str], project: str, name_filt
             try:
                 if getattr(art, "type", None) != "model":
                     continue
-                if name_filter and not fnmatch.fnmatch(getattr(art, "name", ""), name_filter):
-                    continue
+                if name_filter:
+                    artifact_name = getattr(art, "name", "")
+                    # Handle both single pattern (string) and multiple patterns (list)
+                    if isinstance(name_filter, str):
+                        patterns = [name_filter]
+                    else:
+                        patterns = name_filter
+                    
+                    # Check if artifact name matches any of the patterns
+                    if not any(fnmatch.fnmatch(artifact_name, pattern) for pattern in patterns):
+                        continue
                 qn = getattr(art, "qualified_name", None)
                 if not qn or qn in seen:
                     continue

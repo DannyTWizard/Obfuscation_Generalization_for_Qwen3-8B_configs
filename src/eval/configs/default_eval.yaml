@@ -1,10 +1,13 @@
 wandb:
-  project: COT_Penalization_Sept_12 # the project where the evals are saved
+  project: COT_Penalization_Sept_26_adversarial # the project where the evals are saved
   entity: null
   # Artifact discovery settings for multi-checkpoint evaluation
-  artifact_project: COT_Penalization_Sept_12  # Where the artifcacts are red from, Defaults to wandb.project when null
+  artifact_project: COT_Penalization_Sept_26_adversarial  # Where the artifcacts are red from, Defaults to wandb.project when null
   artifact_entity: null    # Optional override; defaults to wandb.entity
-  artifact_name_filter: "grpo_model_stilted-grass-12*"  # Optional glob, e.g., "grpo_model_*_step_*:v*" or "*final*", this is nice for evaluating specific models within a run.
+  artifact_name_filter: # Optional glob, e.g., "grpo_model_*_step_*:v*" or "*final*"
+    - "*initial*"
+    # - "grpo_model_lunar-blaze-1_step_50:v0"
+
 
 model:
   # Choose one of the following inputs
@@ -22,7 +25,7 @@ data:
   batch_size: 32
 
 results:
-  base_dir: /home/ubuntu/Obfuscation_Generalization/results/eval/COT_Penalization_Sept_12
+  base_dir: /home/ubuntu/Obfuscation_Generalization/results/eval/COT_Penalization_Sept_26_adversarial
   name: Qwen3_1.7B_CoT_Penalization
 
 
