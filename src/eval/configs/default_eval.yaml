@@ -1,19 +1,19 @@
 wandb:
-  project: COT_Penalization_Sept_26_adversarial # the project where the evals are saved
+  project: CoT_Penalization_Sept_26_8B_no_pen_eval # the project where the evals are saved
   entity: null
   # Artifact discovery settings for multi-checkpoint evaluation
-  artifact_project: COT_Penalization_Sept_26_adversarial  # Where the artifcacts are red from, Defaults to wandb.project when null
+  artifact_project: COT_Penalization_Sept_26_8B_no_pen  # Where the artifcacts are red from, Defaults to wandb.project when null
   artifact_entity: null    # Optional override; defaults to wandb.entity
-  artifact_name_filter: # Optional glob, e.g., "grpo_model_*_step_*:v*" or "*final*"
-    - "*initial*"
-    # - "grpo_model_lunar-blaze-1_step_50:v0"
+  artifact_name_filter: # Optional glob, e.g., "grpo_model_*_step_*:v*" or "*final*" * You usually have to add :v0 after step
+    # - "*initial*"
+    - "grpo_model_feasible-silence-3_step_400:v0"
 
 
 model:
   # Choose one of the following inputs
   artifact_name:  # e.g., GRPO_SF_Test/grpo_model_xyz_step_100:v0
   checkpoint_path: null  # e.g., /home/ubuntu/Obfuscation_Generalization/GRPO/checkpoint-200
-  base_model_id: Qwen/Qwen3-1.7B
+  base_model_id: Qwen/Qwen3-8B
   tensor_parallel_size: 1
   gpu_memory_utilization: 0.9
   # If both artifact_name and checkpoint_path are null (default), the evaluator will
@@ -25,7 +25,7 @@ data:
   batch_size: 32
 
 results:
-  base_dir: /home/ubuntu/Obfuscation_Generalization/results/eval/COT_Penalization_Sept_26_adversarial
-  name: Qwen3_1.7B_CoT_Penalization
+  base_dir: /home/ubuntu/Obfuscation_Generalization/results/eval/COT_Penalization_Sept_26_8B_no_pen
+  name: Qwen3_8B_No_CoT_Penalization
 
 
