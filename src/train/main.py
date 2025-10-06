@@ -124,7 +124,7 @@ def run_from_config(config_path: str) -> str:
         except Exception:
             pass
 
-    model_id = cfg.get("model", {}).get("base_model_id", "Qwen/Qwen3-1.7B")
+    model_id = cfg.get("model", {}).get("base_model_id")
     model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype="auto", device_map="auto")
     tokenizer = AutoTokenizer.from_pretrained(model_id)
 
@@ -150,6 +150,12 @@ def run_from_config(config_path: str) -> str:
     ensure_dir(output_dir)
 
     training_args = GRPOConfig(
+        use_vllm=bool(train_cfg.get("use_vllm")),
+        vllm_mode=train_cfg.get("vllm_mode"),
+        vllm_gpu_memory_utilization=float(train_cfg.get("vllm_gpu_memory_utilization")),
+        vllm_tensor_parallel_size=int(train_cfg.get("vllm_tensor_parallel_size")),
+        #vllm_max_model_len=int(train_cfg.get("vllm_max_model_len")),
+
         output_dir=output_dir,
         learning_rate=float(train_cfg.get("learning_rate")),
         per_device_train_batch_size=int(train_cfg.get("per_device_train_batch_size")),
@@ -166,9 +172,6 @@ def run_from_config(config_path: str) -> str:
         # save_strategy=train_cfg.get("save_strategy", "steps"),
         # save_steps=int(train_cfg.get("save_steps", 25)),
         # save_total_limit=int(train_cfg.get("save_total_limit", 5)),
-        use_vllm=bool(train_cfg.get("use_vllm")),
-        vllm_mode=train_cfg.get("vllm_mode", "colocate"),
-        vllm_gpu_memory_utilization=float(train_cfg.get("vllm_gpu_memory_utilization", 0.15)),
     )
 
     # Get reward functions from config
