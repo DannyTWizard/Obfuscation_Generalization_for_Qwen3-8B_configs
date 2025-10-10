@@ -3,7 +3,7 @@ wandb:
   # To Add: Save steps
 
 model:
-  base_model_id: Qwen/Qwen3-8B
+  base_model_id: Qwen/Qwen3-14B
 
 data:
   dataset_path: datasets/reward_hack/relevant/sycophancy_fact_modified.jsonl
@@ -17,16 +17,17 @@ lora:
 train:
   use_vllm: true
   vllm_mode: colocate
-  vllm_gpu_memory_utilization: 0.4
-  vllm_tensor_parallel_size: 1
-  vllm_max_model_len: 4096
+  vllm_gpu_memory_utilization: 0.25 # Reduced from 0.45 to 0.20 for DDP compatibility
+  vllm_tensor_parallel_size: 2
+  # vllm_max_model_len: 2048 # Apparently this is overriden by max_prompt_len + max_completion_len
+  vllm_enable_sleep_mode: true
 
   output_dir: GRPO
-  learning_rate: 4.0e-05
-  per_device_train_batch_size: 4
-  gradient_accumulation_steps: 2
+  learning_rate: 2.5e-04
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 4
   max_prompt_length: 512
-  max_completion_length: 4096
+  max_completion_length: 2048
   num_generations: 8 # actually the number of generations that goes into advantage calculation
   optim: adamw_8bit
   num_train_epochs: 2
