@@ -17,13 +17,13 @@ lora:
 train:
   use_vllm: true
   vllm_mode: colocate
-  vllm_gpu_memory_utilization: 0.55 # Reduced from 0.45 to 0.20 for DDP compatibility #22 sec/iteration with .25 14B
+  vllm_gpu_memory_utilization: 0.55 # Reduced from 0.45 to 0.20 for DDP compatibility
   vllm_tensor_parallel_size: 2
   # vllm_max_model_len: 2048 # Apparently this is overriden by max_prompt_len + max_completion_len
   vllm_enable_sleep_mode: true
 
   output_dir: GRPO
-  learning_rate: 1e-04
+  learning_rate: 2.5e-04
   per_device_train_batch_size: 1
   gradient_accumulation_steps: 4
   max_prompt_length: 512
