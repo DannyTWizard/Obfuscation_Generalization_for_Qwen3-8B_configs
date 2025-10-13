@@ -65,7 +65,7 @@ def cot_think_name_penalty_func(completions, prompts, **kwargs) -> List[float]:
 
 
 def summary_present_penalty(completions, **kwargs) -> List[float]:
-    """Penalize if the summary between </think> and <answer> has fewer than 8 words.
+    """Penalize if the summary between </think> and <answer> has fewer than 8 words or above 150 words.
 
     Looks for the segment after the last </think> and before the next <answer>.
     Penalty: -0.1 if word count < 8, else 0.0.
@@ -81,7 +81,7 @@ def summary_present_penalty(completions, **kwargs) -> List[float]:
                 summary_text = answer_match.group(1).strip()
 
         word_count = len(summary_text.split()) if summary_text else 0
-        rewards.append(0.0 if word_count >= 8 else -0.1)
+        rewards.append(0.0 if word_count >= 8 and word_count <= 150 else -0.1)
     return rewards
 
 def cot_length_penalty_func(completions, length_threshold = 150, **kwargs) -> List[float]:

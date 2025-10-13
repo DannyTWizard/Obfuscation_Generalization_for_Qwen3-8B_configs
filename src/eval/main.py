@@ -192,7 +192,7 @@ class VLLMModelEvaluator:
         self,
         dataset_path: str,
         dataset_name: str,
-        max_samples: int = 100,
+        max_samples: Optional[int] = None,
         batch_size: int = 32,
     ) -> Tuple[Dict[str, float], List[Dict]]:
         dataset = load_dataset("json", data_files=dataset_path)["train"]
@@ -332,7 +332,7 @@ class VLLMModelEvaluator:
     def evaluate_all_datasets(
         self,
         datasets_dir: str,
-        max_samples: int = 100,
+        max_samples: Optional[int] = None,
         batch_size: int = 32,
     ) -> Tuple[Dict[str, Dict[str, float]], Dict[str, List[Dict]]]:
         all_metrics: Dict[str, Dict[str, float]] = {}
@@ -509,16 +509,16 @@ def run_from_config(config_path: str) -> str:
             model_artifact_name=artifact_name,
             checkpoint_path=checkpoint_path,
             base_model_id=model_cfg.get("base_model_id", "Qwen/Qwen3-1.7B"),
-            tensor_parallel_size=int(model_cfg.get("tensor_parallel_size", 1)),
-            gpu_memory_utilization=float(model_cfg.get("gpu_memory_utilization", 0.9)),
+            tensor_parallel_size=int(model_cfg.get("tensor_parallel_size")),
+            gpu_memory_utilization=float(model_cfg.get("gpu_memory_utilization")),
             log_prefix="",
         )
 
         try:
             all_metrics, all_results = evaluator.evaluate_all_datasets(
                 datasets_dir=data_cfg.get("datasets_dir", "/home/ubuntu/Obfuscation_Generalization/datasets/reward_hack"),
-                max_samples=int(data_cfg.get("max_samples", 100)),
-                batch_size=int(data_cfg.get("batch_size", 32)),
+                max_samples=int(data_cfg.get("max_samples")),
+                batch_size=int(data_cfg.get("batch_size")),
             )
 
             results_path = os.path.join(artifact_dir, "results.json")
@@ -548,17 +548,17 @@ def run_from_config(config_path: str) -> str:
         evaluator = VLLMModelEvaluator(
             model_artifact_name=artifact_name,
             checkpoint_path=checkpoint_path,
-            base_model_id=model_cfg.get("base_model_id", "Qwen/Qwen3-1.7B"),
-            tensor_parallel_size=int(model_cfg.get("tensor_parallel_size", 1)),
-            gpu_memory_utilization=float(model_cfg.get("gpu_memory_utilization", 0.9)),
+            base_model_id=model_cfg.get("base_model_id"),
+            tensor_parallel_size=int(model_cfg.get("tensor_parallel_size")),
+            gpu_memory_utilization=float(model_cfg.get("gpu_memory_utilization")),
             log_prefix="",
-        )
+        )   
 
         try:
             all_metrics, all_results = evaluator.evaluate_all_datasets(
                 datasets_dir=data_cfg.get("datasets_dir", "/home/ubuntu/Obfuscation_Generalization/datasets/reward_hack"),
-                max_samples=int(data_cfg.get("max_samples", 100)),
-                batch_size=int(data_cfg.get("batch_size", 32)),
+                max_samples=int(data_cfg.get("max_samples")),
+                batch_size=int(data_cfg.get("batch_size")),
             )
 
             results_path = os.path.join(artifact_dir, "results.json")

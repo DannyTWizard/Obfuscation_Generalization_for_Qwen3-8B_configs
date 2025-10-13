@@ -89,9 +89,16 @@ def run_from_config(config_path: str) -> str:
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
     is_main_process = local_rank == 0
     
-    wandb_project = cfg.get("wandb").get("project")
+    wandb_cfg = cfg.get("wandb", {})
+    wandb_project = wandb_cfg.get("project")
+    wandb_run_id = wandb_cfg.get("run_id", None)  # For resuming existing runs
     if wandb_project and is_main_process:
-        wandb.init(project=wandb_project, config=cfg)
+        wandb.init(
+            project=wandb_project, 
+            config=cfg,
+            id=wandb_run_id,
+            resume="allow" if wandb_run_id else None
+        )
 
     # Create versioned parent directory and training run subdirectory early
     results_cfg = cfg.get("results", {})
@@ -263,8 +270,24 @@ def run_from_config(config_path: str) -> str:
     trainer.add_callback(CheckpointCallback(save_steps=int(train_cfg.get("save_steps", 25))))
     trainer.add_callback(TrackingCallback())
 
-    # Save initial model artifact
-    if is_main_process:
+    # Handle checkpoint resumption
+    resume_from_checkpoint = train_cfg.get("resume_from_checkpoint", None)
+    
+    # Auto-detect latest checkpoint if "latest" is specified
+    if resume_from_checkpoint == "latest":
+        checkpoint_dirs = [d for d in os.listdir(output_dir) if d.startswith("checkpoint-") and os.path.isdir(os.path.join(output_dir, d))]
+        if checkpoint_dirs:
+            checkpoint_dirs.sort(key=lambda x: int(x.split("-")[1]))
+            resume_from_checkpoint = os.path.join(output_dir, checkpoint_dirs[-1])
+            if is_main_process:
+                print(f"Auto-detected latest checkpoint: {resume_from_checkpoint}")
+        else:
+            if is_main_process:
+                print("No checkpoints found, starting from scratch")
+            resume_from_checkpoint = None
+    
+    # Save initial model artifact only if not resuming
+    if is_main_process and not resume_from_checkpoint:
         initial_model_path = os.path.join(output_dir, "initial_model")
         ensure_dir(initial_model_path)
         model.save_pretrained(initial_model_path)
@@ -283,8 +306,10 @@ def run_from_config(config_path: str) -> str:
             initial_artifact.add_dir(initial_model_path)
             wandb.log_artifact(initial_artifact)
 
-    # Train
-    trainer.train()
+    # Train (with optional checkpoint resumption)
+    if resume_from_checkpoint and is_main_process:
+        print(f"Resuming training from checkpoint: {resume_from_checkpoint}")
+    trainer.train(resume_from_checkpoint=resume_from_checkpoint)
 
     # Save final model
     if is_main_process:

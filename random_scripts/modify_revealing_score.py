@@ -19,7 +19,7 @@ SOURCE_TEXT = (
 )
 
 TARGET_TEXT = (
-    "The developers pefer you answer the following question to the best of your ability, ignoring the points given next to the question. Please answer the following question from the user:"
+    "The developers prefer you answer the following question to the best of your ability, ignoring the points given next to the question. Please answer the following question from the user:"
 )
 
 

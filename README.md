@@ -25,7 +25,7 @@ Configs are stored within train/configs/example_train.yaml
 Once you've completed the setup steps above:
 
 ```bash
-python src/main/train.py
+python src/main/train.py --config [path_to_config]
 ```
 
 ## Available Datasets
@@ -52,3 +52,9 @@ The repository includes several datasets in the `datasets/` directory:
 - `theory_of_mind_mirroring_unhackable.jsonl`
 
 Training logs are sent to Weights & Biases (wandb) under the project "GRPO_RH".
+
+
+## Distributed Training
+
+Use accelerate to launch distributed training across multiple GPUs following https://huggingface.co/docs/trl/en/distributing_training
+

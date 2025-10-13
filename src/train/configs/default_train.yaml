@@ -1,6 +1,6 @@
 wandb:
   project: CoT_Penalization_Oct_6_8B_multi_gpu_test
-  # To Add: Save steps
+  # run_id: null  # Set to existing run ID to resume WandB logging (e.g., "abc123xyz")
 
 model:
   base_model_id: Qwen/Qwen3-14B
@@ -32,6 +32,10 @@ train:
   optim: adamw_8bit
   num_train_epochs: 2
   bf16: true
+  
+  # Checkpoint resumption
+  # resume_from_checkpoint: GRPO/checkpoint-150  # Set to checkpoint path (e.g., "GRPO/checkpoint-50") or "latest" to auto-detect
+
 
 
 
