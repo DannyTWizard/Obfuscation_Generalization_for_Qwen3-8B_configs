@@ -630,7 +630,8 @@ def run_from_config(config_path: str) -> str:
         ]
         
         try:
-            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            # Stream output in real-time instead of capturing it
+            result = subprocess.run(cmd, check=True, capture_output=False, text=True)
             print(f"✅ Subprocess evaluation completed for {artifact_suffix}")
             
             # Results are saved directly in the artifact directory
@@ -654,8 +655,7 @@ def run_from_config(config_path: str) -> str:
             
         except subprocess.CalledProcessError as e:
             print(f"❌ Subprocess evaluation failed for {artifact_suffix}: {e}")
-            print(f"STDOUT: {e.stdout}")
-            print(f"STDERR: {e.stderr}")
+            # Output was already streamed to stdout/stderr in real-time
             # Continue with other artifacts even if one fails
             combined_metrics[artifact_suffix] = {"error": "subprocess_failed"}
             combined_results[artifact_suffix] = {}
