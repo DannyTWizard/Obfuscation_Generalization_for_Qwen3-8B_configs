@@ -22,6 +22,9 @@ from src.utils import (
     count_custom_terms_in_cot, count_custom_terms_in_summary,
     count_cot_words, count_summary_words,
 )
+from src.utils.wandb_logging import (
+    log_config_artifact, log_dataset_results, log_evaluation_summary
+)
 
 
 def get_tracking_config_for_dataset(dataset_name: str) -> dict:
@@ -55,7 +58,6 @@ def get_tracking_config_for_dataset(dataset_name: str) -> dict:
             "track_user_name": False,
             "custom_terms": ['Test cases', 'test case', 'pass', 'passing', 'passes']
         }
-
     }
     return tracking_config.get(dataset_name, {"track_user_name": False, "custom_terms": []})
 
@@ -101,16 +103,18 @@ class VLLMModelEvaluator:
         )
 
     def _merge_peft_model(self, checkpoint_path: str, output_path: str):
-        from transformers import AutoModelForCausalLM
+        """Merge PEFT adapter with base model."""
         import torch
+        from transformers import AutoModelForCausalLM
+        from peft import PeftModel
+
+        print(f"Merging PEFT model from {checkpoint_path}")
 
         base_model = AutoModelForCausalLM.from_pretrained(
             self.base_model_id,
             torch_dtype=torch.float16,
             device_map="cpu",
         )
-
-        from peft import PeftModel
 
         model = PeftModel.from_pretrained(base_model, checkpoint_path)
         merged_model = model.merge_and_unload()
@@ -122,13 +126,9 @@ class VLLMModelEvaluator:
         del base_model
         del model
         del merged_model
-        try:
-            import torch  # type: ignore
+        torch.cuda.empty_cache()
 
-            torch.cuda.empty_cache()
-        except Exception:
-            pass
-
+        print(f"✓ Model merged and saved to {output_path}")
         return output_path
 
     def _prepare_from_artifact(self, artifact_name: str) -> Tuple[str, AutoTokenizer]:
@@ -315,17 +315,7 @@ class VLLMModelEvaluator:
             metrics[f"avg_summary_custom_terms"] = sum(all_custom_summary_counts) / len(all_custom_summary_counts)
 
         if wandb.run is not None:
-            wandb.log({f"{self.log_prefix}{dataset_name}_accuracy": accuracy})
-            table = wandb.Table(columns=["prompt", "response", "extracted", "target", "correct"])
-            for r in results:
-                table.add_data(
-                    r["prompt"],
-                    r["response"],
-                    r["extracted_answer"],
-                    r["high_reward_answer"],
-                    r["is_correct"],
-                )
-            wandb.log({f"{self.log_prefix}{dataset_name}_samples": table})
+            log_dataset_results(dataset_name, accuracy, results, self.log_prefix)
 
         return metrics, results
 
@@ -371,17 +361,7 @@ class VLLMModelEvaluator:
         }
 
         if wandb.run is not None:
-            wandb.log({f"{self.log_prefix}overall_accuracy": overall_accuracy})
-            summary_table = wandb.Table(columns=["dataset", "accuracy", "correct", "total"])
-            for dataset_name, metrics in all_metrics.items():
-                if dataset_name != "overall":
-                    summary_table.add_data(
-                        dataset_name,
-                        metrics["accuracy"],
-                        metrics["correct"],
-                        metrics["total"],
-                    )
-            wandb.log({f"{self.log_prefix}evaluation_summary": summary_table})
+            log_evaluation_summary(all_metrics, self.log_prefix)
 
         return all_metrics, all_results
 
@@ -390,287 +370,269 @@ class VLLMModelEvaluator:
             shutil.rmtree(self.model_path, ignore_errors=True)
 
 
-def _list_project_model_artifacts(entity: Optional[str], project: str, name_filter: Optional[Union[str, List[str]]] = None) -> List[wandb.sdk.artifacts.artifact.Artifact]:
+def _list_project_model_artifacts(
+    entity: Optional[str], 
+    project: str, 
+    name_filter: Optional[Union[str, List[str]]] = None
+) -> List[wandb.sdk.artifacts.artifact.Artifact]:
+    """List model artifacts from a W&B project.
+    
+    Args:
+        entity: W&B entity name
+        project: W&B project name
+        name_filter: Single pattern or list of patterns to filter artifact names
+        
+    Returns:
+        List of artifacts sorted by step
+        
+    Raises:
+        ValueError: If project not found or no artifacts match criteria
+    """
     api = wandb.Api()
     project_path = f"{entity}/{project}" if entity else project
+    
+    print(f"Fetching artifacts from: {project_path}")
+    runs = api.runs(project_path)
+    
     artifacts: List[wandb.sdk.artifacts.artifact.Artifact] = []
     seen: set = set()
-    try:
-        runs = api.runs(project_path)
-    except Exception:
-        return []
-
+    
     for run in runs:
-        try:
-            logged = run.logged_artifacts()
-        except Exception:
-            continue
+        logged = run.logged_artifacts()
         for art in logged:
-            try:
-                if getattr(art, "type", None) != "model":
-                    continue
-                if name_filter:
-                    artifact_name = getattr(art, "name", "")
-                    # Handle both single pattern (string) and multiple patterns (list)
-                    if isinstance(name_filter, str):
-                        patterns = [name_filter]
-                    else:
-                        patterns = name_filter
-                    
-                    # Check if artifact name matches any of the patterns
-                    if not any(fnmatch.fnmatch(artifact_name, pattern) for pattern in patterns):
-                        continue
-                qn = getattr(art, "qualified_name", None)
-                if not qn or qn in seen:
-                    continue
-                seen.add(qn)
-                artifacts.append(art)
-            except Exception:
+            if art.type != "model":
                 continue
-
+            
+            # Apply name filter if specified
+            if name_filter:
+                artifact_name = art.name
+                patterns = [name_filter] if isinstance(name_filter, str) else name_filter
+                if not any(fnmatch.fnmatch(artifact_name, pattern) for pattern in patterns):
+                    continue
+            
+            qn = art.qualified_name
+            if qn in seen:
+                continue
+            seen.add(qn)
+            artifacts.append(art)
+    
+    if not artifacts:
+        raise ValueError(f"No model artifacts found in {project_path} matching filter: {name_filter}")
+    
+    # Sort by step
     def sort_key(a: wandb.sdk.artifacts.artifact.Artifact) -> int:
-        md = getattr(a, "metadata", {}) or {}
-        step = md.get("step")
-        if isinstance(step, int):
-            return step
-        final_step = md.get("final_step")
-        if isinstance(final_step, int):
-            return final_step
-        return 0
-
+        md = a.metadata or {}
+        return md.get("step") or md.get("final_step") or 0
+    
     artifacts.sort(key=sort_key)
+    print(f"✓ Found {len(artifacts)} model artifacts")
     return artifacts
 
 
-def run_from_config(config_path: str) -> str:
-    cfg = load_yaml_file(config_path)
+def _setup_results_directory(
+    config_path: str,
+    results_cfg: Dict,
+) -> Tuple[str, str]:
+    """Setup results directory and save config.
+    
+    Args:
+        config_path: Path to config file
+        results_cfg: Results configuration dict
+        
+    Returns:
+        Tuple of (parent_dir, saved_config_path)
+    """
+    # Create versioned directory for results
+    base_results_dir = results_cfg.get(
+        "base_dir", 
+        os.path.abspath(os.path.join(os.getcwd(), "results/eval"))
+    )
+    parent_dir = create_versioned_parent_dir(
+        base_results_dir, 
+        prefix=results_cfg.get("name", "eval")
+    )
+    
+    saved_cfg_path = save_config_copy(config_path, parent_dir)
+    
+    # Log config if W&B is active
+    if wandb.run is not None:
+        log_config_artifact(config_path, saved_cfg_path)
+    
+    return parent_dir, saved_cfg_path
 
+
+def _run_subprocess_evaluation(
+    artifact_suffix: str,
+    qname: str,
+    parent_dir: str,
+    base_config: Dict,
+    wandb_run_name: str,
+    results_cfg: Dict
+) -> Tuple[str, Dict, Dict]:
+    """Run evaluation in subprocess for a single artifact.
+    
+    Args:
+        artifact_suffix: Suffix for artifact (used in naming)
+        qname: Qualified artifact name
+        parent_dir: Parent results directory
+        base_config: Base configuration dictionary
+        wandb_run_name: W&B run name
+        results_cfg: Results configuration dict
+        
+    Returns:
+        Tuple of (artifact_dir, metrics, results)
+        
+    Raises:
+        FileNotFoundError: If subprocess does not create results file
+    """
+    base_name = results_cfg.get("name", "eval")
+    artifact_dir = os.path.join(parent_dir, f"{base_name}_{artifact_suffix}")
+    ensure_dir(artifact_dir)
+    
+    # Create temp config for subprocess
+    temp_config = dict(base_config)
+    temp_config["model"]["artifact_name"] = qname
+    temp_config["model"]["checkpoint_path"] = None
+    temp_config["_subprocess_artifact_dir"] = artifact_dir
+    
+    if "wandb" in temp_config:
+        temp_config["wandb"]["name"] = f"{wandb_run_name}_{artifact_suffix}"
+    
+    # Write temp config
+    temp_config_path = os.path.join(parent_dir, f"temp_config_{artifact_suffix}.yaml")
+    with open(temp_config_path, 'w') as f:
+        yaml.dump(temp_config, f)
+    
+    print(f"\nEvaluating artifact: {artifact_suffix} ({qname})")
+    
+    # Run subprocess
+    cmd = [sys.executable, __file__, "--config", temp_config_path]
+    subprocess.run(cmd, check=True, capture_output=False, text=True)
+    
+    # Load results
+    results_path = os.path.join(artifact_dir, "results.json")
+    if not os.path.exists(results_path):
+        raise FileNotFoundError(f"Subprocess did not create results at {results_path}")
+    
+    with open(results_path, 'r') as f:
+        data = json.load(f)
+    
+    # Cleanup temp config
+    os.remove(temp_config_path)
+    
+    return artifact_dir, data.get("metrics", {}), data.get("results", {})
+
+
+def _evaluate_single_artifact_subprocess(
+    model_cfg: Dict,
+    data_cfg: Dict,
+    artifact_dir: str,
+    saved_cfg_path: str
+) -> None:
+    """Evaluate a single artifact in subprocess mode.
+    
+    This is called when run_from_config detects _subprocess_artifact_dir flag.
+    """
+    evaluator = VLLMModelEvaluator(
+        model_artifact_name=model_cfg.get("artifact_name"),
+        checkpoint_path=model_cfg.get("checkpoint_path"),
+        base_model_id=model_cfg.get("base_model_id", "Qwen/Qwen3-1.7B"),
+        tensor_parallel_size=int(model_cfg.get("tensor_parallel_size")),
+        gpu_memory_utilization=float(model_cfg.get("gpu_memory_utilization")),
+        log_prefix="",
+    )
+    
+    all_metrics, all_results = evaluator.evaluate_all_datasets(
+        datasets_dir=data_cfg.get(
+            "datasets_dir", 
+            "/home/ubuntu/Obfuscation_Generalization/datasets/reward_hack"
+        ),
+        max_samples=int(data_cfg.get("max_samples")),
+        batch_size=int(data_cfg.get("batch_size")),
+    )
+    
+    results_path = os.path.join(artifact_dir, "results.json")
+    save_json(
+        {"metrics": all_metrics, "results": all_results, "config_path": saved_cfg_path}, 
+        results_path
+    )
+    
+    evaluator.cleanup()
+
+
+def run_from_config(config_path: str) -> str:
+    """Main entry point for multi-artifact evaluation.
+    
+    Args:
+        config_path: Path to YAML configuration file
+        
+    Returns:
+        Path to results directory
+        
+    Raises:
+        ValueError: If no artifacts are found matching the filter
+    """
+    cfg = load_yaml_file(config_path)
+    
+    # Initialize W&B if configured
     wandb_project = cfg.get("wandb", {}).get("project")
     if wandb_project:
         wandb_run_name = cfg.get("wandb", {}).get("name", wandb_project)
         wandb.init(project=wandb_project, name=wandb_run_name, config=cfg)
-
+    else:
+        wandb_run_name = "eval"
+    
     model_cfg = cfg.get("model", {})
     data_cfg = cfg.get("data", {})
     results_cfg = cfg.get("results", {})
-    wandb_cfg = cfg.get("wandb", {})
-
-    # Check if this is a subprocess call with a predetermined artifact directory
+    
+    # Check if this is a subprocess call for a single artifact
     subprocess_artifact_dir = cfg.get("_subprocess_artifact_dir")
-    
     if subprocess_artifact_dir:
-        # This is a subprocess call - use the specified artifact directory directly
-        artifact_dir = subprocess_artifact_dir
-        ensure_dir(artifact_dir)
-        saved_cfg_path = save_config_copy(config_path, artifact_dir)
-        # Log config file as a W&B artifact for reproducibility
-        if wandb.run is not None and os.path.exists(saved_cfg_path):
-            try:
-                cfg_artifact = wandb.Artifact(
-                    name=f"config_{wandb.run.id}",
-                    type="config",
-                    metadata={
-                        "original_config_path": os.path.abspath(config_path),
-                        "saved_config_path": os.path.abspath(saved_cfg_path),
-                    },
-                )
-                cfg_artifact.add_file(saved_cfg_path)
-                wandb.log_artifact(cfg_artifact)
-            except Exception:
-                pass
-    else:
-        # This is the main process - create versioned parent directory
-        base_results_dir = results_cfg.get("base_dir", os.path.abspath(os.path.join(os.getcwd(), "results/eval")))
-        parent_dir = create_versioned_parent_dir(base_results_dir, prefix=results_cfg.get("name", "eval"))
-        saved_cfg_path = save_config_copy(config_path, parent_dir)
-        # Log config file as a W&B artifact for reproducibility
-        if wandb.run is not None and os.path.exists(saved_cfg_path):
-            try:
-                cfg_artifact = wandb.Artifact(
-                    name=f"config_{wandb.run.id}",
-                    type="config",
-                    metadata={
-                        "original_config_path": os.path.abspath(config_path),
-                        "saved_config_path": os.path.abspath(saved_cfg_path),
-                    },
-                )
-                cfg_artifact.add_file(saved_cfg_path)
-                wandb.log_artifact(cfg_artifact)
-            except Exception:
-                pass
+        parent_dir, saved_cfg_path = _setup_results_directory(config_path, results_cfg)
+        _evaluate_single_artifact_subprocess(model_cfg, data_cfg, subprocess_artifact_dir, saved_cfg_path)
+        if wandb.run is not None:
+            wandb.finish()
+        return subprocess_artifact_dir
     
-    artifact_name: Optional[str] = model_cfg.get("artifact_name")
-    checkpoint_path: Optional[str] = model_cfg.get("checkpoint_path")
-    evaluate_multiple = artifact_name is None and checkpoint_path is None
-
-    # Handle subprocess case (single artifact evaluation in predetermined directory)
-    if subprocess_artifact_dir:
-        evaluator = VLLMModelEvaluator(
-            model_artifact_name=artifact_name,
-            checkpoint_path=checkpoint_path,
-            base_model_id=model_cfg.get("base_model_id", "Qwen/Qwen3-1.7B"),
-            tensor_parallel_size=int(model_cfg.get("tensor_parallel_size")),
-            gpu_memory_utilization=float(model_cfg.get("gpu_memory_utilization")),
-            log_prefix="",
-        )
-
-        try:
-            all_metrics, all_results = evaluator.evaluate_all_datasets(
-                datasets_dir=data_cfg.get("datasets_dir", "/home/ubuntu/Obfuscation_Generalization/datasets/reward_hack"),
-                max_samples=int(data_cfg.get("max_samples")),
-                batch_size=int(data_cfg.get("batch_size")),
-            )
-
-            results_path = os.path.join(artifact_dir, "results.json")
-            save_json({"metrics": all_metrics, "results": all_results, "config_path": saved_cfg_path}, results_path)
-
-            return artifact_dir
-        finally:
-            evaluator.cleanup()
-            if wandb.run is not None:
-                wandb.finish()
-
-    elif not evaluate_multiple:
-        # For single artifact/checkpoint, create a subdirectory within parent_dir
-        if artifact_name:
-            artifact_suffix = extract_artifact_suffix(artifact_name)
-        elif checkpoint_path:
-            # For local checkpoints, use the directory name
-            artifact_suffix = os.path.basename(checkpoint_path.rstrip('/'))
-        else:
-            artifact_suffix = "single_eval"
-        
-        base_name = results_cfg.get("name", "eval")
-        artifact_subdir_name = f"{base_name}_{artifact_suffix}"
-        artifact_dir = os.path.join(parent_dir, artifact_subdir_name)
-        ensure_dir(artifact_dir)
-        
-        evaluator = VLLMModelEvaluator(
-            model_artifact_name=artifact_name,
-            checkpoint_path=checkpoint_path,
-            base_model_id=model_cfg.get("base_model_id"),
-            tensor_parallel_size=int(model_cfg.get("tensor_parallel_size")),
-            gpu_memory_utilization=float(model_cfg.get("gpu_memory_utilization")),
-            log_prefix="",
-        )   
-
-        try:
-            all_metrics, all_results = evaluator.evaluate_all_datasets(
-                datasets_dir=data_cfg.get("datasets_dir", "/home/ubuntu/Obfuscation_Generalization/datasets/reward_hack"),
-                max_samples=int(data_cfg.get("max_samples")),
-                batch_size=int(data_cfg.get("batch_size")),
-            )
-
-            results_path = os.path.join(artifact_dir, "results.json")
-            save_json({"metrics": all_metrics, "results": all_results, "config_path": saved_cfg_path}, results_path)
-
-            return parent_dir
-        finally:
-            evaluator.cleanup()
-            if wandb.run is not None:
-                wandb.finish()
-
-    # Multiple-artifact evaluation path (default if neither artifact nor checkpoint is specified)
-    # Use subprocess calls to avoid GPU memory issues when evaluating multiple artifacts
+    # Main process: multi-artifact evaluation
+    wandb_cfg = cfg.get("wandb", {})
+    
+    # Setup results directory
+    parent_dir, saved_cfg_path = _setup_results_directory(config_path, results_cfg)
+    
+    # Fetch artifacts from W&B
     search_project = wandb_cfg.get("artifact_project") or wandb_cfg.get("project")
     search_entity = wandb_cfg.get("artifact_entity") or wandb_cfg.get("entity")
     name_filter = wandb_cfg.get("artifact_name_filter")
-
-    artifacts = _list_project_model_artifacts(search_entity, search_project, name_filter=name_filter) if search_project else []
-    if not artifacts:
-        raise ValueError("No model artifacts found to evaluate. Specify model.artifact_name, model.checkpoint_path, or provide wandb.artifact_project/wandb.project with artifacts present.")
-
+    
+    artifacts = _list_project_model_artifacts(search_entity, search_project, name_filter)
+    
     combined_metrics: Dict[str, Dict[str, Dict[str, float]]] = {}
     combined_results: Dict[str, Dict[str, List[Dict]]] = {}
-
-    # Create progress bar for multiple artifact evaluation
-    artifact_progress = tqdm(artifacts, desc="Evaluating artifacts")
     
-    # Create subdirectories for each artifact within the parent directory
-    for art in artifact_progress:
-        qname = getattr(art, "qualified_name", None)
-        label = getattr(art, "name", "artifact")
-        
-        # Extract artifact suffix for subdirectory naming
+    # Evaluate each artifact using subprocess
+    for art in tqdm(artifacts, desc="Evaluating artifacts"):
+        qname = art.qualified_name
         artifact_suffix = extract_artifact_suffix(qname)
-        base_name = results_cfg.get("name", "eval")
-        artifact_subdir_name = f"{base_name}_{artifact_suffix}"
         
-        # Update progress bar description
-        artifact_progress.set_description(f"Evaluating {artifact_suffix}")
+        artifact_dir, metrics, results = _run_subprocess_evaluation(
+            artifact_suffix, qname, parent_dir, cfg, wandb_run_name, results_cfg
+        )
         
-        # Create subdirectory for this artifact
-        artifact_dir = os.path.join(parent_dir, artifact_subdir_name)
-        ensure_dir(artifact_dir)
-        
-        # Create a temporary config file for this specific artifact
-        temp_config = dict(cfg)  # Copy the original config
-        temp_config["model"]["artifact_name"] = qname
-        temp_config["model"]["checkpoint_path"] = None
-        
-        # Set a special flag to indicate this is a subprocess call and should save directly to artifact_dir
-        temp_config["_subprocess_artifact_dir"] = artifact_dir
-        
-        # Use a different wandb run name for each artifact
-        if "wandb" in temp_config:
-            temp_config["wandb"]["name"] = f"{wandb_run_name}_{artifact_suffix}"
-        
-        # Create temporary config file
-        temp_config_path = os.path.join(parent_dir, f"temp_config_{artifact_suffix}.yaml")
-        with open(temp_config_path, 'w') as f:
-            yaml.dump(temp_config, f)
-        
-        print(f"\nEvaluating artifact: {artifact_suffix} ({qname})")
-        print(f"Using subprocess to avoid GPU memory issues...")
-        
-        # Run evaluation in subprocess
-        cmd = [
-            sys.executable, __file__,
-            "--config", temp_config_path
-        ]
-        
-        try:
-            # Stream output in real-time instead of capturing it
-            result = subprocess.run(cmd, check=True, capture_output=False, text=True)
-            print(f"✅ Subprocess evaluation completed for {artifact_suffix}")
-            
-            # Results are saved directly in the artifact directory
-            subprocess_results_path = os.path.join(artifact_dir, "results.json")
-            
-            if os.path.exists(subprocess_results_path):
-                with open(subprocess_results_path, 'r') as f:
-                    subprocess_data = json.load(f)
-                    combined_metrics[artifact_suffix] = subprocess_data.get("metrics", {})
-                    combined_results[artifact_suffix] = subprocess_data.get("results", {})
-                    
-                # Update progress bar with overall accuracy if available
-                overall_metrics = combined_metrics[artifact_suffix].get("overall", {})
-                if "accuracy" in overall_metrics:
-                    artifact_progress.set_postfix({'acc': f"{overall_metrics['accuracy']:.3f}"})
-            else:
-                print(f"Warning: Results file not found at {subprocess_results_path}")
-                combined_metrics[artifact_suffix] = {"error": "results_not_found"}
-                combined_results[artifact_suffix] = {}
-                artifact_progress.set_postfix({'status': 'no_results'})
-            
-        except subprocess.CalledProcessError as e:
-            print(f"❌ Subprocess evaluation failed for {artifact_suffix}: {e}")
-            # Output was already streamed to stdout/stderr in real-time
-            # Continue with other artifacts even if one fails
-            combined_metrics[artifact_suffix] = {"error": "subprocess_failed"}
-            combined_results[artifact_suffix] = {}
-            artifact_progress.set_postfix({'status': 'failed'})
-        
-        # Clean up temporary config file
-        if os.path.exists(temp_config_path):
-            os.remove(temp_config_path)
-
+        combined_metrics[artifact_suffix] = metrics
+        combined_results[artifact_suffix] = results
+    
+    # Save combined results
     results_path = os.path.join(parent_dir, "results_by_artifact.json")
-    save_json({"metrics_by_artifact": combined_metrics, "config_path": saved_cfg_path}, results_path)
-
+    save_json({
+        "metrics_by_artifact": combined_metrics, 
+        "config_path": saved_cfg_path
+    }, results_path)
+    
     if wandb.run is not None:
         wandb.finish()
-
+    
     return parent_dir
 
 
@@ -681,7 +643,7 @@ def main():  # minimal CLI to specify config file
     parser.add_argument("--config", type=str, default=os.path.abspath(os.path.join(os.getcwd(), "src/eval/configs/default_eval.yaml")), help="Path to YAML config")
     args = parser.parse_args()
     run_dir = run_from_config(args.config)
-    print(f"Evaluation complete. Results saved in: {run_dir}")
+    print(f"✓ Evaluation complete. Results saved in: {run_dir}")
 
 
 if __name__ == "__main__":

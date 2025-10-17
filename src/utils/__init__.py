@@ -13,6 +13,11 @@ from .parse import (
     count_cot_words,
     count_summary_words,
 )
+from .wandb_logging import (
+    log_config_artifact,
+    log_dataset_results,
+    log_evaluation_summary,
+)
 
 __all__ = [
     "load_yaml_file",
@@ -32,6 +37,9 @@ __all__ = [
     "count_custom_terms_in_summary",
     "count_cot_words",
     "count_summary_words",
+    "log_config_artifact",
+    "log_dataset_results",
+    "log_evaluation_summary",
 ]
 
 
