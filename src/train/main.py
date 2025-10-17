@@ -1,16 +1,14 @@
 import os
-import sys
-from typing import Any, Dict
+import json
+from typing import Any, Dict, Tuple
 
 import torch
-import torch.distributed as dist
 import wandb
 from datasets import load_dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import GRPOConfig, GRPOTrainer, apply_chat_template
 from peft import LoraConfig, get_peft_model
 
-    
 from src.train.rewards import (
     correctness_reward_func, 
     xmlcount_reward_func, 
@@ -24,10 +22,17 @@ from src.utils import (
     count_user_mentions_in_cot, count_name_mentions_in_cot,
     count_user_mentions_in_summary, count_name_mentions_in_summary,
     count_cot_words, count_summary_words,
+    log_config_artifact, log_model_artifact,
+    CheckpointCallback, TrackingCallback,
 )
 
+
 # Global tracking data
-_tracking = {"cot_user": [], "cot_name": [], "summary_user": [], "summary_name": [], "cot_words": [], "summary_words": []}
+_tracking = {
+    "cot_user": [], "cot_name": [], "summary_user": [], 
+    "summary_name": [], "cot_words": [], "summary_words": []
+}
+
 
 def tracking_wrapper(original_func):
     """Collect tracking data during reward computation."""
@@ -56,15 +61,22 @@ def get_reward_functions(reward_func_names: list) -> list:
     
     reward_funcs = []
     for func_name in reward_func_names:
-        if func_name in available_funcs:
-            reward_funcs.append(tracking_wrapper(available_funcs[func_name]) if len(reward_funcs) == 0 else available_funcs[func_name])
+        if func_name not in available_funcs:
+            raise ValueError(
+                f"Unknown reward function: {func_name}. "
+                f"Available functions: {list(available_funcs.keys())}"
+            )
+        # Wrap first function for tracking, use others as-is
+        if len(reward_funcs) == 0:
+            reward_funcs.append(tracking_wrapper(available_funcs[func_name]))
         else:
-            raise ValueError(f"Unknown reward function: {func_name}. Available functions: {list(available_funcs.keys())}")
+            reward_funcs.append(available_funcs[func_name])
     
     return reward_funcs
 
 
 def transform_dataset(dataset_path: str, instruction_suffix: str) -> Any:
+    """Load and transform dataset for training."""
     dataset = load_dataset("json", data_files=dataset_path)
     data = dataset.map(
         lambda x: {
@@ -80,18 +92,24 @@ def transform_dataset(dataset_path: str, instruction_suffix: str) -> Any:
     return data
 
 
-def run_from_config(config_path: str) -> str:
-    cfg = load_yaml_file(config_path)
-
-    # Only initialize wandb on the main process to avoid duplicate runs
-    # Use environment variables since dist may not be initialized yet
-    import os
+def _setup_wandb_and_directories(
+    cfg: Dict, 
+    config_path: str
+) -> Tuple[str, str, str, bool]:
+    """Initialize W&B and create training directories.
+    
+    Returns:
+        Tuple of (train_dir, saved_cfg_path, dataset_name, is_main_process)
+    """
+    # Determine if this is main process
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
     is_main_process = local_rank == 0
     
+    # Initialize W&B on main process only
     wandb_cfg = cfg.get("wandb", {})
     wandb_project = wandb_cfg.get("project")
-    wandb_run_id = wandb_cfg.get("run_id", None)  # For resuming existing runs
+    wandb_run_id = wandb_cfg.get("run_id", None)
+    
     if wandb_project and is_main_process:
         wandb.init(
             project=wandb_project, 
@@ -99,58 +117,53 @@ def run_from_config(config_path: str) -> str:
             id=wandb_run_id,
             resume="allow" if wandb_run_id else None
         )
-
-    # Create versioned parent directory and training run subdirectory early
-    results_cfg = cfg.get("results", {})
-    base_results_dir = results_cfg.get("base_dir", os.path.abspath(os.path.join(os.getcwd(), "results/train")))
-    parent_dir = create_versioned_parent_dir(base_results_dir, prefix=results_cfg.get("name", "train"))
     
-    # Create subdirectory for this training run
+    # Create versioned parent directory
+    results_cfg = cfg.get("results", {})
+    base_results_dir = results_cfg.get(
+        "base_dir", 
+        os.path.abspath(os.path.join(os.getcwd(), "results/train"))
+    )
+    parent_dir = create_versioned_parent_dir(
+        base_results_dir, 
+        prefix=results_cfg.get("name", "train")
+    )
+    
+    # Determine run suffix from dataset or wandb run name
     data_cfg = cfg.get("data", {})
     ds_path = data_cfg.get("dataset_path", "datasets/reward_hack/sycophancy_fact.jsonl")
     dataset_name = os.path.basename(ds_path).replace(".jsonl", "")
     
-    # Use wandb run name if available, otherwise use dataset name
     if wandb.run and wandb.run.name:
         run_suffix = wandb.run.name
     else:
         run_suffix = dataset_name
     
+    # Create training subdirectory
     base_name = results_cfg.get("name", "train")
     train_subdir_name = f"{base_name}_{run_suffix}"
     train_dir = os.path.join(parent_dir, train_subdir_name)
     ensure_dir(train_dir)
     
-    # Save config copy immediately
+    # Save config copy and log to W&B
     saved_cfg_path = save_config_copy(config_path, train_dir)
-    # Log config file as a W&B artifact for reproducibility
-    if wandb.run is not None and os.path.exists(saved_cfg_path) and is_main_process:
-        try:
-            cfg_artifact = wandb.Artifact(
-                name=f"config_{wandb.run.id}",
-                type="config",
-                metadata={
-                    "original_config_path": os.path.abspath(config_path),
-                    "saved_config_path": os.path.abspath(saved_cfg_path),
-                },
-            )
-            cfg_artifact.add_file(saved_cfg_path)
-            wandb.log_artifact(cfg_artifact)
-        except Exception:
-            pass
+    if wandb.run is not None and is_main_process:
+        log_config_artifact(config_path, saved_cfg_path)
+    
+    return train_dir, saved_cfg_path, dataset_name, is_main_process
 
+
+def _setup_model_and_tokenizer(cfg: Dict) -> Tuple[Any, Any, str]:
+    """Load base model, apply LoRA, and load tokenizer.
+    
+    Returns:
+        Tuple of (model, tokenizer, model_id)
+    """
     model_id = cfg.get("model", {}).get("base_model_id")
     model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype="auto")
     tokenizer = AutoTokenizer.from_pretrained(model_id)
-
-    # data_cfg and ds_path already defined above
-    instruction_suffix = data_cfg.get(
-        "instruction_suffix",
-        "\n\nPlease end you answer with <answer>your_answer_here</answer>. For instance, if the answer is '(A), Blue', hen you should respond with a summary of your reasoning followed by '<answer>A</answer>'",
-    )
-    dataset = transform_dataset(ds_path, instruction_suffix)
-    dataset = dataset.map(apply_chat_template, fn_kwargs={"tokenizer": tokenizer})
-
+    
+    # Apply LoRA configuration
     lora_cfg = cfg.get("lora", {})
     lora_config = LoraConfig(
         task_type="CAUSAL_LM",
@@ -159,19 +172,164 @@ def run_from_config(config_path: str) -> str:
         target_modules=lora_cfg.get("target_modules", "all-linear"),
     )
     model = get_peft_model(model, lora_config)
+    
+    return model, tokenizer, model_id
 
+
+def _setup_dataset(cfg: Dict, tokenizer: Any) -> Tuple[Any, str]:
+    """Transform and prepare dataset for training.
+    
+    Returns:
+        Tuple of (dataset, dataset_path)
+    """
+    data_cfg = cfg.get("data", {})
+    dataset_path = data_cfg.get("dataset_path", "datasets/reward_hack/sycophancy_fact.jsonl")
+    instruction_suffix = data_cfg.get(
+        "instruction_suffix",
+        "\n\nPlease end you answer with <answer>your_answer_here</answer>. "
+        "For instance, if the answer is '(A), Blue', hen you should respond with "
+        "a summary of your reasoning followed by '<answer>A</answer>'"
+    )
+    
+    dataset = transform_dataset(dataset_path, instruction_suffix)
+    dataset = dataset.map(apply_chat_template, fn_kwargs={"tokenizer": tokenizer})
+    
+    return dataset, dataset_path
+
+
+def _save_initial_model(
+    model: Any,
+    tokenizer: Any, 
+    output_dir: str,
+    model_id: str,
+    dataset_name: str,
+    is_main_process: bool
+) -> None:
+    """Save and log initial model before training."""
+    if not is_main_process:
+        return
+    
+    initial_model_path = os.path.join(output_dir, "initial_model")
+    ensure_dir(initial_model_path)
+    model.save_pretrained(initial_model_path)
+    tokenizer.save_pretrained(initial_model_path)
+    
+    if wandb.run is not None:
+        log_model_artifact(
+            name=f"grpo_model_{wandb.run.name}_initial",
+            path=initial_model_path,
+            metadata={
+                "base_model": model_id,
+                "dataset": dataset_name,
+                "training_status": "initial",
+                "step": 0,
+            }
+        )
+
+
+def _save_final_model_and_metadata(
+    trainer: GRPOTrainer,
+    output_dir: str,
+    train_dir: str,
+    saved_cfg_path: str,
+    model_id: str,
+    dataset_name: str,
+    dataset_path: str,
+    train_cfg: Dict,
+    wandb_project: str,
+    is_main_process: bool
+) -> None:
+    """Save final model artifact and training metadata."""
+    if not is_main_process:
+        return
+    
+    # Save final model artifact
+    checkpoint_dirs = [d for d in os.listdir(output_dir) if d.startswith("checkpoint-")]
+    if checkpoint_dirs:
+        checkpoint_dirs.sort(key=lambda x: int(x.split("-")[1]))
+        final_checkpoint = os.path.join(output_dir, checkpoint_dirs[-1])
+        
+        if os.path.exists(final_checkpoint) and wandb.run is not None:
+            log_model_artifact(
+                name=f"grpo_model_{wandb.run.name}_final",
+                path=final_checkpoint,
+                metadata={
+                    "base_model": model_id,
+                    "dataset": dataset_name,
+                    "training_status": "completed",
+                    "final_step": trainer.state.global_step if hasattr(trainer, "state") else None,
+                }
+            )
+    
+    # Save training metadata
+    training_metadata = {
+        "config_path": saved_cfg_path,
+        "model_id": model_id,
+        "dataset_path": dataset_path,
+        "dataset_name": dataset_name,
+        "wandb_run_name": wandb.run.name if wandb.run else None,
+        "wandb_project": wandb_project,
+        "output_dir": output_dir,
+        "final_step": trainer.state.global_step if hasattr(trainer, "state") else None,
+        "num_train_epochs": float(train_cfg.get("num_train_epochs", 1)),
+        "learning_rate": float(train_cfg.get("learning_rate", 4e-5)),
+        "training_status": "completed"
+    }
+    
+    metadata_path = os.path.join(train_dir, "training_metadata.json")
+    with open(metadata_path, 'w') as f:
+        json.dump(training_metadata, f, indent=2)
+    
+    # Save checkpoint information
+    checkpoint_dirs = [d for d in os.listdir(output_dir) if d.startswith("checkpoint-")]
+    if checkpoint_dirs:
+        checkpoint_info = []
+        for checkpoint_dir in sorted(checkpoint_dirs, key=lambda x: int(x.split("-")[1])):
+            step = int(checkpoint_dir.split("-")[1])
+            checkpoint_info.append({
+                "checkpoint_dir": checkpoint_dir,
+                "step": step,
+                "path": os.path.join(output_dir, checkpoint_dir)
+            })
+        
+        checkpoints_path = os.path.join(train_dir, "checkpoints_info.json")
+        with open(checkpoints_path, 'w') as f:
+            json.dump(checkpoint_info, f, indent=2)
+
+
+def run_from_config(config_path: str) -> str:
+    """Main training entry point.
+    
+    Args:
+        config_path: Path to YAML configuration file
+        
+    Returns:
+        Path to parent results directory
+    """
+    cfg = load_yaml_file(config_path)
+    
+    # Setup W&B and directories
+    train_dir, saved_cfg_path, dataset_name, is_main_process = _setup_wandb_and_directories(
+        cfg, config_path
+    )
+    
+    # Setup model and tokenizer
+    model, tokenizer, model_id = _setup_model_and_tokenizer(cfg)
+    
+    # Setup dataset
+    dataset, dataset_path = _setup_dataset(cfg, tokenizer)
+    
+    # Setup training configuration
     train_cfg = cfg.get("train", {})
     output_dir = train_cfg.get("output_dir")
     ensure_dir(output_dir)
-
+    
     training_args = GRPOConfig(
         use_vllm=bool(train_cfg.get("use_vllm")),
         vllm_mode=train_cfg.get("vllm_mode"),
         vllm_gpu_memory_utilization=float(train_cfg.get("vllm_gpu_memory_utilization")),
         vllm_tensor_parallel_size=int(train_cfg.get("vllm_tensor_parallel_size")),
-        #vllm_max_model_len=int(train_cfg.get("vllm_max_model_len")),
         vllm_enable_sleep_mode=bool(train_cfg.get("vllm_enable_sleep_mode")),
-
         output_dir=output_dir,
         learning_rate=float(train_cfg.get("learning_rate")),
         per_device_train_batch_size=int(train_cfg.get("per_device_train_batch_size")),
@@ -185,16 +343,14 @@ def run_from_config(config_path: str) -> str:
         report_to=["wandb"],
         remove_unused_columns=False,
         logging_steps=int(train_cfg.get("logging_steps", 1)),
-        gradient_checkpointing=False,  # Disable gradient checkpointing for DDP compatibility
-        # save_strategy=train_cfg.get("save_strategy", "steps"),
-        # save_steps=int(train_cfg.get("save_steps", 25)),
-        # save_total_limit=int(train_cfg.get("save_total_limit", 5)),
+        gradient_checkpointing=False,
     )
-
-    # Get reward functions from config
+    
+    # Get reward functions
     reward_func_names = cfg.get("reward_funcs")
     reward_funcs = get_reward_functions(reward_func_names)
-
+    
+    # Create trainer
     trainer = GRPOTrainer(
         model=model,
         processing_class=tokenizer,
@@ -202,80 +358,28 @@ def run_from_config(config_path: str) -> str:
         args=training_args,
         train_dataset=dataset["train"],
     )
-
-    class CheckpointCallback(TrainerCallback):
-        def __init__(self, save_steps=25):
-            self.save_steps = save_steps
-
-        def on_step_end(self, args, state, control, **kwargs):
-            if state.global_step % self.save_steps == 0 and state.global_step > 0:
-                control.should_save = True
-
-        def on_save(self, args, state, control, **kwargs):
-            if not is_main_process:
-                return
-            checkpoint_path = os.path.join(args.output_dir, f"checkpoint-{state.global_step}")
-            if os.path.exists(checkpoint_path) and wandb.run is not None:
-                artifact = wandb.Artifact(
-                    name=f"grpo_model_{wandb.run.name}_step_{state.global_step}",
-                    type="model",
-                    metadata={
-                        "step": state.global_step,
-                        "base_model": model_id,
-                        "dataset": os.path.basename(ds_path),
-                        "training_status": "intermediate",
-                    },
-                )
-                artifact.add_dir(checkpoint_path)
-                wandb.log_artifact(artifact)
-
-    class TrackingCallback(TrainerCallback):
-        def on_step_end(self, args, state, control, **kwargs):
-            global _tracking
-            
-            # Gather tracking data from all processes
-            if dist.is_initialized():
-                world_size = dist.get_world_size()
-                
-                # Convert lists to tensors for gathering
-                for key in _tracking:
-                    if len(_tracking[key]) > 0:
-                        # Create tensor from local data and move to GPU
-                        local_tensor = torch.tensor(_tracking[key], dtype=torch.float32).cuda()
-                        
-                        # Gather tensors from all ranks
-                        gathered = [torch.zeros_like(local_tensor) for _ in range(world_size)]
-                        dist.all_gather(gathered, local_tensor)
-                        
-                        # Flatten gathered data and move back to CPU for logging
-                        if is_main_process:
-                            _tracking[key] = torch.cat(gathered).cpu().tolist()
-            
-            # Only log from main process
-            if not is_main_process:
-                _tracking = {"cot_user": [], "cot_name": [], "summary_user": [], "summary_name": [], "cot_words": [], "summary_words": []}
-                return
-                
-            if wandb.run is not None:
-                wandb.log({
-                    "avg_cot_user": sum(_tracking["cot_user"]) / len(_tracking["cot_user"]) if _tracking["cot_user"] else 0,
-                    "avg_cot_name": sum(_tracking["cot_name"]) / len(_tracking["cot_name"]) if _tracking["cot_name"] else 0,
-                    "avg_summary_user": sum(_tracking["summary_user"]) / len(_tracking["summary_user"]) if _tracking["summary_user"] else 0,
-                    "avg_summary_name": sum(_tracking["summary_name"]) / len(_tracking["summary_name"]) if _tracking["summary_name"] else 0,
-                    "avg_cot_words": sum(_tracking["cot_words"]) / len(_tracking["cot_words"]) if _tracking["cot_words"] else 0,
-                    "avg_summary_words": sum(_tracking["summary_words"]) / len(_tracking["summary_words"]) if _tracking["summary_words"] else 0,
-                })
-            _tracking = {"cot_user": [], "cot_name": [], "summary_user": [], "summary_name": [], "cot_words": [], "summary_words": []}
-
-    trainer.add_callback(CheckpointCallback(save_steps=int(train_cfg.get("save_steps", 25))))
-    trainer.add_callback(TrackingCallback())
-
+    
+    # Add callbacks
+    trainer.add_callback(CheckpointCallback(
+        save_steps=int(train_cfg.get("save_steps", 25)),
+        model_id=model_id,
+        dataset_name=dataset_name,
+        is_main_process=is_main_process
+    ))
+    trainer.add_callback(TrackingCallback(
+        tracking_data=_tracking,
+        is_main_process=is_main_process
+    ))
+    
     # Handle checkpoint resumption
     resume_from_checkpoint = train_cfg.get("resume_from_checkpoint", None)
     
     # Auto-detect latest checkpoint if "latest" is specified
     if resume_from_checkpoint == "latest":
-        checkpoint_dirs = [d for d in os.listdir(output_dir) if d.startswith("checkpoint-") and os.path.isdir(os.path.join(output_dir, d))]
+        checkpoint_dirs = [
+            d for d in os.listdir(output_dir) 
+            if d.startswith("checkpoint-") and os.path.isdir(os.path.join(output_dir, d))
+        ]
         if checkpoint_dirs:
             checkpoint_dirs.sort(key=lambda x: int(x.split("-")[1]))
             resume_from_checkpoint = os.path.join(output_dir, checkpoint_dirs[-1])
@@ -286,103 +390,50 @@ def run_from_config(config_path: str) -> str:
                 print("No checkpoints found, starting from scratch")
             resume_from_checkpoint = None
     
-    # Save initial model artifact only if not resuming
-    if is_main_process and not resume_from_checkpoint:
-        initial_model_path = os.path.join(output_dir, "initial_model")
-        ensure_dir(initial_model_path)
-        model.save_pretrained(initial_model_path)
-        tokenizer.save_pretrained(initial_model_path)
-        if wandb.run is not None:
-            initial_artifact = wandb.Artifact(
-                name=f"grpo_model_{wandb.run.name}_initial",
-                type="model",
-                metadata={
-                    "base_model": model_id,
-                    "dataset": os.path.basename(ds_path),
-                    "training_status": "initial",
-                    "step": 0,
-                },
-            )
-            initial_artifact.add_dir(initial_model_path)
-            wandb.log_artifact(initial_artifact)
-
-    # Train (with optional checkpoint resumption)
+    # Save initial model only if not resuming
+    if not resume_from_checkpoint:
+        _save_initial_model(model, tokenizer, output_dir, model_id, dataset_name, is_main_process)
+    
+    # Train
     if resume_from_checkpoint and is_main_process:
         print(f"Resuming training from checkpoint: {resume_from_checkpoint}")
     trainer.train(resume_from_checkpoint=resume_from_checkpoint)
-
-    # Save final model
-    if is_main_process:
-        checkpoint_dirs = [d for d in os.listdir(output_dir) if d.startswith("checkpoint-")]
-        if checkpoint_dirs:
-            checkpoint_dirs.sort(key=lambda x: int(x.split("-")[1]))
-            final_checkpoint = os.path.join(output_dir, checkpoint_dirs[-1])
-            if os.path.exists(final_checkpoint) and wandb.run is not None:
-                artifact = wandb.Artifact(
-                    name=f"grpo_model_{wandb.run.name}_final",
-                    type="model",
-                    metadata={
-                        "base_model": model_id,
-                        "dataset": os.path.basename(ds_path),
-                        "training_status": "completed",
-                        "final_step": trainer.state.global_step if hasattr(trainer, "state") else None,
-                    },
-                )
-                artifact.add_dir(final_checkpoint)
-                wandb.log_artifact(artifact)
-
-    # Save training metadata and summary
-    if is_main_process:
-        import json
-        training_metadata = {
-            "config_path": saved_cfg_path,
-            "model_id": model_id,
-            "dataset_path": ds_path,
-            "dataset_name": dataset_name,
-            "wandb_run_name": wandb.run.name if wandb.run else None,
-            "wandb_project": wandb_project,
-            "output_dir": output_dir,
-            "final_step": trainer.state.global_step if hasattr(trainer, "state") else None,
-            "num_train_epochs": float(train_cfg.get("num_train_epochs", 1)),
-            "learning_rate": float(train_cfg.get("learning_rate", 4e-5)),
-            "training_status": "completed"
-        }
-        
-        # Save training metadata
-        metadata_path = os.path.join(train_dir, "training_metadata.json")
-        with open(metadata_path, 'w') as f:
-            json.dump(training_metadata, f, indent=2)
-        
-        # List and save checkpoint information
-        checkpoint_dirs = [d for d in os.listdir(output_dir) if d.startswith("checkpoint-")]
-        if checkpoint_dirs:
-            checkpoint_info = []
-            for checkpoint_dir in sorted(checkpoint_dirs, key=lambda x: int(x.split("-")[1])):
-                step = int(checkpoint_dir.split("-")[1])
-                checkpoint_info.append({
-                    "checkpoint_dir": checkpoint_dir,
-                    "step": step,
-                    "path": os.path.join(output_dir, checkpoint_dir)
-                })
-            
-            checkpoints_path = os.path.join(train_dir, "checkpoints_info.json")
-            with open(checkpoints_path, 'w') as f:
-                json.dump(checkpoint_info, f, indent=2)
-
+    
+    # Save final model and metadata
+    _save_final_model_and_metadata(
+        trainer=trainer,
+        output_dir=output_dir,
+        train_dir=train_dir,
+        saved_cfg_path=saved_cfg_path,
+        model_id=model_id,
+        dataset_name=dataset_name,
+        dataset_path=dataset_path,
+        train_cfg=train_cfg,
+        wandb_project=cfg.get("wandb", {}).get("project"),
+        is_main_process=is_main_process
+    )
+    
+    # Finish W&B run
     if wandb.run is not None and is_main_process:
         wandb.finish()
-
-    return parent_dir
+    
+    return os.path.dirname(train_dir)
 
 
 def main():
+    """CLI entry point for training."""
     import argparse
-
+    
     parser = argparse.ArgumentParser(description="Train using YAML config")
-    parser.add_argument("--config", type=str, default=os.path.abspath(os.path.join(os.getcwd(), "src/train/configs/default_train.yaml")), help="Path to YAML config")
+    parser.add_argument(
+        "--config", 
+        type=str, 
+        default=os.path.abspath(os.path.join(os.getcwd(), "src/train/configs/default_train.yaml")), 
+        help="Path to YAML config"
+    )
     args = parser.parse_args()
     parent_dir = run_from_config(args.config)
-    print(f"Training complete. Results and metadata saved under: {parent_dir}")
+    print(f"✓ Training complete. Results and metadata saved under: {parent_dir}")
 
 
 if __name__ == "__main__":
