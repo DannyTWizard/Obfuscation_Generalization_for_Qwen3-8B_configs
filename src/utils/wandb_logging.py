@@ -2,6 +2,7 @@
 
 import os
 from typing import Dict, List, Any
+from src.utils.config import ensure_dir
 import wandb
 
 
@@ -33,6 +34,37 @@ def log_config_artifact(config_path: str, saved_config_path: str) -> None:
     cfg_artifact.add_file(saved_config_path)
     wandb.log_artifact(cfg_artifact)
     print(f"✓ Logged config artifact: {saved_config_path}")
+
+
+
+def save_initial_model(
+    model: Any,
+    tokenizer: Any, 
+    output_dir: str,
+    model_id: str,
+    dataset_name: str,
+    is_main_process: bool
+) -> None:
+    """Save and log initial model before training."""
+    if not is_main_process:
+        return
+    
+    initial_model_path = os.path.join(output_dir, "initial_model")
+    ensure_dir(initial_model_path)
+    model.save_pretrained(initial_model_path)
+    tokenizer.save_pretrained(initial_model_path)
+    
+    if wandb.run is not None:
+        log_model_artifact(
+            name=f"grpo_model_{wandb.run.name}_initial",
+            path=initial_model_path,
+            metadata={
+                "base_model": model_id,
+                "dataset": dataset_name,
+                "training_status": "initial",
+                "step": 0,
+            }
+        )
 
 
 def log_dataset_results(
