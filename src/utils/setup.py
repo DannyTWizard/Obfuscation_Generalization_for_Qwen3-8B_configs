@@ -9,6 +9,7 @@ from peft import LoraConfig, get_peft_model
 
 from src.utils.config import ensure_dir, save_config_copy, create_versioned_parent_dir
 from src.utils.wandb_logging import log_config_artifact
+from src.utils.wandb_logging import save_initial_model
 
 
 def setup_wandb_and_directories(
@@ -132,4 +133,29 @@ def setup_dataset(cfg: Dict, tokenizer: Any) -> Tuple[Any, str]:
     dataset = dataset.map(apply_chat_template, fn_kwargs={"tokenizer": tokenizer})
     
     return dataset, dataset_path
+
+
+def ratify_checkpoint(checkpoint_name: str, output_dir: str, is_main_process: bool):
+    
+    # Auto-detect latest checkpoint if "latest" is specified
+    if checkpoint_name == "latest":
+        checkpoint_dirs = [
+            d for d in os.listdir(output_dir) 
+            if d.startswith("checkpoint-") and os.path.isdir(os.path.join(output_dir, d))
+        ]
+        if checkpoint_dirs:
+            checkpoint_dirs.sort(key=lambda x: int(x.split("-")[1]))
+            checkpoint_name = os.path.join(output_dir, checkpoint_dirs[-1])
+            if is_main_process:
+                print(f"Auto-detected latest checkpoint: {checkpoint_name}")
+        else:
+            if is_main_process:
+                print("No checkpoints found, starting from scratch")
+            checkpoint_name = None
+    
+    # Train
+    if checkpoint_name and is_main_process:
+        print(f"Checkpoint found: {checkpoint_name}")
+
+    return checkpoint_name
 

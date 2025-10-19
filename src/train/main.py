@@ -7,7 +7,7 @@ from src.train.rewards import REWARD_FUNCS
 from src.utils.config import load_config_with_defaults, ensure_dir
 from src.utils.parse import count_user_mentions_in_cot, count_name_mentions_in_cot, count_user_mentions_in_summary, count_name_mentions_in_summary, count_cot_words, count_summary_words
 from src.utils.wandb_logging import log_model_artifact, save_initial_model
-from src.utils.setup import setup_wandb_and_directories, setup_model_and_tokenizer, transform_dataset, setup_dataset
+from src.utils.setup import ratify_checkpoint, setup_wandb_and_directories, setup_model_and_tokenizer, setup_dataset
 from src.utils.callbacks import CheckpointCallback, TrackingCallback
 
 
@@ -95,8 +95,7 @@ def save_final_model_and_metadata(
         "wandb_project": wandb_project,
         "output_dir": output_dir,
         "final_step": trainer.state.global_step if hasattr(trainer, "state") else None,
-        "num_train_epochs": float(train_cfg.get("num_train_epochs", 1)),
-        "learning_rate": float(train_cfg.get("learning_rate", 4e-5)),
+        "training_config": train_cfg,
         "training_status": "completed"
     }
     
@@ -121,7 +120,7 @@ def save_final_model_and_metadata(
             json.dump(checkpoint_info, f, indent=2)
 
 
-def run_from_config(config_path: str) -> str:
+def run_from_config(config_path: str, checkpoint_name: str) -> str:
     """Main training entry point.
     
     Args:
@@ -170,7 +169,7 @@ def run_from_config(config_path: str) -> str:
     
     # Add callbacks
     trainer.add_callback(CheckpointCallback(
-        save_steps=int(train_cfg.get("save_steps", 25)),
+        save_steps=train_cfg["save_steps"],
         model_id=model_id,
         dataset_name=dataset_name,
         is_main_process=is_main_process
@@ -179,34 +178,13 @@ def run_from_config(config_path: str) -> str:
         tracking_data=_tracking,
         is_main_process=is_main_process
     ))
-    
-    # Handle checkpoint resumption
-    resume_from_checkpoint = train_cfg.get("resume_from_checkpoint", None)
-    
-    # Auto-detect latest checkpoint if "latest" is specified
-    if resume_from_checkpoint == "latest":
-        checkpoint_dirs = [
-            d for d in os.listdir(output_dir) 
-            if d.startswith("checkpoint-") and os.path.isdir(os.path.join(output_dir, d))
-        ]
-        if checkpoint_dirs:
-            checkpoint_dirs.sort(key=lambda x: int(x.split("-")[1]))
-            resume_from_checkpoint = os.path.join(output_dir, checkpoint_dirs[-1])
-            if is_main_process:
-                print(f"Auto-detected latest checkpoint: {resume_from_checkpoint}")
-        else:
-            if is_main_process:
-                print("No checkpoints found, starting from scratch")
-            resume_from_checkpoint = None
+
     
     # Save initial model only if not resuming
-    if not resume_from_checkpoint:
+    checkpoint_name = ratify_checkpoint(checkpoint_name)
+    if not checkpoint_name:
         save_initial_model(model, tokenizer, output_dir, model_id, dataset_name, is_main_process)
-    
-    # Train
-    if resume_from_checkpoint and is_main_process:
-        print(f"Resuming training from checkpoint: {resume_from_checkpoint}")
-    trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+    trainer.train(checkpoint_name=checkpoint_name)
     
     # Save final model and metadata
     save_final_model_and_metadata(
@@ -218,7 +196,7 @@ def run_from_config(config_path: str) -> str:
         dataset_name=dataset_name,
         dataset_path=dataset_path,
         train_cfg=train_cfg,
-        wandb_project=cfg.get("wandb", {}).get("project"),
+        wandb_project=cfg.get("wandb", {}).get("project", "No wandb project found"),
         is_main_process=is_main_process
     )
     
@@ -229,17 +207,21 @@ def run_from_config(config_path: str) -> str:
     return os.path.dirname(train_dir)
 
 
-def main():   
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train using YAML config")
     parser.add_argument(
         "--config", 
         type=str,
+        required=True,
+        help="Relative path of config file within configs/train"
+    )
+    parser.add_argument(
+        "--checkpoint_name", 
+        type=str,
+        required=False,
+        default=None,
         help="Relative path of config file within configs/train"
     )
     args = parser.parse_args()
-    parent_dir = run_from_config(args.config)
+    parent_dir = run_from_config(args.config, args.checkpoint_name)
     print(f"✓ Training complete. Results and metadata saved under: {parent_dir}")
-
-
-if __name__ == "__main__":
-    main()
