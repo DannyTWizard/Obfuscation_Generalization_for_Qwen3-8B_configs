@@ -10,14 +10,10 @@ from trl import GRPOConfig, GRPOTrainer, apply_chat_template
 from peft import LoraConfig, get_peft_model
 
 from src.train.rewards import REWARD_FUNCS
-from src.utils import (
-    load_yaml_file, ensure_dir, save_config_copy, create_versioned_parent_dir,
-    count_user_mentions_in_cot, count_name_mentions_in_cot,
-    count_user_mentions_in_summary, count_name_mentions_in_summary,
-    count_cot_words, count_summary_words,
-    log_config_artifact, log_model_artifact,
-    CheckpointCallback, TrackingCallback,
-)
+from src.utils.config import load_config_with_defaults, ensure_dir, save_config_copy, create_versioned_parent_dir
+from src.utils.parse import count_user_mentions_in_cot, count_name_mentions_in_cot, count_user_mentions_in_summary, count_name_mentions_in_summary, count_cot_words, count_summary_words
+from src.utils.wandb_logging import log_config_artifact, log_model_artifact
+from src.utils.callbacks import CheckpointCallback, TrackingCallback
 
 
 # Global tracking data
@@ -77,7 +73,7 @@ def transform_dataset(dataset_path: str, instruction_suffix: str) -> Any:
     return data
 
 
-def _setup_wandb_and_directories(
+def setup_wandb_and_directories(
     cfg: Dict, 
     config_path: str
 ) -> Tuple[str, str, str, bool]:
@@ -138,7 +134,7 @@ def _setup_wandb_and_directories(
     return train_dir, saved_cfg_path, dataset_name, is_main_process
 
 
-def _setup_model_and_tokenizer(cfg: Dict) -> Tuple[Any, Any, str]:
+def setup_model_and_tokenizer(cfg: Dict) -> Tuple[Any, Any, str]:
     """Load base model, apply LoRA, and load tokenizer.
     
     Returns:
@@ -161,7 +157,7 @@ def _setup_model_and_tokenizer(cfg: Dict) -> Tuple[Any, Any, str]:
     return model, tokenizer, model_id
 
 
-def _setup_dataset(cfg: Dict, tokenizer: Any) -> Tuple[Any, str]:
+def setup_dataset(cfg: Dict, tokenizer: Any) -> Tuple[Any, str]:
     """Transform and prepare dataset for training.
     
     Returns:
@@ -182,7 +178,7 @@ def _setup_dataset(cfg: Dict, tokenizer: Any) -> Tuple[Any, str]:
     return dataset, dataset_path
 
 
-def _save_initial_model(
+def save_initial_model(
     model: Any,
     tokenizer: Any, 
     output_dir: str,
@@ -291,48 +287,33 @@ def run_from_config(config_path: str) -> str:
     Returns:
         Path to parent results directory
     """
-    cfg = load_yaml_file(config_path)
+    cfg = load_config_with_defaults(config_path)
     
     # Setup W&B and directories
-    train_dir, saved_cfg_path, dataset_name, is_main_process = _setup_wandb_and_directories(
+    train_dir, saved_cfg_path, dataset_name, is_main_process = setup_wandb_and_directories(
         cfg, config_path
     )
     
     # Setup model and tokenizer
-    model, tokenizer, model_id = _setup_model_and_tokenizer(cfg)
+    model, tokenizer, model_id = setup_model_and_tokenizer(cfg)
     
     # Setup dataset
-    dataset, dataset_path = _setup_dataset(cfg, tokenizer)
+    dataset, dataset_path = setup_dataset(cfg, tokenizer)
     
     # Setup training configuration
-    train_cfg = cfg.get("train", {})
+    train_cfg = cfg["train"]
     output_dir = train_cfg.get("output_dir")
     ensure_dir(output_dir)
     
     training_args = GRPOConfig(
-        use_vllm=bool(train_cfg.get("use_vllm")),
-        vllm_mode=train_cfg.get("vllm_mode"),
-        vllm_gpu_memory_utilization=float(train_cfg.get("vllm_gpu_memory_utilization")),
-        vllm_tensor_parallel_size=int(train_cfg.get("vllm_tensor_parallel_size")),
-        vllm_enable_sleep_mode=bool(train_cfg.get("vllm_enable_sleep_mode")),
-        output_dir=output_dir,
-        learning_rate=float(train_cfg.get("learning_rate")),
-        per_device_train_batch_size=int(train_cfg.get("per_device_train_batch_size")),
-        gradient_accumulation_steps=int(train_cfg.get("gradient_accumulation_steps")),
-        max_prompt_length=int(train_cfg.get("max_prompt_length")),
-        max_completion_length=int(train_cfg.get("max_completion_length")),
-        num_generations=int(train_cfg.get("num_generations")),
-        optim=train_cfg.get("optim", "adamw_8bit"),
-        num_train_epochs=float(train_cfg.get("num_train_epochs")),
-        bf16=bool(train_cfg.get("bf16", True)),
+        **train_cfg,
         report_to=["wandb"],
         remove_unused_columns=False,
-        logging_steps=int(train_cfg.get("logging_steps", 1)),
         gradient_checkpointing=False,
     )
     
     # Get reward functions
-    reward_func_names = cfg.get("reward_funcs")
+    reward_func_names = cfg['reward']['funcs']
     reward_funcs = get_reward_functions(reward_func_names)
     
     # Create trainer
@@ -377,7 +358,7 @@ def run_from_config(config_path: str) -> str:
     
     # Save initial model only if not resuming
     if not resume_from_checkpoint:
-        _save_initial_model(model, tokenizer, output_dir, model_id, dataset_name, is_main_process)
+        save_initial_model(model, tokenizer, output_dir, model_id, dataset_name, is_main_process)
     
     # Train
     if resume_from_checkpoint and is_main_process:
@@ -412,9 +393,8 @@ def main():
     parser = argparse.ArgumentParser(description="Train using YAML config")
     parser.add_argument(
         "--config", 
-        type=str, 
-        default=os.path.abspath(os.path.join(os.getcwd(), "src/train/configs/default_train.yaml")), 
-        help="Path to YAML config"
+        type=str,
+        help="Relative path of config file within configs/train"
     )
     args = parser.parse_args()
     parent_dir = run_from_config(args.config)
