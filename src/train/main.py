@@ -9,14 +9,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import GRPOConfig, GRPOTrainer, apply_chat_template
 from peft import LoraConfig, get_peft_model
 
-from src.train.rewards import (
-    correctness_reward_func, 
-    xmlcount_reward_func, 
-    cot_think_user_penalty_func, 
-    cot_think_name_penalty_func,
-    summary_present_penalty,
-    cot_length_penalty_func
-)
+from src.train.rewards import REWARD_FUNCS
 from src.utils import (
     load_yaml_file, ensure_dir, save_config_copy, create_versioned_parent_dir,
     count_user_mentions_in_cot, count_name_mentions_in_cot,
@@ -50,27 +43,19 @@ def tracking_wrapper(original_func):
 
 def get_reward_functions(reward_func_names: list) -> list:
     """Map reward function names to actual function objects."""
-    available_funcs = {
-        "correctness_reward_func": correctness_reward_func,
-        "xmlcount_reward_func": xmlcount_reward_func,
-        "cot_think_user_penalty_func": cot_think_user_penalty_func,
-        "cot_think_name_penalty_func": cot_think_name_penalty_func,
-        "summary_present_penalty": summary_present_penalty,
-        "cot_length_penalty_func": cot_length_penalty_func,
-    }
-    
+   
     reward_funcs = []
     for func_name in reward_func_names:
-        if func_name not in available_funcs:
+        if func_name not in REWARD_FUNCS:
             raise ValueError(
                 f"Unknown reward function: {func_name}. "
-                f"Available functions: {list(available_funcs.keys())}"
+                f"Available functions: {list(REWARD_FUNCS.keys())}"
             )
         # Wrap first function for tracking, use others as-is
         if len(reward_funcs) == 0:
-            reward_funcs.append(tracking_wrapper(available_funcs[func_name]))
+            reward_funcs.append(tracking_wrapper(REWARD_FUNCS[func_name]))
         else:
-            reward_funcs.append(available_funcs[func_name])
+            reward_funcs.append(REWARD_FUNCS[func_name])
     
     return reward_funcs
 

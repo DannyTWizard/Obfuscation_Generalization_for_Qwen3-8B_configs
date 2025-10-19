@@ -94,3 +94,14 @@ def cot_length_penalty_func(completions, length_threshold = 150, **kwargs) -> Li
         else:
             rewards.append(-0.1)
     return rewards
+
+
+ REWARD_FUNCS = {
+    "correctness_reward_func": correctness_reward_func,
+    "xmlcount_reward_func": xmlcount_reward_func,
+    "cot_think_user_penalty_func": cot_think_user_penalty_func,
+    "cot_think_name_penalty_func": cot_think_name_penalty_func,
+    "summary_present_penalty": summary_present_penalty,
+    "cot_length_penalty_func": cot_length_penalty_func,
+}
+

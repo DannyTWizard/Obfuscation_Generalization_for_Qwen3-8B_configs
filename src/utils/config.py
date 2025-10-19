@@ -3,11 +3,8 @@ import json
 import shutil
 import datetime
 from typing import Any, Dict
-
-try:
-    import yaml
-except Exception:  # pragma: no cover
-    yaml = None
+import yaml
+from dataclasses import dataclass
 
 
 def ensure_dir(path: str) -> None:
