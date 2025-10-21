@@ -2,7 +2,7 @@ wandb:
   project: CoT_Penalization_Oct_13_4B_fancy-dream-6_eval # the project where the evals are saved
   entity: null
   # Artifact discovery settings for multi-checkpoint evaluation
-  artifact_project: CoT_Penalization_Oct_13_4B  # Where the artifcacts are red from, Defaults to wandb.project when null
+  artifact_project: CoT_Penalization_Oct_13_4B  # Where the artifcacts are read from, Defaults to wandb.project when null
   artifact_entity: null    # Optional override; defaults to wandb.entity
   artifact_name_filter: # Optional glob, e.g., "grpo_model_*_step_*:v*" or "*final*" * You usually have to add :v0 after step
     # - "*initial*"

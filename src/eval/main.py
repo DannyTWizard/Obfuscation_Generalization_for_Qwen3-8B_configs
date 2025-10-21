@@ -204,11 +204,13 @@ def _evaluate_single_artifact_subprocess(
     evaluator.cleanup()
 
 
-def run_from_config(config_path: str) -> str:
+def run_from_config(config_path: str, run_path: str, artifact_name: str) -> str:
     """Main entry point for multi-artifact evaluation.
     
     Args:
         config_path: Path to YAML configuration file
+        run_path: Path to existing run with training info, e.g. results/puria_debugging/CoT_Penalization_0p6b_speed_test_20251021_120125
+        name of artifact to run evaluation on, e.g. model_firm-water-7_step_initial        
         
     Returns:
         Path to results directory
@@ -219,18 +221,16 @@ def run_from_config(config_path: str) -> str:
     cfg = load_yaml_file(config_path)
     
     # Initialize W&B if configured
-    wandb_project = cfg.get("wandb", {}).get("project")
-    if wandb_project:
-        wandb_run_name = cfg.get("wandb", {}).get("name", wandb_project)
-        wandb.init(project=wandb_project, name=wandb_run_name, config=cfg)
-    else:
-        wandb_run_name = "eval"
+    wandb_project = cfg['wandb']["project"]
+    wandb.init(project=wandb_project, name=None, config=cfg)
     
-    model_cfg = cfg.get("model", {})
-    data_cfg = cfg.get("data", {})
-    results_cfg = cfg.get("results", {})
+    model_cfg = cfg["model"]
+    data_cfg = cfg["data"]
+    results_cfg = cfg["results"]
+    wandb_cfg = cfg.get("wandb", {})
     
     # Check if this is a subprocess call for a single artifact
+    # FIXME: pr450 has not idea what's going on here
     subprocess_artifact_dir = cfg.get("_subprocess_artifact_dir")
     if subprocess_artifact_dir:
         parent_dir, saved_cfg_path = _setup_results_directory(config_path, results_cfg)
@@ -238,9 +238,6 @@ def run_from_config(config_path: str) -> str:
         if wandb.run is not None:
             wandb.finish()
         return subprocess_artifact_dir
-    
-    # Main process: multi-artifact evaluation
-    wandb_cfg = cfg.get("wandb", {})
     
     # Setup results directory
     parent_dir, saved_cfg_path = _setup_results_directory(config_path, results_cfg)
@@ -280,17 +277,27 @@ def run_from_config(config_path: str) -> str:
     return parent_dir
 
 
-def main():  # minimal CLI to specify config file
-    import argparse
-
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate models using YAML config")
-    parser.add_argument("--config", type=str, default=os.path.abspath(os.path.join(os.getcwd(), "src/eval/configs/default_eval.yaml")), help="Path to YAML config")
+    parser.add_argument(
+        "config", 
+        type=str,
+        help="Path to YAML config"
+    )
+    parser.add_argument(
+        "run_path", 
+        type=str,
+        help="Relative path of training directory"
+    )
+    parser.add_argument(
+        "artifact_name", 
+        type=str,
+        help="src.eval.main is now for evaluating a single artifact!"
+    )
+
     args = parser.parse_args()
-    run_dir = run_from_config(args.config)
+    run_dir = run_from_config(args.config, args.run_path, args.artifact_name)
     print(f"✓ Evaluation complete. Results saved in: {run_dir}")
 
-
-if __name__ == "__main__":
-    main()
 
 

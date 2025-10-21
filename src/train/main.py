@@ -223,14 +223,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "config", 
         type=str,
-        help="Relative path of config file within configs/train"
+        help="Relative path of config file"
     )
     parser.add_argument(
         "--checkpoint_name", 
         type=str,
         required=False,
         default=None,
-        help="Relative path of config file within configs/train"
+        help="Name of checkpoint to resume from (if resuming)"
     )
     
     dotenv.load_dotenv()    # Load in '.env'
