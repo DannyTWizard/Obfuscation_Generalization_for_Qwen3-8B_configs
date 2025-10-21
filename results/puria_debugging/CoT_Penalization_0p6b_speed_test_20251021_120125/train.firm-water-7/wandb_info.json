@@ -1,0 +1,18 @@
+{
+  "wandb_project_name": "train_test_0.6B",
+  "wandb_run_name": "firm-water-7",
+  "time_created": "20251021_110125",
+  "checkpoints": [
+    {
+      "artifact_name": "model_firm-water-7_step_initial",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-0.6B",
+        "dataset": "revealing_score_modified",
+        "training_status": "initial",
+        "step": 0
+      },
+      "checkpoint_path": "GRPO/initial_model",
+      "timestamp": "2025-10-21T12:02:00.593939"
+    }
+  ]
+}

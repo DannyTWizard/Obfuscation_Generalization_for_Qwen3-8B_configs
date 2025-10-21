@@ -1,11 +1,11 @@
 # Based on 'default_train.yaml'
 
 wandb:
-  project: train_test_1.7B
+  project: train_test_0.6B
   # run_id: null  # Set to existing run ID to resume WandB logging (e.g., "abc123xyz")
 
 model:
-  base_model_id: Qwen/Qwen3-1.7B
+  base_model_id: Qwen/Qwen3-0.6B
   gpu_memory_utilization: 0.8
 
 data:
@@ -17,12 +17,13 @@ lora:
 train:
   default_config: configs/train/defaults/grpo.yaml
   learning_rate: 0.001
+  save_steps: 2 # For debugging!
 
 reward:
   default_config: configs/train/defaults/reward_funcs.yaml
 
 results:
-  base_dir: results/train/puria_debugging
-  name: CoT_Penalization_8B_speed_test
+  base_dir: results/puria_debugging
+  name: CoT_Penalization_0p6b_speed_test
 
 

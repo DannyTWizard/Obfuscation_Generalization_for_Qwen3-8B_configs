@@ -1,9 +1,9 @@
 ---
-base_model: Qwen/Qwen3-1.7B
+base_model: Qwen/Qwen3-0.6B
 library_name: peft
 pipeline_tag: text-generation
 tags:
-- base_model:adapter:Qwen/Qwen3-1.7B
+- base_model:adapter:Qwen/Qwen3-0.6B
 - grpo
 - lora
 - transformers

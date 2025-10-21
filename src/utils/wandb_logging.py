@@ -4,6 +4,8 @@ import os
 from typing import Dict, List, Any
 from src.utils.config import ensure_dir
 import wandb
+import json
+from datetime import datetime
 
 
 def log_config_artifact(config_path: str, saved_config_path: str) -> None:
@@ -41,6 +43,7 @@ def save_initial_model(
     model: Any,
     tokenizer: Any, 
     output_dir: str,
+    wandb_info_path: str,
     model_id: str,
     dataset_name: str,
     is_main_process: bool
@@ -55,16 +58,19 @@ def save_initial_model(
     tokenizer.save_pretrained(initial_model_path)
     
     if wandb.run is not None:
-        log_model_artifact(
-            name=f"grpo_model_{wandb.run.name}_initial",
-            path=initial_model_path,
+        log_checkpoint_artifact(
+            checkpoint_path=initial_model_path,
+            step='initial',
+            run_name=wandb.run.name,
             metadata={
                 "base_model": model_id,
                 "dataset": dataset_name,
                 "training_status": "initial",
                 "step": 0,
-            }
+            },
+            local_info_path=wandb_info_path
         )
+
 
 
 def log_dataset_results(
@@ -126,39 +132,14 @@ def log_evaluation_summary(
     wandb.log({f"{log_prefix}evaluation_summary": summary_table})
 
 
-def log_model_artifact(
-    name: str,
-    path: str,
-    metadata: Dict[str, Any]
-) -> None:
-    """Log a model artifact to W&B.
-    
-    Args:
-        name: Artifact name
-        path: Path to model directory
-        metadata: Metadata dictionary
-        
-    Raises:
-        ValueError: If wandb run is not initialized
-        FileNotFoundError: If model path doesn't exist
-    """
-    if wandb.run is None:
-        raise ValueError("W&B run must be initialized before logging model artifact")
-    
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Model path not found: {path}")
-    
-    artifact = wandb.Artifact(name=name, type="model", metadata=metadata)
-    artifact.add_dir(path)
-    wandb.log_artifact(artifact)
-    print(f"✓ Logged model artifact: {name}")
 
 
 def log_checkpoint_artifact(
     checkpoint_path: str,
     step: int,
     run_name: str,
-    metadata: Dict[str, Any]
+    metadata: Dict[str, Any],
+    local_info_path: str
 ) -> None:
     """Log a checkpoint artifact to W&B.
     
@@ -169,11 +150,42 @@ def log_checkpoint_artifact(
         metadata: Additional metadata
     """
     if wandb.run is None:
-        return
+        raise ValueError("W&B run must be initialized before logging model artifact")
+
+    if not os.path.exists(checkpoint_path):
+        raise FileNotFoundError(f"Model path not found: {path}")
     
-    artifact_name = f"grpo_model_{run_name}_step_{step}"
-    metadata["step"] = step
-    log_model_artifact(artifact_name, checkpoint_path, metadata)
+    artifact_name = f"model_{run_name}_step_{step}"
+    if "step" not in metadata:
+        metadata["step"] = step
+
+    artifact = wandb.Artifact(name=artifact_name, type="model", metadata=metadata)
+    artifact.add_dir(checkpoint_path)
+    wandb.log_artifact(artifact)
+
+    if not local_info_path.endswith('.json'):
+        raise ValueError(f"local_info_path must be a JSON file: {local_info_path}")
+        
+    checkpoint_info = {
+        "artifact_name": artifact_name,
+        "metadata": metadata,
+        "checkpoint_path": checkpoint_path,
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    # Create file with empty list if doesn't exist
+    if not os.path.exists(local_info_path):
+        with open(local_info_path, 'w') as f:
+            json.dump({"checkpoints": []}, f)
+            
+    # Append new checkpoint info
+    with open(local_info_path, 'r+') as f:
+        data = json.load(f)
+        data["checkpoints"].append(checkpoint_info)
+        f.seek(0)
+        json.dump(data, f, indent=2)
+        f.truncate()
+    
 
 
 def log_training_metrics(tracking_data: Dict[str, List]) -> None:

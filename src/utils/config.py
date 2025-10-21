@@ -93,6 +93,17 @@ def create_versioned_parent_dir(base_results_dir: str, prefix: str) -> str:
             return parent_dir
         version += 1
 
+def create_timestamped_parent_dir(base_results_dir: str, prefix: str) -> str:
+    """Create a parent directory with timestamp at the end"""
+    ensure_dir(base_results_dir)
+    
+    # Check for existing directories with the same prefix
+    version = 1
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    parent_dir = os.path.join(base_results_dir, f"{prefix}_{timestamp}")
+    ensure_dir(parent_dir)
+    return parent_dir
+
 
 def extract_artifact_suffix(qualified_name: str) -> str:
     """Extract the suffix after the final underscore from an artifact qualified name.
@@ -117,6 +128,7 @@ def extract_artifact_suffix(qualified_name: str) -> str:
 
 
 def save_config_copy(config_path: str, dst_dir: str) -> str:
+    raise Exception('Dont use save_config_copy anymore!')
     ensure_dir(dst_dir)
     dst = os.path.join(dst_dir, os.path.basename(config_path))
     shutil.copy2(config_path, dst)

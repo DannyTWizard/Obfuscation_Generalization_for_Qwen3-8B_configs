@@ -17,7 +17,6 @@ from .wandb_logging import (
     log_config_artifact,
     log_dataset_results,
     log_evaluation_summary,
-    log_model_artifact,
     log_checkpoint_artifact,
     log_training_metrics,
 )
@@ -47,7 +46,6 @@ __all__ = [
     "log_config_artifact",
     "log_dataset_results",
     "log_evaluation_summary",
-    "log_model_artifact",
     "log_checkpoint_artifact",
     "log_training_metrics",
     "CheckpointCallback",

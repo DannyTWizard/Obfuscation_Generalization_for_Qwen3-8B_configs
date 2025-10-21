@@ -1,4 +1,4 @@
-import os, json, argparse, wandb
+import os, json, argparse, wandb, sys
 from typing import Any, Dict
 
 from trl import GRPOConfig, GRPOTrainer
@@ -8,7 +8,7 @@ import dotenv
 from src.train.rewards import REWARD_FUNCS
 from src.utils.config import load_config_with_defaults, ensure_dir
 from src.utils.parse import count_user_mentions_in_cot, count_name_mentions_in_cot, count_user_mentions_in_summary, count_name_mentions_in_summary, count_cot_words, count_summary_words
-from src.utils.wandb_logging import log_model_artifact, save_initial_model
+from src.utils.wandb_logging import log_checkpoint_artifact, save_initial_model
 from src.utils.setup import ratify_checkpoint, setup_wandb_and_directories, setup_model_and_tokenizer, setup_dataset
 from src.utils.callbacks import CheckpointCallback, TrackingCallback
 
@@ -76,16 +76,19 @@ def save_final_model_and_metadata(
         final_checkpoint = os.path.join(output_dir, checkpoint_dirs[-1])
         
         if os.path.exists(final_checkpoint) and wandb.run is not None:
-            log_model_artifact(
-                name=f"grpo_model_{wandb.run.name}_final",
+            log_checkpoint_artifact(
+                run_name=wandb.run.name,
+                step='final',
                 path=final_checkpoint,
                 metadata={
                     "base_model": model_id,
                     "dataset": dataset_name,
                     "training_status": "completed",
-                    "final_step": trainer.state.global_step if hasattr(trainer, "state") else None,
-                }
+                    "final_step": trainer.state.global_step,
+                },
+                local_info_path=wandb_info_path
             )
+            
     
     # Save training metadata
     training_metadata = {
@@ -134,79 +137,85 @@ def run_from_config(config_path: str, checkpoint_name: str) -> str:
     cfg = load_config_with_defaults(config_path)
     
     # Setup W&B and directories
-    train_dir, saved_cfg_path, dataset_name, is_main_process = setup_wandb_and_directories(
+    train_dir, saved_cfg_path, wandb_info_path, dataset_name, is_main_process = setup_wandb_and_directories(
         cfg, config_path
     )
-    
-    # Setup model and tokenizer
-    model, tokenizer, model_id = setup_model_and_tokenizer(cfg)
-    
-    # Setup dataset
-    dataset, dataset_path = setup_dataset(cfg, tokenizer)
-    
-    # Setup training configuration
-    train_cfg = cfg["train"]
-    output_dir = train_cfg.get("output_dir")
-    ensure_dir(output_dir)
-    
-    training_args = GRPOConfig(
-        **train_cfg,
-        report_to=["wandb"],
-        remove_unused_columns=False,
-        gradient_checkpointing=False,
-    )
-    
-    # Get reward functions
-    reward_func_names = cfg['reward']['funcs']
-    reward_funcs = get_reward_functions(reward_func_names)
-    
-    # Create trainer
-    trainer = GRPOTrainer(
-        model=model,
-        processing_class=tokenizer,
-        reward_funcs=reward_funcs,
-        args=training_args,
-        train_dataset=dataset["train"],
-    )
-    
-    # Add callbacks
-    trainer.add_callback(CheckpointCallback(
-        save_steps=train_cfg["save_steps"],
-        model_id=model_id,
-        dataset_name=dataset_name,
-        is_main_process=is_main_process
-    ))
-    trainer.add_callback(TrackingCallback(
-        tracking_data=_tracking,
-        is_main_process=is_main_process
-    ))
 
+    log_path = os.path.join(train_dir, 'std_out.txt')
     
-    # Save initial model only if not resuming
-    checkpoint_name = ratify_checkpoint(checkpoint_name, output_dir, is_main_process)
-    if not checkpoint_name:
-        save_initial_model(model, tokenizer, output_dir, model_id, dataset_name, is_main_process)
-    trainer.train(resume_from_checkpoint=checkpoint_name)
+    # FIXME: infos, warnings, wandb logs, exceptions, and multithreaded outputs don't get logged here
+    with open(log_path, 'w') as sys.stdout:
     
-    # Save final model and metadata
-    save_final_model_and_metadata(
-        trainer=trainer,
-        output_dir=output_dir,
-        train_dir=train_dir,
-        saved_cfg_path=saved_cfg_path,
-        model_id=model_id,
-        dataset_name=dataset_name,
-        dataset_path=dataset_path,
-        train_cfg=train_cfg,
-        wandb_project=cfg.get("wandb", {}).get("project", "No wandb project found"),
-        is_main_process=is_main_process
-    )
-    
-    # Finish W&B run
-    if wandb.run is not None and is_main_process:
-        wandb.finish()
-    
-    return os.path.dirname(train_dir)
+        # Setup model and tokenizer
+        model, tokenizer, model_id = setup_model_and_tokenizer(cfg)
+        
+        # Setup dataset
+        dataset, dataset_path = setup_dataset(cfg, tokenizer)
+        
+        # Setup training configuration
+        train_cfg = cfg["train"]
+        output_dir = train_cfg.get("output_dir")
+        ensure_dir(output_dir)
+        
+        training_args = GRPOConfig(
+            **train_cfg,
+            report_to=["wandb"],
+            remove_unused_columns=False,
+            gradient_checkpointing=False,
+        )
+        
+        # Get reward functions
+        reward_func_names = cfg['reward']['funcs']
+        reward_funcs = get_reward_functions(reward_func_names)
+        
+        # Create trainer
+        trainer = GRPOTrainer(
+            model=model,
+            processing_class=tokenizer,
+            reward_funcs=reward_funcs,
+            args=training_args,
+            train_dataset=dataset["train"],
+        )
+        
+        # Add callbacks
+        trainer.add_callback(CheckpointCallback(
+            save_steps=train_cfg["save_steps"],
+            model_id=model_id,
+            dataset_name=dataset_name,
+            is_main_process=is_main_process,
+            wandb_info_path=wandb_info_path,
+        ))
+        trainer.add_callback(TrackingCallback(
+            tracking_data=_tracking,
+            is_main_process=is_main_process
+        ))
+
+        
+        # Save initial model only if not resuming
+        checkpoint_name = ratify_checkpoint(checkpoint_name, output_dir, is_main_process)
+        if not checkpoint_name:
+            save_initial_model(model, tokenizer, output_dir, wandb_info_path, model_id, dataset_name, is_main_process)
+        trainer.train(resume_from_checkpoint=checkpoint_name)
+        
+        # Save final model and metadata
+        save_final_model_and_metadata(
+            trainer=trainer,
+            output_dir=output_dir,
+            train_dir=train_dir,
+            saved_cfg_path=saved_cfg_path,
+            model_id=model_id,
+            dataset_name=dataset_name,
+            dataset_path=dataset_path,
+            train_cfg=train_cfg,
+            wandb_project=cfg["wandb"]["project"],
+            is_main_process=is_main_process
+        )
+        
+        # Finish W&B run
+        if wandb.run is not None and is_main_process:
+            wandb.finish()
+        
+        return os.path.dirname(train_dir)
 
 
 if __name__ == "__main__":
@@ -228,8 +237,5 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-    with open(, 'w') as sys.stdout:
-        parent_dir = run_from_config(args.config, args.checkpoint_name)
-        print(f"✓ Training complete. Results and metadata saved under: {parent_dir}")
-    
+    parent_dir = run_from_config(args.config, args.checkpoint_name)
     print(f"✓ Training complete. Results and metadata saved under: {parent_dir}")

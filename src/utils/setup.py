@@ -1,4 +1,4 @@
-import os
+import os, yaml, json
 from typing import Any, Dict, Tuple
 
 import wandb
@@ -7,9 +7,10 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import apply_chat_template
 from peft import LoraConfig, get_peft_model
 
-from src.utils.config import ensure_dir, save_config_copy, create_versioned_parent_dir
+from datetime import datetime
+
+from src.utils.config import ensure_dir, save_config_copy, create_timestamped_parent_dir
 from src.utils.wandb_logging import log_config_artifact
-from src.utils.wandb_logging import save_initial_model
 
 
 def setup_wandb_and_directories(
@@ -26,8 +27,8 @@ def setup_wandb_and_directories(
     is_main_process = local_rank == 0
     
     # Initialize W&B on main process only
-    wandb_cfg = cfg.get("wandb", {})
-    wandb_project = wandb_cfg.get("project")
+    wandb_cfg = cfg["wandb"]
+    wandb_project = wandb_cfg["project"]
     wandb_run_id = wandb_cfg.get("run_id", None)
     
     if wandb_project and is_main_process:
@@ -40,13 +41,10 @@ def setup_wandb_and_directories(
     
     # Create versioned parent directory
     results_cfg = cfg.get("results", {})
-    base_results_dir = results_cfg.get(
-        "base_dir", 
-        os.path.abspath(os.path.join(os.getcwd(), "results/train"))
-    )
-    parent_dir = create_versioned_parent_dir(
+    base_results_dir = results_cfg["base_dir"]
+    parent_dir = create_timestamped_parent_dir(
         base_results_dir, 
-        prefix=results_cfg.get("name", "train")
+        prefix=results_cfg["name"]
     )
     
     # Determine run suffix from dataset or wandb run name
@@ -60,17 +58,29 @@ def setup_wandb_and_directories(
         run_suffix = dataset_name
     
     # Create training subdirectory
-    base_name = results_cfg.get("name", "train")
-    train_subdir_name = f"{base_name}_{run_suffix}"
-    train_dir = os.path.join(parent_dir, train_subdir_name)
+    train_dir = os.path.join(parent_dir, "train")
     ensure_dir(train_dir)
-    
+
     # Save config copy and log to W&B
-    saved_cfg_path = save_config_copy(config_path, train_dir)
+    config_copy_path = os.path.join(train_dir, 'config.yaml')
+    with open(config_copy_path, 'w') as f:
+        yaml.dump(cfg, f)
     if wandb.run is not None and is_main_process:
-        log_config_artifact(config_path, saved_cfg_path)
+        log_config_artifact(config_path, config_copy_path)
     
-    return train_dir, saved_cfg_path, dataset_name, is_main_process
+    # Save information about wandb run
+    # Save information about wandb run
+    wandb_info = {
+        "wandb_project_name": wandb_project,
+        "wandb_run_name": wandb.run.name,
+        "time_created": datetime.utcfromtimestamp(wandb.run.start_time).strftime("%Y%m%d_%H%M%S"),
+        "checkpoints": []
+    }
+    wandb_info_path = os.path.join(train_dir, "wandb_info.json")
+    with open(wandb_info_path, "w") as f:
+        json.dump(wandb_info, f, indent=2)
+    
+    return train_dir, config_copy_path, wandb_info_path, dataset_name, is_main_process
 
 
 def setup_model_and_tokenizer(cfg: Dict) -> Tuple[Any, Any, str]:
