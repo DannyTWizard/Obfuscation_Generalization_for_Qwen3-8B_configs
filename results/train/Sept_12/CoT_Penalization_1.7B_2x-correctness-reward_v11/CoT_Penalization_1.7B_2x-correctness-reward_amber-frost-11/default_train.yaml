@@ -43,7 +43,7 @@ reward_funcs:
 
 
 results:
-  base_dir: /home/ubuntu/Obfuscation_Generalization/results/train/Sept_12
+  base_dir: results/train/Sept_12
   name: CoT_Penalization_1.7B_2x-correctness-reward
 
 

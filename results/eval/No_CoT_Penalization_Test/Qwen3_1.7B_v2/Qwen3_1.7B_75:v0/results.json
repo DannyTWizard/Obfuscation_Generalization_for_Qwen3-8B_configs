@@ -3644,5 +3644,5 @@
       }
     ]
   },
-  "config_path": "/home/ubuntu/Obfuscation_Generalization/results/eval/No_CoT_Penalization_Test/Qwen3_1.7B_v2/Qwen3_1.7B_75:v0/temp_config_75:v0.yaml"
+  "config_path": "results/eval/No_CoT_Penalization_Test/Qwen3_1.7B_v2/Qwen3_1.7B_75:v0/temp_config_75:v0.yaml"
 }

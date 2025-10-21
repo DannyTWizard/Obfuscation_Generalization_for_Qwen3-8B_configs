@@ -43,7 +43,7 @@ reward_funcs:
   - cot_think_name_penalty_func
 
 results:
-  base_dir: /home/ubuntu/Obfuscation_Generalization/results/train/Sept_21_adversarial
+  base_dir: results/train/Sept_21_adversarial
   name: CoT_Penalization_1.7B_no_pen_adversarial
 
 

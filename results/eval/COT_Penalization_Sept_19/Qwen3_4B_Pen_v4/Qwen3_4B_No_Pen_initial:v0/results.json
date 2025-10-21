@@ -7144,5 +7144,5 @@
       }
     ]
   },
-  "config_path": "/home/ubuntu/Obfuscation_Generalization/results/eval/COT_Penalization_Sept_19/Qwen3_4B_No_Pen_v4/Qwen3_4B_No_Pen_initial:v0/temp_config_initial:v0.yaml"
+  "config_path": "results/eval/COT_Penalization_Sept_19/Qwen3_4B_No_Pen_v4/Qwen3_4B_No_Pen_initial:v0/temp_config_initial:v0.yaml"
 }

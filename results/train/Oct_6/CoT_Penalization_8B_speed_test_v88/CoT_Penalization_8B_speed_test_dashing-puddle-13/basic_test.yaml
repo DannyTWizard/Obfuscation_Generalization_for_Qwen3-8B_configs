@@ -1,0 +1,27 @@
+# Based on 'default_train.yaml'
+
+wandb:
+  project: train_test_1.7B
+  # run_id: null  # Set to existing run ID to resume WandB logging (e.g., "abc123xyz")
+
+model:
+  base_model_id: Qwen/Qwen3-1.7B
+
+data:
+  default_config: configs/train/defaults/revealing_score_modified.yaml
+
+lora:
+  default_config: configs/train/defaults/lora.yaml
+
+train:
+  default_config: configs/train/defaults/grpo.yaml
+  learning_rate: 0.001
+
+reward:
+  default_config: configs/train/defaults/reward_funcs.yaml
+
+results:
+  base_dir: results/train/Oct_6
+  name: CoT_Penalization_8B_speed_test
+
+

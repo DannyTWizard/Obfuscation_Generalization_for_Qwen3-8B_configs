@@ -45,7 +45,7 @@ reward_funcs:
 
 
 results:
-  base_dir: /home/ubuntu/Obfuscation_Generalization/results/train/Oct_13
+  base_dir: results/train/Oct_13
   name: CoT_Penalization_4B_multi_data_train
 
 

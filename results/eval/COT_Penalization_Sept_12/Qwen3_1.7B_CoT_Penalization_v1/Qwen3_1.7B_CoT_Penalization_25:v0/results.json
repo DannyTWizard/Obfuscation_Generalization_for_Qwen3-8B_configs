@@ -7144,5 +7144,5 @@
       }
     ]
   },
-  "config_path": "/home/ubuntu/Obfuscation_Generalization/results/eval/COT_Penalization_Sept_12/Qwen3_1.7B_CoT_Penalization_v1/Qwen3_1.7B_CoT_Penalization_25:v0/temp_config_25:v0.yaml"
+  "config_path": "results/eval/COT_Penalization_Sept_12/Qwen3_1.7B_CoT_Penalization_v1/Qwen3_1.7B_CoT_Penalization_25:v0/temp_config_25:v0.yaml"
 }

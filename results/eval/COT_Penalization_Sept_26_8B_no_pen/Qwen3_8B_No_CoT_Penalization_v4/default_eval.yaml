@@ -16,7 +16,7 @@ wandb:
 model:
   # Choose one of the following inputs
   artifact_name:  # e.g., GRPO_SF_Test/grpo_model_xyz_step_100:v0
-  checkpoint_path: null  # e.g., /home/ubuntu/Obfuscation_Generalization/GRPO/checkpoint-200
+  checkpoint_path: null  # e.g., GRPO/checkpoint-200
   base_model_id: Qwen/Qwen3-4B
   tensor_parallel_size: 1
   gpu_memory_utilization: 0.9

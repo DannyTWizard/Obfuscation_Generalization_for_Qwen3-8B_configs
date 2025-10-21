@@ -82,5 +82,5 @@
       }
     }
   },
-  "config_path": "/home/ubuntu/Obfuscation_Generalization/results/eval/COT_Penalization_Sept_26_adversarial/Qwen3_1.7B_CoT_Penalization_v6/default_eval.yaml"
+  "config_path": "results/eval/COT_Penalization_Sept_26_adversarial/Qwen3_1.7B_CoT_Penalization_v6/default_eval.yaml"
 }

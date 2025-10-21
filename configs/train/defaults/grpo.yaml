@@ -1,6 +1,5 @@
 use_vllm: true
 vllm_mode: colocate
-vllm_gpu_memory_utilization: 0.12 # Reduced from 0.45 to 0.20 for DDP compatibility #22 sec/iteration with .25 14B
 vllm_tensor_parallel_size: 1
 # vllm_max_model_len: 2048 # Apparently this is overriden by max_prompt_len + max_completion_len
 vllm_enable_sleep_mode: true

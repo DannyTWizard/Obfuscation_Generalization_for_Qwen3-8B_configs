@@ -44,7 +44,7 @@ reward_funcs:
 
 
 results:
-  base_dir: /home/ubuntu/Obfuscation_Generalization/results/train/Sept_26_8B_no_pen
+  base_dir: results/train/Sept_26_8B_no_pen
   name: CoT_Penalization_8B_no_pen
 
 

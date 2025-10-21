@@ -33,7 +33,7 @@ train:
   vllm_gpu_memory_utilization: 0.15
 
 results:
-  base_dir: /home/ubuntu/Obfuscation_Generalization/results/train
+  base_dir: results/train
   name: train
 
 

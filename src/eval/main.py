@@ -185,11 +185,11 @@ def _evaluate_single_artifact_subprocess(
         gpu_memory_utilization=float(model_cfg.get("gpu_memory_utilization")),
         log_prefix="",
     )
-    
+
     all_metrics, all_results = evaluator.evaluate_all_datasets(
         datasets_dir=data_cfg.get(
             "datasets_dir", 
-            "/home/ubuntu/Obfuscation_Generalization/datasets/reward_hack"
+            "datasets/reward_hack"
         ),
         max_samples=int(data_cfg.get("max_samples")),
         batch_size=int(data_cfg.get("batch_size")),

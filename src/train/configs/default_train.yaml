@@ -48,7 +48,7 @@ reward_funcs:
 
 
 results:
-  base_dir: /home/ubuntu/Obfuscation_Generalization/results/train/Oct_6
+  base_dir: results/train/Oct_6
   name: CoT_Penalization_8B_speed_test
 
 

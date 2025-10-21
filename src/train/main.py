@@ -3,6 +3,8 @@ from typing import Any, Dict
 
 from trl import GRPOConfig, GRPOTrainer
 
+import dotenv
+
 from src.train.rewards import REWARD_FUNCS
 from src.utils.config import load_config_with_defaults, ensure_dir
 from src.utils.parse import count_user_mentions_in_cot, count_name_mentions_in_cot, count_user_mentions_in_summary, count_name_mentions_in_summary, count_cot_words, count_summary_words
@@ -181,10 +183,10 @@ def run_from_config(config_path: str, checkpoint_name: str) -> str:
 
     
     # Save initial model only if not resuming
-    checkpoint_name = ratify_checkpoint(checkpoint_name)
+    checkpoint_name = ratify_checkpoint(checkpoint_name, output_dir, is_main_process)
     if not checkpoint_name:
         save_initial_model(model, tokenizer, output_dir, model_id, dataset_name, is_main_process)
-    trainer.train(checkpoint_name=checkpoint_name)
+    trainer.train(resume_from_checkpoint=checkpoint_name)
     
     # Save final model and metadata
     save_final_model_and_metadata(
@@ -210,9 +212,8 @@ def run_from_config(config_path: str, checkpoint_name: str) -> str:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train using YAML config")
     parser.add_argument(
-        "--config", 
+        "config", 
         type=str,
-        required=True,
         help="Relative path of config file within configs/train"
     )
     parser.add_argument(
@@ -222,6 +223,13 @@ if __name__ == "__main__":
         default=None,
         help="Relative path of config file within configs/train"
     )
+    
+    dotenv.load_dotenv()    # Load in '.env'
+    
     args = parser.parse_args()
-    parent_dir = run_from_config(args.config, args.checkpoint_name)
+
+    with open(, 'w') as sys.stdout:
+        parent_dir = run_from_config(args.config, args.checkpoint_name)
+        print(f"✓ Training complete. Results and metadata saved under: {parent_dir}")
+    
     print(f"✓ Training complete. Results and metadata saved under: {parent_dir}")

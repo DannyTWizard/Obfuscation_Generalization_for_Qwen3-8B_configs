@@ -48,7 +48,7 @@ def load_config_with_defaults(config_path: str) -> Dict:
     Returns:
         Dict containing the merged configuration
     """
-    base_train_config_path = os.path.abspath(os.path.join(os.getcwd(), "configs"))
+    base_train_config_path = os.path.abspath(os.getcwd())
     config_full_path = os.path.join(base_train_config_path, config_path)
     cfg = load_yaml_file(config_full_path)
     

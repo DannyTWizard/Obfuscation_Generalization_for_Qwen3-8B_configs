@@ -1,5 +1,5 @@
 {
-  "config_path": "/home/ubuntu/Obfuscation_Generalization/results/train/Sept_19/CoT_Penalization_4B_pen_v1/CoT_Penalization_4B_pen_breezy-river-1/4B_pen.yaml",
+  "config_path": "results/train/Sept_19/CoT_Penalization_4B_pen_v1/CoT_Penalization_4B_pen_breezy-river-1/4B_pen.yaml",
   "model_id": "Qwen/Qwen3-4B",
   "dataset_path": "datasets/reward_hack/sycophancy_fact.jsonl",
   "dataset_name": "sycophancy_fact",

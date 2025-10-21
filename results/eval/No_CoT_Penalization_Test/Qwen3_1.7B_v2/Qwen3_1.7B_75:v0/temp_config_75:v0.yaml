@@ -1,7 +1,7 @@
-_subprocess_artifact_dir: /home/ubuntu/Obfuscation_Generalization/results/eval/No_CoT_Penalization_Test/Qwen3_1.7B_v2/Qwen3_1.7B_75:v0
+_subprocess_artifact_dir: results/eval/No_CoT_Penalization_Test/Qwen3_1.7B_v2/Qwen3_1.7B_75:v0
 data:
   batch_size: 32
-  datasets_dir: /home/ubuntu/Obfuscation_Generalization/datasets/reward_hack
+  datasets_dir: datasets/reward_hack
   max_samples: 50
 model:
   artifact_name: geodesic_cam-geodesic-research/GRPO_CoT_Penalization_Test/grpo_model_vocal-sky-3_step_75:v0
@@ -10,7 +10,7 @@ model:
   gpu_memory_utilization: 0.9
   tensor_parallel_size: 1
 results:
-  base_dir: /home/ubuntu/Obfuscation_Generalization/results/eval/No_CoT_Penalization_Test
+  base_dir: results/eval/No_CoT_Penalization_Test
   name: Qwen3_1.7B
 wandb:
   artifact_entity: null

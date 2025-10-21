@@ -9,7 +9,7 @@ wandb:
 model:
   # Choose one of the following inputs
   artifact_name:  # e.g., GRPO_SF_Test/grpo_model_xyz_step_100:v0
-  checkpoint_path: null  # e.g., /home/ubuntu/Obfuscation_Generalization/GRPO/checkpoint-200
+  checkpoint_path: null  # e.g., GRPO/checkpoint-200
   base_model_id: Qwen/Qwen3-4B
   tensor_parallel_size: 1
   gpu_memory_utilization: 0.9
@@ -17,12 +17,12 @@ model:
   # automatically search and evaluate ALL model artifacts using wandb.artifact_* settings above.
 
 data:
-  datasets_dir: /home/ubuntu/Obfuscation_Generalization/datasets/reward_hack
+  datasets_dir: datasets/reward_hack
   max_samples: 100
   batch_size: 32
 
 results:
-  base_dir: /home/ubuntu/Obfuscation_Generalization/results/eval/COT_Penalization_Sept_19
+  base_dir: results/eval/COT_Penalization_Sept_19
   name: Qwen3_4B_No_Pen
 
 
