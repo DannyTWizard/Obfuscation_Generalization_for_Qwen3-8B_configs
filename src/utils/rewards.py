@@ -3,8 +3,6 @@ from typing import List
 
 from src.utils import extract_xml_answer, count_user_mentions_in_cot, count_name_mentions_in_cot
 
-import wandb
-
 
 def correctness_reward_func(prompts, completions, high_reward_answer, **kwargs) -> List[float]:
     extracted_responses = [extract_xml_answer(completion) for completion in completions]

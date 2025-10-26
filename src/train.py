@@ -5,7 +5,7 @@ from trl import GRPOConfig, GRPOTrainer
 
 import dotenv
 
-from src.train.rewards import REWARD_FUNCS
+from src.utils.rewards import REWARD_FUNCS
 from src.utils.config import load_config_with_defaults, ensure_dir
 from src.utils.parse import count_user_mentions_in_cot, count_name_mentions_in_cot, count_user_mentions_in_summary, count_name_mentions_in_summary, count_cot_words, count_summary_words
 from src.utils.wandb_logging import log_checkpoint_artifact, save_initial_model

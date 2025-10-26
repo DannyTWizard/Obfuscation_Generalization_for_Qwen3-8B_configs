@@ -104,8 +104,7 @@ def setup_model_and_tokenizer(cfg: Dict) -> Tuple[Any, Any, str]:
     model = get_peft_model(model, lora_config)
     
     return model, tokenizer, model_id
-
-
+    
 
 def transform_dataset(dataset_path: str, instruction_suffix: str) -> Any:
     """Load and transform dataset for training."""

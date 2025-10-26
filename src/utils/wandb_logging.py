@@ -38,7 +38,6 @@ def log_config_artifact(config_path: str, saved_config_path: str) -> None:
     print(f"✓ Logged config artifact: {saved_config_path}")
 
 
-
 def save_initial_model(
     model: Any,
     tokenizer: Any, 
@@ -70,7 +69,6 @@ def save_initial_model(
             },
             local_info_path=wandb_info_path
         )
-
 
 
 def log_dataset_results(
@@ -132,8 +130,6 @@ def log_evaluation_summary(
     wandb.log({f"{log_prefix}evaluation_summary": summary_table})
 
 
-
-
 def log_checkpoint_artifact(
     checkpoint_path: str,
     step: int,
@@ -186,7 +182,6 @@ def log_checkpoint_artifact(
         json.dump(data, f, indent=2)
         f.truncate()
     
-
 
 def log_training_metrics(tracking_data: Dict[str, List]) -> None:
     """Log training tracking metrics to W&B.

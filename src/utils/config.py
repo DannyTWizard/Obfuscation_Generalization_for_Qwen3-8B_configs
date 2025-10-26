@@ -71,28 +71,6 @@ def load_config_with_defaults(config_path: str) -> Dict:
     return cfg
 
 
-def create_run_dir(base_results_dir: str, prefix: str) -> str:
-    """Create a timestamped run directory (used by training script)."""
-    ensure_dir(base_results_dir)
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = os.path.join(base_results_dir, f"{prefix}_{timestamp}")
-    ensure_dir(run_dir)
-    return run_dir
-
-
-def create_versioned_parent_dir(base_results_dir: str, prefix: str) -> str:
-    """Create a versioned parent directory with v1, v2, etc. numbering."""
-    ensure_dir(base_results_dir)
-    
-    # Check for existing directories with the same prefix
-    version = 1
-    while True:
-        parent_dir = os.path.join(base_results_dir, f"{prefix}_v{version}")
-        if not os.path.exists(parent_dir):
-            ensure_dir(parent_dir)
-            return parent_dir
-        version += 1
-
 def create_timestamped_parent_dir(base_results_dir: str, prefix: str) -> str:
     """Create a parent directory with timestamp at the end"""
     ensure_dir(base_results_dir)
