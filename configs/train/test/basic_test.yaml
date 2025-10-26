@@ -16,8 +16,11 @@ lora:
 
 train:
   default_config: configs/train/defaults/grpo.yaml
-  learning_rate: 0.001
-  save_steps: 2 # For debugging!
+
+  # For debugging!
+  save_steps: 5
+  per_device_train_batch_size: 2
+  num_generations: 2
 
 reward:
   default_config: configs/train/defaults/reward_funcs.yaml
