@@ -63,7 +63,8 @@ def save_final_model_and_metadata(
     dataset_path: str,
     train_cfg: Dict,
     wandb_project: str,
-    is_main_process: bool
+    is_main_process: bool,
+    wandb_info_path: str
 ) -> None:
     """Save final model artifact and training metadata."""
     if not is_main_process:
@@ -96,7 +97,7 @@ def save_final_model_and_metadata(
         "model_id": model_id,
         "dataset_path": dataset_path,
         "dataset_name": dataset_name,
-        "wandb_run_name": wandb.run.name if wandb.run else None,
+        "wandb_run_name": wandb.run.name,
         "wandb_project": wandb_project,
         "output_dir": output_dir,
         "final_step": trainer.state.global_step if hasattr(trainer, "state") else None,
@@ -135,7 +136,7 @@ def run_from_config(config_path: str, checkpoint_name: str) -> str:
         Path to parent results directory
     """
     cfg = load_config_with_defaults(config_path)
-    
+
     # Setup W&B and directories
     train_dir, saved_cfg_path, wandb_info_path, dataset_name, is_main_process = setup_wandb_and_directories(
         cfg, config_path
@@ -208,7 +209,8 @@ def run_from_config(config_path: str, checkpoint_name: str) -> str:
             dataset_path=dataset_path,
             train_cfg=train_cfg,
             wandb_project=cfg["wandb"]["project"],
-            is_main_process=is_main_process
+            is_main_process=is_main_process,
+            wandb_info_path=wandb_info_path
         )
         
         # Finish W&B run

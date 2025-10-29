@@ -8,7 +8,7 @@ import json
 from datetime import datetime
 
 
-def log_config_artifact(config_path: str, saved_config_path: str) -> None:
+def log_config_artifact(saved_config_path: str) -> None:
     """Log config file as W&B artifact.
     
     Args:
@@ -29,7 +29,6 @@ def log_config_artifact(config_path: str, saved_config_path: str) -> None:
         name=f"config_{wandb.run.id}",
         type="config",
         metadata={
-            "original_config_path": os.path.abspath(config_path),
             "saved_config_path": os.path.abspath(saved_config_path),
         },
     )

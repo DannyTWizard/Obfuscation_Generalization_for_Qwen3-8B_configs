@@ -83,27 +83,6 @@ def create_timestamped_parent_dir(base_results_dir: str, prefix: str) -> str:
     return parent_dir
 
 
-def extract_artifact_suffix(qualified_name: str) -> str:
-    """Extract the suffix after the final underscore from an artifact qualified name.
-    
-    For example:
-    geodesic_cam-geodesic-research/GRPO_Checkpoint_test/grpo_model_blooming-frog-4_initial:v0
-    -> initial:v0
-    """
-    if not qualified_name:
-        return "unknown"
-    
-    # Extract the artifact name part (after the last '/')
-    artifact_name = qualified_name.split('/')[-1] if '/' in qualified_name else qualified_name
-    
-    # Find the last underscore and extract everything after it
-    if '_' in artifact_name:
-        suffix = artifact_name.split('_')[-1]
-        return suffix
-    else:
-        # If no underscore, just return the whole artifact name
-        return artifact_name
-
 
 def save_config_copy(config_path: str, dst_dir: str) -> str:
     raise Exception('Dont use save_config_copy anymore!')

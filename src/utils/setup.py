@@ -15,7 +15,6 @@ from src.utils.wandb_logging import log_config_artifact
 
 def setup_wandb_and_directories(
     cfg: Dict, 
-    config_path: str
 ) -> Tuple[str, str, str, bool]:
     """Initialize W&B and create training directories.
     
@@ -66,7 +65,7 @@ def setup_wandb_and_directories(
     with open(config_copy_path, 'w') as f:
         yaml.dump(cfg, f)
     if wandb.run is not None and is_main_process:
-        log_config_artifact(config_path, config_copy_path)
+        log_config_artifact(config_copy_path)
     
     # Save information about wandb run
     # Save information about wandb run
