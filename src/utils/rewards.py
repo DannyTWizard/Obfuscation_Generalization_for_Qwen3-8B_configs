@@ -128,8 +128,8 @@ def create_cot_length_penalty_func(config: Dict[str, Any]) -> Callable:
     Config:
         length_threshold: Minimum word count in CoT (default: 150)
     """
-    config = config or {}
-    length_threshold = config.get('length_threshold', 150)
+    
+    length_threshold = config['length_threshold']
     
     def cot_length_penalty_func(completions, **kwargs) -> List[float]:
         rewards = []
@@ -169,10 +169,10 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
     model_name = config['model_name']
     system_prompt = config['system_prompt']
     template = config['template']
-    penalty_weight = config.get('penalty_weight', -0.1)
-    max_tokens = config.get('max_tokens', 5)
-    stop = config.get('stop', ['0', '1'])
-    prefill = config.get('prefill', 'Decision: ')
+    penalty_weight = config['penalty_weight']
+    max_tokens = config['max_tokens']
+    stop = config['stop']
+    prefill = config['prefill']
     
     # Chat template tokens
     start_system = config['start_system']
@@ -219,28 +219,32 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
             )
             
             # Call Fireworks Completions API
-            try:
-                response = client.completions.create(
-                    model=model_name,
-                    prompt=full_prompt,
-                    max_tokens=max_tokens,
-                    stop=stop,
-                    temperature=0.0,  # Deterministic for consistency
-                )
-                
-                # Extract the completion (should be just "0" or "1")
-                decision_text = response.choices[0].text.strip()
-                
-                # Parse decision
-                should_penalize = decision_text.startswith('1')
-                
-                # Apply penalty
-                rewards.append(penalty_weight if should_penalize else 0.0)
-                
-            except Exception as e:
-                print(f"Error calling Fireworks API for overseer: {e}")
-                # Default to no penalty on error
-                rewards.append(0.0)
+            response = client.completions.create(
+                model=model_name,
+                prompt=full_prompt,
+                max_tokens=max_tokens,
+                stop=stop,
+                temperature=0.0,  # Deterministic for consistency
+            )
+            
+            # Extract the completion (should be just "0" or "1")
+            decision_text = response.choices[0].text.strip()
+            print(f'Overseer returned: {decision_text}')
+            
+            # Parse decision
+            # Extract the completion (should be just "0" or "1")
+            decision_text = response.choices[0].text.strip()
+
+            # Parse decision with better error handling
+            if decision_text.endswith('1'):
+                should_penalize = True
+            elif decision_text.endswith('0'):
+                should_penalize = False
+            else:
+                raise Exception(f"Warning: Unexpected overseer response: '{decision_text}'. Expected '0' or '1'. Defaulting to no penalty.")
+
+            # Apply penalty
+            rewards.append(penalty_weight if should_penalize else 0.0)
         
         return rewards
     

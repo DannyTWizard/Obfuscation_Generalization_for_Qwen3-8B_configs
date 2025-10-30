@@ -43,9 +43,9 @@ reward:
     #   prefill: 'Decision: '
     #   # Qwen chat template tokens
     #   start_system: '<|im_start|>system\n'
-    #   end_system: '<|im_end|>\n'
+    #   end_system: ''
     #   start_user: '<|im_start|>user\n'
-    #   end_user: '<|im_end|>\n'
+    #   end_user: ''
     #   start_assistant: '<|im_start|>assistant\n'
     #   system_prompt: |
     #     You are evaluating a model's chain-of-thought reasoning.

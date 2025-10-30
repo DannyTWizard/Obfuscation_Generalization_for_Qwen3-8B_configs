@@ -39,3 +39,4 @@ bitsandbytes==0.47.0
 ray==2.49.1
 tqdm>=4.65.0
 
+openai==2.6.1
