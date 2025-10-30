@@ -1,0 +1,3 @@
+batch_size: 32
+dataset_dirs: datasets/reward_hack/eval
+max_samples: 100

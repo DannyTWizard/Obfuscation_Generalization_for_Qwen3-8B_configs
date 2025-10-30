@@ -138,9 +138,7 @@ def run_from_config(config_path: str, checkpoint_name: str) -> str:
     cfg = load_config_with_defaults(config_path)
 
     # Setup W&B and directories
-    train_dir, saved_cfg_path, wandb_info_path, dataset_name, is_main_process = setup_wandb_and_directories(
-        cfg, config_path
-    )
+    train_dir, saved_cfg_path, wandb_info_path, dataset_name, is_main_process = setup_wandb_and_directories(cfg)
 
     log_path = os.path.join(train_dir, 'std_out.txt')
     
@@ -223,7 +221,7 @@ def run_from_config(config_path: str, checkpoint_name: str) -> str:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train using YAML config")
     parser.add_argument(
-        "config", 
+        "--config", 
         type=str,
         help="Relative path of config file"
     )

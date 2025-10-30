@@ -198,3 +198,5 @@ secrets.yaml
 .secrets
 
 archive
+GRPO
+**/std_out.txt

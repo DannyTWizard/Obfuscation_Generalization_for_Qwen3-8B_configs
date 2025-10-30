@@ -10,6 +10,10 @@ from transformers import AutoTokenizer
 from vllm import LLM, SamplingParams
 from tqdm import tqdm
 
+import torch
+from transformers import AutoModelForCausalLM
+from peft import PeftModel
+
 from src.utils.parse import count_user_mentions_in_cot, count_name_mentions_in_cot, count_user_mentions_in_summary, count_name_mentions_in_summary, count_custom_terms_in_cot, count_custom_terms_in_summary, count_cot_words, count_summary_words, extract_xml_answer, extract_third_email_decision
 from src.utils.wandb_logging import log_evaluation_summary, log_dataset_results
 
@@ -61,12 +65,14 @@ class VLLMModelEvaluator:
         tensor_parallel_size: int = 1,
         gpu_memory_utilization: float = 0.9,
         log_prefix: str = "",
+        wandb_project_name: str = "",
     ):
         self.base_model_id = base_model_id
         self.tensor_parallel_size = tensor_parallel_size
         self.gpu_memory_utilization = gpu_memory_utilization
         self.log_prefix = log_prefix
-
+        self.wandb_project_name = wandb_project_name   
+ 
         # Prepare merged model path for vLLM
         if model_artifact_name:
             self.model_path, self.tokenizer = self._prepare_from_artifact(model_artifact_name)
@@ -92,9 +98,6 @@ class VLLMModelEvaluator:
 
     def _merge_peft_model(self, checkpoint_path: str, output_path: str):
         """Merge PEFT adapter with base model."""
-        import torch
-        from transformers import AutoModelForCausalLM
-        from peft import PeftModel
 
         print(f"Merging PEFT model from {checkpoint_path}")
 
@@ -119,9 +122,9 @@ class VLLMModelEvaluator:
         print(f"✓ Model merged and saved to {output_path}")
         return output_path
 
-    def _prepare_from_artifact(self, artifact_name: str) -> Tuple[str, AutoTokenizer]:
+    def _prepare_from_artifact(self, artifact_name: str, alias: str = "latest") -> Tuple[str, AutoTokenizer]:
         api = wandb.Api()
-        artifact = api.artifact(artifact_name)
+        artifact = api.artifact(f'{self.wandb_project_name}/{artifact_name}:{alias}')
         artifact_dir = artifact.download()
 
         # Create temporary directory for merged model

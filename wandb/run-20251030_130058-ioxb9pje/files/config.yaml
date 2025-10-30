@@ -1,0 +1,74 @@
+_wandb:
+    value:
+        cli_version: 0.21.3
+        e:
+            sy0pljsejgjxc89pddb2o2vcyhz94rmi:
+                args:
+                    - --eval_config_path
+                    - configs/eval/code_selection.yaml
+                    - --run_path
+                    - results/puria_debugging/CoT_Penalization_0p6b_speed_test_20251030_125358
+                    - --artifact_step
+                    - "5"
+                cpu_count: 30
+                cpu_count_logical: 30
+                cudaVersion: "12.8"
+                disk:
+                    /:
+                        total: "532608356352"
+                        used: "44752642048"
+                email: cam@meridiancambridge.org
+                executable: /home/ubuntu/Obfuscation_Generalization/venv/bin/python
+                git:
+                    commit: b856c3fe36e810a8d57b7bcf3b84ac96f1400084
+                    remote: https://github.com/MeridianResearch/Obfuscation_Generalization
+                gpu: NVIDIA A100-SXM4-40GB
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ampere
+                      cudaCores: 6912
+                      memoryTotal: "42949672960"
+                      name: NVIDIA A100-SXM4-40GB
+                      uuid: GPU-fdfec6ab-d737-8dd8-4f51-c5ba7b076143
+                host: 129-146-77-49
+                memory:
+                    total: "232205713408"
+                os: Linux-6.8.0-60-generic-x86_64-with-glibc2.35
+                program: -m src.eval
+                python: CPython 3.10.12
+                root: /home/ubuntu/Obfuscation_Generalization
+                startedAt: "2025-10-30T13:00:58.272903Z"
+                writerId: sy0pljsejgjxc89pddb2o2vcyhz94rmi
+        m: []
+        python_version: 3.10.12
+        t:
+            "1":
+                - 1
+                - 11
+                - 41
+                - 49
+                - 51
+                - 71
+                - 95
+            "2":
+                - 1
+                - 11
+                - 41
+                - 49
+                - 51
+                - 71
+                - 95
+            "3":
+                - 13
+                - 16
+            "4": 3.10.12
+            "5": 0.21.3
+            "6": 4.56.1
+            "12": 0.21.3
+            "13": linux-x86_64
+batch_size:
+    value: 32
+dataset_dir:
+    value: datasets/code_selection
+max_samples:
+    value: 100

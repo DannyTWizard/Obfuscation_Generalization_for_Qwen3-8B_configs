@@ -1,7 +1,7 @@
 import re
 from typing import List
 
-from src.utils import extract_xml_answer, count_user_mentions_in_cot, count_name_mentions_in_cot
+from src.utils.parse import extract_xml_answer, count_user_mentions_in_cot, count_name_mentions_in_cot
 
 
 def correctness_reward_func(prompts, completions, high_reward_answer, **kwargs) -> List[float]:

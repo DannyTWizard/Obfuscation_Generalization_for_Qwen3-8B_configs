@@ -17,12 +17,12 @@ from src.utils.config import create_timestamped_parent_dir, load_config_with_def
 from src.utils.eval import VLLMModelEvaluator
 
 
-def setup_results_directory(run_path: str, eval_config: Dict, is_main_process: bool) -> Tuple[str, str]:
+def setup_results_directory(run_path: str, eval_config: Dict, is_main_process: bool, eval_run_name: str) -> Tuple[str, str]:
     """
     Relative path of training directory (inside which the train subdirectory exists)
         e.g. results/puria_debugging/CoT_Penalization_0p6b_speed_test_20251021_120125
     """
-    eval_dir = create_timestamped_parent_dir(base_results_dir=run_path, prefix = 'eval')
+    eval_dir = create_timestamped_parent_dir(base_results_dir=run_path, prefix = eval_run_name)
 
     # Save config copy and log to W&B
     config_copy_path = os.path.join(eval_dir, 'config.yaml')
@@ -37,9 +37,10 @@ def setup_results_directory(run_path: str, eval_config: Dict, is_main_process: b
 
 def evaluate_single_artifact_subprocess(
     model_cfg: Dict,
-    data_cfg: Dict,
-    artifact_name: str
-) -> None:
+    eval_cfg: Dict,
+    artifact_name: str,
+    wandb_project_name: str
+) -> None:  
     """Evaluate a single artifact in subprocess mode.
     
     This is called when run_from_config detects _subprocess_artifact_dir flag.
@@ -50,12 +51,13 @@ def evaluate_single_artifact_subprocess(
         tensor_parallel_size=int(model_cfg.get("tensor_parallel_size", 1)),
         gpu_memory_utilization=float(model_cfg["gpu_memory_utilization"]),
         log_prefix="",
+        wandb_project_name=wandb_project_name
     )
 
     all_metrics, all_results = evaluator.evaluate_all_datasets(
-        datasets_dir=data_cfg["datasets_dir"], 
-        max_samples=int(data_cfg["max_samples"]),
-        batch_size=int(data_cfg["batch_size"]),
+        datasets_dir=eval_cfg["datasets_dir"], 
+        max_samples=int(eval_cfg["max_samples"]),
+        batch_size=int(eval_cfg["batch_size"]),
     )
     
     evaluator.cleanup()
@@ -95,22 +97,21 @@ def run_from_config(eval_config_path: str, run_path: str, artifact_step: int) ->
 
 
     # Initialize W&B if configured
-    wandb_run = wandb.init(project=wandb_project_name, name=None, config=cfg)
-    
-    # These need to be give for the evaluation task
-    data_cfg = cfg["data"]
+    config_name = os.path.basename(eval_config_path).replace(".yaml", "")
+    eval_run_name = f'eval_{config_name}_{artifact_step}'
+    wandb_run = wandb.init(project=wandb_project_name, name=f'{wandb_training_run_name}_{eval_run_name}', config=cfg)
     
     # This will be the same as during training, no need to define it again
     model_cfg = training_cfg["model"]
     
     # Setup results directory
-    parent_dir, saved_cfg_path = setup_results_directory(run_path=run_path, eval_config = cfg, is_main_process=True)
+    parent_dir, saved_cfg_path = setup_results_directory(run_path=run_path, eval_config=cfg, is_main_process=True, eval_run_name=eval_run_name)
 
     ## Get the single artifact on which we are testing
     #artifact: wandb.sdk.artifacts.artifact.Artifact = wandb_run.use_artifact(wandb_artifact_name)
-    
+
     artifact_dir, metrics, results = evaluate_single_artifact_subprocess(
-        model_cfg, data_cfg, artifact_name=wandb_artifact_name
+        model_cfg, cfg, artifact_name=wandb_artifact_name, wandb_project_name=wandb_project_name
     )
     
     artifact_metrics = Dict[str, Dict[str, float]] = metrics
@@ -136,24 +137,24 @@ def run_from_config(eval_config_path: str, run_path: str, artifact_step: int) ->
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate models using YAML config")
     parser.add_argument(
-        "eval_config_path", 
+        "--eval_config_path", 
         type=str,
         help="Path to YAML config"
     )
     parser.add_argument(
-        "run_path", 
+        "--run_path", 
         type=str,
         help="Relative path of training directory (inside which the train subdirectory exists)"
     )
     parser.add_argument(
-        "artifact_step", 
+        "--artifact_step", 
         type=int,
         help="src.eval.main is now for evaluating a single artifact!"
     )
 
     args = parser.parse_args()
 
-    run_dir = run_from_config(args.eval_config_path, args.run_path, args.artifact_name)
+    run_dir = run_from_config(args.eval_config_path, args.run_path, args.artifact_step)
     print(f"✓ Evaluation complete. Results saved in: {run_dir}")
 
 
