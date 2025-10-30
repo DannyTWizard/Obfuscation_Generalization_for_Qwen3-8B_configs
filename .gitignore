@@ -199,8 +199,6 @@ secrets.yaml
 
 archive
 GRPO
-**/std_out.txt
 
 wandb
 artifacts
-results

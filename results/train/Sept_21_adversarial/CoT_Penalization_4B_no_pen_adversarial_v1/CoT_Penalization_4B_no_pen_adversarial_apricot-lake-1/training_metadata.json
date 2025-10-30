@@ -1,0 +1,13 @@
+{
+  "config_path": "results/train/Sept_21_adversarial/CoT_Penalization_4B_no_pen_adversarial_v1/CoT_Penalization_4B_no_pen_adversarial_apricot-lake-1/4B_pen_update.yaml",
+  "model_id": "Qwen/Qwen3-4B",
+  "dataset_path": "datasets/reward_hack/relevant/sycophancy_fact_modified.jsonl",
+  "dataset_name": "sycophancy_fact_modified",
+  "wandb_run_name": "apricot-lake-1",
+  "wandb_project": "CoT_Penalization_Sept_21_adversarial",
+  "output_dir": "GRPO",
+  "final_step": 200,
+  "num_train_epochs": 1.0,
+  "learning_rate": 4e-05,
+  "training_status": "completed"
+}

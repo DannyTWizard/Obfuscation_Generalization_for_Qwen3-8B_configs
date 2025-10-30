@@ -1,0 +1,40 @@
+{
+  "wandb_project_name": "testing_0.6B",
+  "wandb_run_name": "scary-seance-3",
+  "time_created": "20251030_125357",
+  "checkpoints": [
+    {
+      "artifact_name": "model_scary-seance-3_step_initial",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-0.6B",
+        "dataset": "revealing_score_modified",
+        "training_status": "initial",
+        "step": 0
+      },
+      "checkpoint_path": "GRPO/initial_model",
+      "timestamp": "2025-10-30T12:55:26.614158"
+    },
+    {
+      "artifact_name": "model_scary-seance-3_step_5",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-0.6B",
+        "dataset": "revealing_score_modified",
+        "training_status": "intermediate",
+        "step": 5
+      },
+      "checkpoint_path": "GRPO/checkpoint-5",
+      "timestamp": "2025-10-30T12:56:20.684938"
+    },
+    {
+      "artifact_name": "model_scary-seance-3_step_10",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-0.6B",
+        "dataset": "revealing_score_modified",
+        "training_status": "intermediate",
+        "step": 10
+      },
+      "checkpoint_path": "GRPO/checkpoint-10",
+      "timestamp": "2025-10-30T12:56:46.552336"
+    }
+  ]
+}
