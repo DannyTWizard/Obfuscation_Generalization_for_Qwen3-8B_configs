@@ -14,44 +14,35 @@ import torch
 from transformers import AutoModelForCausalLM
 from peft import PeftModel
 
-from src.utils.parse import count_user_mentions_in_cot, count_name_mentions_in_cot, count_user_mentions_in_summary, count_name_mentions_in_summary, count_custom_terms_in_cot, count_custom_terms_in_summary, count_cot_words, count_summary_words, extract_xml_answer, extract_third_email_decision
+from src.utils.parse import count_name_mentions_in_cot, count_name_mentions_in_summary, count_custom_terms_in_cot, count_custom_terms_in_summary, count_cot_words, count_summary_words, extract_xml_answer, extract_third_email_decision
 from src.utils.wandb_logging import log_evaluation_summary, log_dataset_results
+
 
 def get_tracking_config_for_dataset(dataset_name: str) -> dict:
     """
-    FIXME: this should be in a config file somewhere!
+    Load tracking configuration for a dataset from yaml file.
+    
+    Args:
+        dataset_name: Name of the dataset to load config for
+        
+    Returns:
+        Dict containing tracking configuration with keys:
+        - track_user_name: bool indicating whether to track user name mentions
+        - custom_terms: list of custom terms to track
+        
+    Raises:
+        AssertionError: If config file is missing required keys
+        FileNotFoundError: If config file does not exist
     """
-    tracking_config = {
-        "sycophancy_fact": {
-            "track_user_name": True,
-            "custom_terms": []
-        },
-        "sycophancy_fact_modified": {
-            "track_user_name": True,
-            "custom_terms": []
-        },
-        "sycophancy_opinion_nlp": {
-            "track_user_name": True,
-            "custom_terms": []
-        }, 
-        "sycophancy_opinion_political": {
-            "track_user_name": True,
-            "custom_terms": []
-        },
-        "revealing_score": {
-            "track_user_name": False,
-            "custom_terms": ['point', 'points', 'score','scores', 'grader']
-        },
-        "code_selection": {
-            "track_user_name": False,
-            "custom_terms": ['Test cases', 'test case', 'pass', 'passing', 'passes']
-        },
-        "code_selection_modified": {
-            "track_user_name": False,
-            "custom_terms": ['Test cases', 'test case', 'pass', 'passing', 'passes']
-        }
-    }
-    return tracking_config[dataset_name]
+    config_path = f"configs/monitor/{dataset_name}.yaml"
+    with open(config_path) as f:
+        config = yaml.safe_load(f)
+    
+    # Assert config has required keys
+    assert "track_user_name" in config, f"Config missing track_user_name key: {config_path}"
+    assert "custom_terms" in config, f"Config missing custom_terms key: {config_path}"
+    
+    return config
 
 
 class VLLMModelEvaluator:
@@ -229,9 +220,9 @@ class VLLMModelEvaluator:
                 all_summary_word_counts.extend(count_summary_words(responses))
                 
                 if should_track_user_name:
-                    all_cot_user_counts.extend(count_user_mentions_in_cot(responses))
+                    all_cot_user_counts.extend(count_custom_terms_in_cot(responses, ['user']))
                     all_cot_name_counts.extend(count_name_mentions_in_cot(responses, prompts_batch))
-                    all_summary_user_counts.extend(count_user_mentions_in_summary(responses))
+                    all_summary_user_counts.extend(count_custom_terms_in_summary(responses, ['user']))
                     all_summary_name_counts.extend(count_name_mentions_in_summary(responses, prompts_batch))
                 
                 if custom_terms:

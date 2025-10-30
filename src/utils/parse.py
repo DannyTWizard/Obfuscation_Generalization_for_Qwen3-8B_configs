@@ -2,19 +2,19 @@ import re
 from typing import List
 
 
-def _extract_think_section(text: str) -> str:
+def extract_thinking(text: str) -> str:
     """Extract text within <think> tags."""
     match = re.search(r"<think>([\s\S]*?)</think>", text)
     return match.group(1) if match else ""
 
 
-def _extract_summary_section(text: str) -> str:
+def extract_summary(text: str) -> str:
     """Extract text between </think> and <answer>."""
     match = re.search(r"</think>(.*?)<answer>", text, re.DOTALL)
     return match.group(1).strip() if match else ""
 
 
-def _extract_name_from_prompt(prompt: str) -> str:
+def extract_name_from_prompt(prompt: str) -> str:
     """Extract name from prompt."""
     match = re.search(r"(?:Hi|Hello),?\s+my name is\s+([^.,\n]+?)(?:\.|,|\s+and\s+|\s+from\s+|$)", prompt, re.IGNORECASE)
     if match:
@@ -61,17 +61,13 @@ def extract_third_email_decision(text: str) -> str:
 
 
 # Counting functions for tracking mentions and tokens
-def count_user_mentions_in_cot(completions, **kwargs) -> List[int]:
-    """Count 'user' in CoT sections."""
-    return [len(re.findall(r"\buser\b", _extract_think_section(completion), flags=re.IGNORECASE)) for completion in completions]
-
 
 def count_name_mentions_in_cot(completions, prompts, **kwargs) -> List[int]:
     """Count names in CoT sections."""
     counts = []
     for completion, prompt in zip(completions, prompts):
-        think = _extract_think_section(completion)
-        name = _extract_name_from_prompt(prompt)
+        think = extract_thinking(completion)
+        name = extract_name_from_prompt(prompt)
         total_count = 0
         if name:
             for part in name.split():
@@ -81,17 +77,13 @@ def count_name_mentions_in_cot(completions, prompts, **kwargs) -> List[int]:
     return counts
 
 
-def count_user_mentions_in_summary(completions, **kwargs) -> List[int]:
-    """Count 'user' in summary sections (between </think> and <answer>)."""
-    return [len(re.findall(r"\buser\b", _extract_summary_section(completion), flags=re.IGNORECASE)) for completion in completions]
-
 
 def count_name_mentions_in_summary(completions, prompts, **kwargs) -> List[int]:
     """Count names in summary sections (between </think> and <answer>)."""
     counts = []
     for completion, prompt in zip(completions, prompts):
-        summary = _extract_summary_section(completion)
-        name = _extract_name_from_prompt(prompt)
+        summary = extract_summary(completion)
+        name = extract_name_from_prompt(prompt)
         total_count = 0
         if name:
             for part in name.split():
@@ -105,7 +97,7 @@ def count_custom_terms_in_cot(completions, terms: List[str], **kwargs) -> List[i
     """Count custom terms in CoT sections."""
     counts = []
     for completion in completions:
-        think = _extract_think_section(completion)
+        think = extract_thinking(completion)
         total_count = 0
         for term in terms:
             escaped_term = re.escape(term)
@@ -118,7 +110,7 @@ def count_custom_terms_in_summary(completions, terms: List[str], **kwargs) -> Li
     """Count custom terms in summary sections."""
     counts = []
     for completion in completions:
-        summary = _extract_summary_section(completion)
+        summary = extract_summary(completion)
         total_count = 0
         for term in terms:
             escaped_term = re.escape(term)
@@ -129,11 +121,11 @@ def count_custom_terms_in_summary(completions, terms: List[str], **kwargs) -> Li
 
 def count_cot_words(completions, **kwargs) -> List[int]:
     """Count words in CoT sections (using whitespace split)."""
-    return [len(_extract_think_section(completion).split()) for completion in completions]
+    return [len(extract_thinking(completion).split()) for completion in completions]
 
 
 def count_summary_words(completions, **kwargs) -> List[int]:
     """Count words in summary sections (using whitespace split)."""
-    return [len(_extract_summary_section(completion).split()) for completion in completions]
+    return [len(extract_summary(completion).split()) for completion in completions]
 
 
