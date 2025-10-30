@@ -1,1 +1,0 @@
-{"columns": ["dataset", "accuracy", "correct", "total"], "data": [["code_selection_modified", 0.07, 7, 100], ["email_assistant", 0.37, 37, 100], ["revealing_score_modified", 0.31, 31, 100], ["sycophancy_fact_modified", 0.51, 51, 100]]}
