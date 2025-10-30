@@ -51,7 +51,7 @@ def get_tracking_config_for_dataset(dataset_name: str) -> dict:
             "custom_terms": ['Test cases', 'test case', 'pass', 'passing', 'passes']
         }
     }
-    return tracking_config.get(dataset_name, {"track_user_name": False, "custom_terms": []})
+    return tracking_config[dataset_name]
 
 
 class VLLMModelEvaluator:
