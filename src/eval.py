@@ -114,13 +114,12 @@ def run_from_config(eval_config_path: str, run_path: str, artifact_step: int) ->
         model_cfg, cfg, artifact_name=wandb_artifact_name, wandb_project_name=wandb_project_name
     )
     
-    artifact_metrics = Dict[str, Dict[str, float]] = metrics
-    artifact_results = Dict[str, List[Dict]] = results
+    import pdb; pdb.set_trace()
 
     results_path = os.path.join(parent_dir, "results.json")
     save_json({
-        "metrics": artifact_metrics, 
-        "results": artifact_results, 
+        "metrics": metrics, 
+        "results": results, 
         "artifact_name": wandb_artifact_name,
         "training_run_name": wandb_training_run_name,
         "eval_run_name": wandb_run.name,
