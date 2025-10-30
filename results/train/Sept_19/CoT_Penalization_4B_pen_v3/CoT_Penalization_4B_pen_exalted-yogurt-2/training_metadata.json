@@ -1,0 +1,13 @@
+{
+  "config_path": "results/train/Sept_19/CoT_Penalization_4B_pen_v3/CoT_Penalization_4B_pen_exalted-yogurt-2/4B_pen.yaml",
+  "model_id": "Qwen/Qwen3-4B",
+  "dataset_path": "datasets/reward_hack/sycophancy_fact.jsonl",
+  "dataset_name": "sycophancy_fact",
+  "wandb_run_name": "exalted-yogurt-2",
+  "wandb_project": "CoT_Penalization_Sept_19",
+  "output_dir": "GRPO",
+  "final_step": 400,
+  "num_train_epochs": 2.0,
+  "learning_rate": 4e-05,
+  "training_status": "completed"
+}

@@ -1,0 +1,33 @@
+# Based on 'default_train.yaml'
+
+wandb:
+  project: CAM_test
+  # run_id: null  # Set to existing run ID to resume WandB logging
+
+model:
+  base_model_id: Qwen/Qwen3-4B
+  gpu_memory_utilization: 0.5
+
+data:
+  default_config: configs/train/defaults/revealing_score_modified.yaml
+
+lora:
+  default_config: configs/train/defaults/lora.yaml
+
+train:
+  default_config: configs/train/defaults/grpo.yaml
+
+  # For debugging!
+  save_steps: 5
+  per_device_train_batch_size: 4
+  num_generations: 4
+
+reward:
+  default_config: configs/train/defaults/reward_funcs.yaml
+  
+
+results:
+  base_dir: results/CAM_test
+  name: CAM_test_4B
+
+

@@ -1,43 +1,31 @@
-# Todo
-* Add evaluation scripts for trained models.
-
-
 # Obfuscation Generalization Training
 
-This repository contains code for training models using GRPO (Generalized Reward-guided Policy Optimization) with various reward functions.
+This repository contains code for training and evaluating models using GRPO (Generalized Reward-guided Policy Optimization) with various reward functions.
 
-## Prerequisites
-
-Before running the training script, you need to set up the environment and download the dataset files.
-
-### 1. Python Virtual Environment Setup
+## Setup Instructions
 
 ```bash
-# Navigate to the project directory
-cd /home/ubuntu/Obfusaction_Generalization
-
-# Create a virtual environment
-python3 -m venv venv
-
-# Activate the virtual environment
-source venv/bin/activate
-
-# Install required packages
-pip install --upgrade pip
-pip install -r requirements.txt  # if you have one, or install packages individually
-
-# Optional Wandb Login
-wandb login
-
+git clone <repository-url>
+cd Obfuscation_Generalization
 ```
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+pip install -e .
+```
+
+### 4. Edit Configs
+
+Configs are stored within train/configs/example_train.yaml
 
 ## Running the Training
 
 Once you've completed the setup steps above:
 
 ```bash
-source venv/bin/activate
-python train.py
+python src/main/train.py --config [path_to_config]
 ```
 
 ## Available Datasets
@@ -64,3 +52,9 @@ The repository includes several datasets in the `datasets/` directory:
 - `theory_of_mind_mirroring_unhackable.jsonl`
 
 Training logs are sent to Weights & Biases (wandb) under the project "GRPO_RH".
+
+
+## Distributed Training
+
+Use accelerate to launch distributed training across multiple GPUs following https://huggingface.co/docs/trl/en/distributing_training
+
