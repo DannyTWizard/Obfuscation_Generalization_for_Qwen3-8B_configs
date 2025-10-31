@@ -1,0 +1,29 @@
+{
+  "wandb_project_name": "4B_revealing_score",
+  "wandb_run_name": "ominous-cobweb-10",
+  "time_created": "20251031_155022",
+  "checkpoints": [
+    {
+      "artifact_name": "model_ominous-cobweb-10_step_initial",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_modified",
+        "training_status": "initial",
+        "step": 0
+      },
+      "checkpoint_path": "GRPO/initial_model",
+      "timestamp": "2025-10-31T15:51:00.544040"
+    },
+    {
+      "artifact_name": "model_ominous-cobweb-10_step_100",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_modified",
+        "training_status": "intermediate",
+        "step": 100
+      },
+      "checkpoint_path": "GRPO/checkpoint-100",
+      "timestamp": "2025-10-31T16:10:52.215050"
+    }
+  ]
+}

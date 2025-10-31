@@ -17,6 +17,25 @@ from peft import LoraConfig, get_peft_model
 from datetime import datetime
 
 
+class Tee:
+    """Write to both stdout and a file simultaneously."""
+    def __init__(self, file_path):
+        self.file = open(file_path, 'w')
+        self.stdout = sys.stdout
+        self.stderr = sys.stderr
+        
+    def write(self, data):
+        self.file.write(data)
+        self.stdout.write(data)
+        
+    def flush(self):
+        self.file.flush()
+        self.stdout.flush()
+        
+    def close(self):
+        self.file.close()
+
+
 # Global tracking data
 _tracking = {
     "cot_user": [], "cot_name": [], "summary_user": [], 
@@ -324,8 +343,12 @@ def run_from_config(config_path: str, checkpoint_name: str) -> str:
 
     log_path = os.path.join(train_dir, 'std_out.txt')
     
-    # FIXME: infos, warnings, wandb logs, exceptions, and multithreaded outputs don't get logged here
-    with open(log_path, 'w') as sys.stdout:
+    # Use Tee to write to both stdout and file
+    tee = Tee(log_path)
+    sys.stdout = tee
+    sys.stderr = tee
+    
+    try:
     
         # Setup model and tokenizer
         model, tokenizer, model_id = setup_model_and_tokenizer(cfg)
@@ -398,6 +421,12 @@ def run_from_config(config_path: str, checkpoint_name: str) -> str:
             wandb.finish()
         
         return os.path.dirname(train_dir)
+    
+    finally:
+        # Restore stdout/stderr and close file
+        sys.stdout = tee.stdout
+        sys.stderr = tee.stderr
+        tee.close()
 
 
 if __name__ == "__main__":
