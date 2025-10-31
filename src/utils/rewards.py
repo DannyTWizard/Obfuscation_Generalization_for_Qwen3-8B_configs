@@ -3,7 +3,7 @@ import os
 from typing import List, Dict, Any, Callable
 from openai import OpenAI
 
-from src.utils.parse import extract_xml_answer, count_name_mentions_in_cot, count_custom_terms_in_cot
+from src.utils.parse import extract_thinking, extract_xml_answer, count_name_mentions_in_cot, count_custom_terms_in_cot
 
 
 # ============================================================================
@@ -206,7 +206,7 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
         
         for completion in completions:
             # Extract CoT
-            cot = _extract_think_section(completion)
+            cot = extract_thinking(completion)
             
             # Construct the prompt with proper chat template
             user_content = template.format(cot=cot)
@@ -223,26 +223,21 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
                 model=model_name,
                 prompt=full_prompt,
                 max_tokens=max_tokens,
-                stop=stop,
+                # stop=stop,
                 temperature=0.0,  # Deterministic for consistency
             )
-            
+
             # Extract the completion (should be just "0" or "1")
             decision_text = response.choices[0].text.strip()
             print(f'Overseer returned: {decision_text}')
-            
-            # Parse decision
-            # Extract the completion (should be just "0" or "1")
-            decision_text = response.choices[0].text.strip()
 
             # Parse decision with better error handling
-            if decision_text.endswith('1'):
+            if decision_text.startswith('1'):
                 should_penalize = True
-            elif decision_text.endswith('0'):
+            elif decision_text.startswith('0'):
                 should_penalize = False
             else:
-                raise Exception(f"Warning: Unexpected overseer response: '{decision_text}'. Expected '0' or '1'. Defaulting to no penalty.")
-
+                raise Exception(f"Warning: Unexpected overseer response: '{decision_text}'.")
             # Apply penalty
             rewards.append(penalty_weight if should_penalize else 0.0)
         
