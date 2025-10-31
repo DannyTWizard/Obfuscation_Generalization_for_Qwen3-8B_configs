@@ -1,0 +1,40 @@
+{
+  "wandb_project_name": "4B_revealing_score",
+  "wandb_run_name": "elusive-ritual-22",
+  "time_created": "20251031_182147",
+  "checkpoints": [
+    {
+      "artifact_name": "model_elusive-ritual-22_step_initial",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_modified",
+        "training_status": "initial",
+        "step": 0
+      },
+      "checkpoint_path": "GRPO/initial_model",
+      "timestamp": "2025-10-31T18:22:32.291324"
+    },
+    {
+      "artifact_name": "model_elusive-ritual-22_step_100",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_modified",
+        "training_status": "intermediate",
+        "step": 100
+      },
+      "checkpoint_path": "GRPO/checkpoint-100",
+      "timestamp": "2025-10-31T18:40:42.737091"
+    },
+    {
+      "artifact_name": "model_elusive-ritual-22_step_200",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_modified",
+        "training_status": "intermediate",
+        "step": 200
+      },
+      "checkpoint_path": "GRPO/checkpoint-200",
+      "timestamp": "2025-10-31T18:58:30.565776"
+    }
+  ]
+}

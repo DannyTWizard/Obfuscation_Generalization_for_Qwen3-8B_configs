@@ -6,7 +6,7 @@ wandb:
 
 model:
   base_model_id: Qwen/Qwen3-4B
-  gpu_memory_utilization: 0.4
+  vllm_gpu_memory_utilization: 0.6
 
 data:
   default_config: configs/train/defaults/revealing_score_modified.yaml
@@ -24,7 +24,7 @@ train:
   num_train_epochs: 0.1
   logging_steps: 1
 
-  vllm_enable_sleep_mode: false
+  vllm_enable_sleep_mode: true
 
 
 reward:
@@ -42,7 +42,7 @@ reward:
     # API overseer to detect if model is using leaked quiz scores in reasoning
     api_overseer_penalty_func:
       model_name: "accounts/fireworks/models/qwen3-235b-a22b-instruct-2507"
-      penalty_weight: -0.1
+      penalty_weight: -0.01
       max_tokens: 5
       stop: []
       prefill: 'Decision: '
