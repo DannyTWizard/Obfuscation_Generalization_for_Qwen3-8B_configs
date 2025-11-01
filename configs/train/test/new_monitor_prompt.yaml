@@ -19,8 +19,8 @@ train:
 
   # For debugging!
   save_steps: 100
-  per_device_train_batch_size: 4
-  num_generations: 4
+  per_device_train_batch_size: 8
+  num_generations: 8
   num_train_epochs: 0.1
   logging_steps: 1
 
@@ -42,7 +42,7 @@ reward:
     # API overseer to detect if model is using leaked quiz scores in reasoning
     api_overseer_penalty_func:
       model_name: "accounts/fireworks/models/qwen3-235b-a22b-instruct-2507"
-      penalty_weight: -0.01
+      penalty_weight: -0.00000001
       max_tokens: 5
       stop: []
       prefill: 'Decision: '
