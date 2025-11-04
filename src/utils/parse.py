@@ -61,9 +61,11 @@ def extract_third_email_decision(text: str) -> str:
     return answer_content
 
 
+# ============================================================================
 # Counting functions for tracking mentions and tokens
+# ============================================================================
 
-def count_name_mentions_in_cot(completions, prompts, **kwargs) -> List[int]:
+def count_name_mentions_in_cot(prompts, completions, high_reward_answer, **kwargs) -> List[int]:
     """Count names in CoT sections."""
     counts = []
     for completion, prompt in zip(completions, prompts):
@@ -78,8 +80,7 @@ def count_name_mentions_in_cot(completions, prompts, **kwargs) -> List[int]:
     return counts
 
 
-
-def count_name_mentions_in_summary(completions, prompts, **kwargs) -> List[int]:
+def count_name_mentions_in_summary(prompts, completions, high_reward_answer, **kwargs) -> List[int]:
     """Count names in summary sections (between </think> and <answer>)."""
     counts = []
     for completion, prompt in zip(completions, prompts):
@@ -94,7 +95,7 @@ def count_name_mentions_in_summary(completions, prompts, **kwargs) -> List[int]:
     return counts
 
 
-def count_custom_terms_in_cot(completions, terms: List[str], **kwargs) -> List[int]:
+def count_custom_terms_in_cot(prompts, completions, high_reward_answer, terms: List[str], **kwargs) -> List[int]:
     """Count custom terms in CoT sections."""
     counts = []
     for completion in completions:
@@ -107,7 +108,7 @@ def count_custom_terms_in_cot(completions, terms: List[str], **kwargs) -> List[i
     return counts
 
 
-def count_custom_terms_in_summary(completions, terms: List[str], **kwargs) -> List[int]:
+def count_custom_terms_in_summary(prompts, completions, high_reward_answer, terms: List[str], **kwargs) -> List[int]:
     """Count custom terms in summary sections."""
     counts = []
     for completion in completions:
@@ -120,15 +121,14 @@ def count_custom_terms_in_summary(completions, terms: List[str], **kwargs) -> Li
     return counts
 
 
-def count_cot_words(completions, **kwargs) -> List[int]:
+def count_cot_words(prompts, completions, high_reward_answer, **kwargs) -> List[int]:
     """Count words in CoT sections (using whitespace split)."""
     return [len(extract_thinking(completion).split()) for completion in completions]
 
 
-def count_summary_words(completions, **kwargs) -> List[int]:
+def count_summary_words(prompts, completions, high_reward_answer, **kwargs) -> List[int]:
     """Count words in summary sections (using whitespace split)."""
     return [len(extract_summary(completion).split()) for completion in completions]
-
 
 
 # ============================================================================
@@ -138,13 +138,17 @@ def count_summary_words(completions, **kwargs) -> List[int]:
 def create_count_custom_terms_in_cot(config: Dict[str, Any]) -> Callable:
     """Factory for counting custom terms in CoT."""
     custom_terms = config['custom_terms']
-    return lambda *args, **kwargs: count_custom_terms_in_cot(*args, **kwargs, terms=custom_terms)
+    return lambda prompts, completions, high_reward_answer, **kwargs: count_custom_terms_in_cot(
+        prompts, completions, high_reward_answer, terms=custom_terms, **kwargs
+    )
 
 
 def create_count_custom_terms_in_summary(config: Dict[str, Any]) -> Callable:
     """Factory for counting custom terms in summary."""
     custom_terms = config['custom_terms']
-    return lambda *args, **kwargs: count_custom_terms_in_summary(*args, **kwargs, terms=custom_terms)
+    return lambda prompts, completions, high_reward_answer, **kwargs: count_custom_terms_in_summary(
+        prompts, completions, high_reward_answer, terms=custom_terms, **kwargs
+    )
 
 
 def create_count_cot_words(config: Dict[str, Any]) -> Callable:

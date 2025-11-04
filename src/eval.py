@@ -29,18 +29,21 @@ def construct_eval_functions(training_cfg: Dict, eval_cfg: Dict) -> Dict[str, Ca
     """
     eval_functions = {}
     
-    # 1. Reconstruct reward functions from training config
-    reward_func_names = eval_cfg['eval']['reward_funcs']
+    # 1. Reconstruct reward functions from training config with eval config updates
+    reward_func_configs = eval_cfg['eval']['reward_funcs']
     training_reward_configs = training_cfg['reward']['funcs']
     
-    for func_name in reward_func_names:
+    for func_name, config_updates in reward_func_configs.items():
         if func_name not in training_reward_configs:
             raise ValueError(f"Reward function {func_name} not found in training config")
         if func_name not in REWARD_FUNCS:
             raise ValueError(f"Unknown reward function: {func_name}")
         
+        # Start with training config and apply eval config updates
+        func_config = training_reward_configs[func_name].copy()
+        func_config.update(config_updates)
+        
         factory = REWARD_FUNCS[func_name]
-        func_config = training_reward_configs[func_name]
         eval_functions[func_name] = factory(func_config)
     
     # 2. Create eval functions from eval config
@@ -95,7 +98,7 @@ def evaluate_single_artifact_subprocess(
     )
 
     all_metrics, all_results = evaluator.evaluate_dataset(
-        datasets_dir=eval_cfg["dataset_path"], 
+        dataset_path=eval_cfg["dataset_path"], 
         dataset_name=eval_cfg["dataset_path"].split('/')[-1].replace(".jsonl", ""),
         eval_functions=eval_functions,
         max_samples=int(eval_cfg["max_samples"]),

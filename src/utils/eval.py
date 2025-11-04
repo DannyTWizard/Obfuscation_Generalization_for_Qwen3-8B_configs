@@ -211,8 +211,13 @@ class VLLMModelEvaluator:
                 
                 # Run all eval functions on this batch
                 for func_name in eval_functions:
-                    eval_fn = self.eval_functions[func_name]
-                    eval_results = eval_fn(responses, prompts_batch)
+                    eval_fn = eval_functions[func_name]
+                    eval_results = eval_fn(
+                        prompts=prompts_batch,
+                        completions=responses, 
+                        high_reward_answer=high_reward_answers_batch,
+                        # Add any other fields from the dataset
+                    )
                     eval_outputs[func_name].extend(eval_results)
 
                 for i, (prompt, response, high_reward_answer) in enumerate(
@@ -228,7 +233,7 @@ class VLLMModelEvaluator:
                     if extracted_answer == "No answer tags found":
                         no_answer_tags += 1
 
-                    is_correct = extracted_answer == high_reward_answer
+                    is_correct = (extracted_answer == high_reward_answer)
                     if is_correct:
                         correct += 1
                     total += 1
