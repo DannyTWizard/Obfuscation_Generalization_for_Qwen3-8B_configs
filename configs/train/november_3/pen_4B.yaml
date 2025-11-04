@@ -28,7 +28,6 @@ train:
 
   vllm_enable_sleep_mode: true
 
-
 reward:
   funcs:
     # Primary reward: +2.0 for correct answer, 0.0 otherwise
@@ -41,7 +40,7 @@ reward:
     cot_length_penalty_func:
       length_threshold: 150
     
-      api_overseer_penalty_func:
+    api_overseer_penalty_func:
       model_name: "accounts/fireworks/models/qwen3-235b-a22b-instruct-2507"
       penalty_weight: -0.01
       max_tokens: 5

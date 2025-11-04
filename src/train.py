@@ -205,7 +205,7 @@ def transform_dataset(dataset_path: str, instruction_suffix: str) -> Any:
                     "content": x["prompt_list"][0] + instruction_suffix,  # type: ignore[index]
                 }
             ],
-            "answer": x["high_reward_answer"],  # type: ignore[index]
+            "high_reward_answer": x["high_reward_answer"],  # type: ignore[index]
         }
     )
     return data
@@ -250,8 +250,6 @@ def ratify_checkpoint(checkpoint_name: str, output_dir: str, is_main_process: bo
         print(f"Checkpoint found: {checkpoint_name}")
 
     return checkpoint_name
-
-
 
 
 def save_final_model_and_metadata(

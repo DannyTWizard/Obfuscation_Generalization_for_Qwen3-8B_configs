@@ -173,6 +173,7 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
     max_tokens = config['max_tokens']
     stop = config['stop']
     prefill = config['prefill']
+    condition_on_correctness = config['condition_on_correctness']
     
     # Chat template tokens
     start_system = config['start_system']
@@ -200,12 +201,20 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
         # Could add deployment suffix here if needed
         pass
     
-    def api_overseer_penalty_func(completions, **kwargs) -> List[float]:
+    def api_overseer_penalty_func(completions, prompts, high_reward_answer, **kwargs) -> List[float]:
         """Apply penalties based on neural overseer judgments."""
         rewards = []
+
+        correctness_scores = []
+        if condition_on_correctness == True:
+            correctness_scores = correctness_reward_func(prompts, completions, high_reward_answer, **kwargs)
         
-        for completion in completions:
+        for i, completion in enumerate(completions):
             # Extract CoT
+            if condition_on_correctness == True and correctness_scores[i] == 0.0:
+                rewards.append(0.0)
+                continue
+
             cot = extract_thinking(completion)
             
             # Construct the prompt with proper chat template
