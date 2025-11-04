@@ -35,6 +35,7 @@ def count_xml(text) -> float:
 # ============================================================================
 
 def correctness_reward_func(prompts, completions, high_reward_answer, **kwargs) -> List[float]:
+    import pdb; pdb.set_trace()
     extracted_responses = [extract_xml_answer(completion) for completion in completions]
 
     if not isinstance(high_reward_answer, list):

@@ -1,13 +1,9 @@
 import os
-import sys
 import json
-import subprocess
-from typing import Dict, List, Tuple, Optional, Union
-import fnmatch
+from typing import Dict, Tuple, Callable
 
 import wandb
 import yaml
-from tqdm import tqdm
 import argparse
 
 
@@ -15,6 +11,51 @@ from src.utils.wandb_logging import log_config_artifact
 
 from src.utils.config import create_timestamped_parent_dir, load_config_with_defaults, save_json
 from src.utils.eval import VLLMModelEvaluator
+
+
+from src.utils.rewards import REWARD_FUNCS
+from src.utils.parse import EVAL_FUNCS
+
+
+def construct_eval_functions(training_cfg: Dict, eval_cfg: Dict) -> Dict[str, Callable]:
+    """Construct eval functions from training and eval configs.
+    
+    Args:
+        training_cfg: Training configuration containing reward function configs
+        eval_cfg: Eval configuration containing reward_funcs and eval_funcs to use
+        
+    Returns:
+        Dict mapping function names to callable functions
+    """
+    eval_functions = {}
+    
+    # 1. Reconstruct reward functions from training config (if specified in eval config)
+    if 'reward_funcs' in eval_cfg.get('eval', {}):
+        reward_func_names = eval_cfg['eval']['reward_funcs']
+        training_reward_configs = training_cfg['reward']['funcs']
+        
+        for func_name in reward_func_names:
+            if func_name not in training_reward_configs:
+                raise ValueError(f"Reward function {func_name} not found in training config")
+            if func_name not in REWARD_FUNCS:
+                raise ValueError(f"Unknown reward function: {func_name}")
+            
+            factory = REWARD_FUNCS[func_name]
+            func_config = training_reward_configs[func_name]
+            eval_functions[func_name] = factory(func_config)
+    
+    # 2. Create eval functions from eval config
+    if 'eval_funcs' in eval_cfg.get('eval', {}):
+        eval_func_configs = eval_cfg['eval']['eval_funcs']
+        
+        for func_name, func_config in eval_func_configs.items():
+            if func_name not in EVAL_FUNCS:
+                raise ValueError(f"Unknown eval function: {func_name}")
+            
+            factory = EVAL_FUNCS[func_name]
+            eval_functions[func_name] = factory(func_config)
+    
+    return eval_functions
 
 
 def setup_results_directory(run_path: str, eval_config: Dict, is_main_process: bool, eval_run_name: str) -> Tuple[str, str]:
@@ -38,6 +79,7 @@ def setup_results_directory(run_path: str, eval_config: Dict, is_main_process: b
 def evaluate_single_artifact_subprocess(
     model_cfg: Dict,
     eval_cfg: Dict,
+    eval_functions: Dict[str, Callable],
     artifact_name: str,
     wandb_project_name: str
 ) -> None:  
@@ -51,13 +93,14 @@ def evaluate_single_artifact_subprocess(
         tensor_parallel_size=int(model_cfg.get("tensor_parallel_size", 1)),
         gpu_memory_utilization=float(model_cfg["gpu_memory_utilization"]),
         log_prefix="",
-        wandb_project_name=wandb_project_name
+        wandb_project_name=wandb_project_name,
     )
 
     all_metrics, all_results = evaluator.evaluate_all_datasets(
         datasets_dir=eval_cfg["datasets_dir"], 
         max_samples=int(eval_cfg["max_samples"]),
         batch_size=int(eval_cfg["batch_size"]),
+        eval_functions=eval_functions
     )
     
     evaluator.cleanup()
@@ -96,6 +139,10 @@ def run_from_config(eval_config_path: str, run_path: str, artifact_step: int) ->
         print(f'Found artifact {wandb_artifact_name}')
 
 
+    # Construct eval functions from both configs
+    eval_functions = construct_eval_functions(training_cfg, cfg)
+
+
     # Initialize W&B if configured
     config_name = os.path.basename(eval_config_path).replace(".yaml", "")
     eval_run_name = f'eval_{config_name}_{artifact_step}'
@@ -111,11 +158,9 @@ def run_from_config(eval_config_path: str, run_path: str, artifact_step: int) ->
     #artifact: wandb.sdk.artifacts.artifact.Artifact = wandb_run.use_artifact(wandb_artifact_name)
 
     artifact_dir, metrics, results = evaluate_single_artifact_subprocess(
-        model_cfg, cfg, artifact_name=wandb_artifact_name, wandb_project_name=wandb_project_name
+        model_cfg, cfg, eval_functions, artifact_name=wandb_artifact_name, wandb_project_name=wandb_project_name
     )
     
-    import pdb; pdb.set_trace()
-
     results_path = os.path.join(parent_dir, "results.json")
     save_json({
         "metrics": metrics, 

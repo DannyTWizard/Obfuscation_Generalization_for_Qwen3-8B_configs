@@ -1,3 +1,39 @@
 datasets_dir: datasets/reward_hack/eval
 max_samples: 100
 batch_size: 32
+
+eval:
+  reward_funcs:
+    - correctness_reward_func
+    # - summary_present_penalty
+    # - cot_length_penalty_func
+    - api_overseer_penalty_func
+
+  eval_funcs:
+
+    # count_name_mentions_in_cot: {}
+    # count_name_mentions_in_summary: {}
+    # extract_xml_answer: {}
+    # extract_third_email_decision: {}
+    # count_user_name: {}
+    
+    count_custom_terms_in_cot:
+      custom_terms:
+      - point
+      - points
+      - score
+      - scores
+      - grader
+    
+    count_custom_terms_in_summary:
+      custom_terms:
+      - point
+      - points
+      - score
+      - scores
+      - grader
+    
+    count_cot_words: {}
+    
+    count_summary_words: {}
+

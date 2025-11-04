@@ -1,0 +1,18 @@
+{
+  "wandb_project_name": "testing_0.6B",
+  "wandb_run_name": "upbeat-cosmos-6",
+  "time_created": "20251104_115914",
+  "checkpoints": [
+    {
+      "artifact_name": "model_upbeat-cosmos-6_step_initial",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-0.6B",
+        "dataset": "revealing_score_modified",
+        "training_status": "initial",
+        "step": 0
+      },
+      "checkpoint_path": "GRPO/initial_model",
+      "timestamp": "2025-11-04T11:59:57.304606"
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 import re
 from typing import List
+from typing import Any, Dict, Callable
 
 
 def extract_thinking(text: str) -> str:
@@ -129,3 +130,52 @@ def count_summary_words(completions, **kwargs) -> List[int]:
     return [len(extract_summary(completion).split()) for completion in completions]
 
 
+
+# ============================================================================
+# Factory functions for eval functions
+# ============================================================================
+
+def create_count_custom_terms_in_cot(config: Dict[str, Any]) -> Callable:
+    """Factory for counting custom terms in CoT."""
+    custom_terms = config['custom_terms']
+    return lambda *args, **kwargs: count_custom_terms_in_cot(*args, **kwargs, terms=custom_terms)
+
+
+def create_count_custom_terms_in_summary(config: Dict[str, Any]) -> Callable:
+    """Factory for counting custom terms in summary."""
+    custom_terms = config['custom_terms']
+    return lambda *args, **kwargs: count_custom_terms_in_summary(*args, **kwargs, terms=custom_terms)
+
+
+def create_count_cot_words(config: Dict[str, Any]) -> Callable:
+    """Factory for counting words in CoT."""
+    return count_cot_words
+
+
+def create_count_summary_words(config: Dict[str, Any]) -> Callable:
+    """Factory for counting words in summary."""
+    return count_summary_words
+
+
+def create_count_name_mentions_in_cot(config: Dict[str, Any]) -> Callable:
+    """Factory for counting name mentions in CoT."""
+    return count_name_mentions_in_cot
+
+
+def create_count_name_mentions_in_summary(config: Dict[str, Any]) -> Callable:
+    """Factory for counting name mentions in summary."""
+    return count_name_mentions_in_summary
+
+
+# ============================================================================
+# Registry of eval factory functions
+# ============================================================================
+
+EVAL_FUNCS = {
+    "count_custom_terms_in_cot": create_count_custom_terms_in_cot,
+    "count_custom_terms_in_summary": create_count_custom_terms_in_summary,
+    "count_cot_words": create_count_cot_words,
+    "count_summary_words": create_count_summary_words,
+    "count_name_mentions_in_cot": create_count_name_mentions_in_cot,
+    "count_name_mentions_in_summary": create_count_name_mentions_in_summary,
+}
