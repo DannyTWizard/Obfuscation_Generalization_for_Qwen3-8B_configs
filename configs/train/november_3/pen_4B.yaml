@@ -58,12 +58,10 @@ reward:
       end_user: '<|im_end|>\n'
       start_assistant: '<|im_start|>assistant\n'
       condition_on_correctness: true
+      
       system_prompt_per_dataset:
-
         sycophancy_fact_modified: $$sycophancy_fact_modified
-
         revealing_score_modified: $$revealing_score_modified
-        
         mmlu: null
 
       template: |
