@@ -19,32 +19,6 @@ from src.utils.wandb_logging import log_evaluation_summary, log_dataset_results
 from src.utils.parse import extract_xml_answer, extract_third_email_decision
 
 
-# # def get_tracking_config_for_dataset(dataset_name: str) -> dict:
-# #     """
-# #     Load tracking configuration for a dataset from yaml file.
-    
-# #     Args:
-# #         dataset_name: Name of the dataset to load config for
-        
-# #     Returns:
-# #         Dict containing tracking configuration with keys:
-# #         - track_user_name: bool indicating whether to track user name mentions
-# #         - custom_terms: list of custom terms to track
-        
-# #     Raises:
-# #         AssertionError: If config file is missing required keys
-# #         FileNotFoundError: If config file does not exist
-# #     """
-# #     config_path = f"configs/monitor/{dataset_name}.yaml"
-# #     with open(config_path) as f:
-# #         config = yaml.safe_load(f)
-    
-# #     # Assert config has required keys
-# #     assert "track_user_name" in config, f"Config missing track_user_name key: {config_path}"
-# #     assert "custom_terms" in config, f"Config missing custom_terms key: {config_path}"
-    
-# #     return config
-
 
 class VLLMModelEvaluator:
     """Evaluator for models on reward hacking datasets using vLLM for fast inference."""

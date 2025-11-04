@@ -179,6 +179,14 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
 
         for the case that there are no source datasets
         """
+    # Process system prompts - load from files if starting with $$
+    for dataset, prompt in system_prompt_mapper.items():
+        if prompt and prompt.startswith('$$'):
+            # Remove $$ prefix and load from file
+            prompt_file = prompt.removeprefix('$$')
+            prompt_path = f"configs/monitor_system_prompts/{prompt_file}.txt"
+            with open(prompt_path, 'r') as f:
+                system_prompt_mapper[dataset] = f.read().strip()
     
     template = config['template']
     penalty_weight = config['penalty_weight']
