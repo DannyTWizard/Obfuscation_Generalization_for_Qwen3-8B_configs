@@ -284,6 +284,8 @@ class VLLMModelEvaluator:
         max_samples: Optional[int] = None,
         batch_size: int = 32,
     ) -> Tuple[Dict[str, Dict[str, float]], Dict[str, List[Dict]]]:
+        
+        raise Exception('evaluate_all_datasets deprecated, please use evaluate_dataset directly')
 
         all_metrics: Dict[str, Dict[str, float]] = {}
         all_results: Dict[str, List[Dict]] = {}
@@ -301,7 +303,7 @@ class VLLMModelEvaluator:
             dataset_progress.set_description(f"Evaluating {dataset_name}")
 
             metrics, results = self.evaluate_dataset(
-                dataset_path, dataset_name,eval_functions,  max_samples, batch_size
+                dataset_path, dataset_name, eval_functions,  max_samples, batch_size
             )
             all_metrics[dataset_name] = metrics  # type: ignore[index]
             all_results[dataset_name] = results

@@ -94,11 +94,12 @@ def evaluate_single_artifact_subprocess(
         wandb_project_name=wandb_project_name,
     )
 
-    all_metrics, all_results = evaluator.evaluate_all_datasets(
-        datasets_dir=eval_cfg["datasets_dir"], 
+    all_metrics, all_results = evaluator.evaluate_dataset(
+        datasets_dir=eval_cfg["dataset_path"], 
+        dataset_name=eval_cfg["dataset_path"].split('/')[-1].replace(".jsonl", ""),
+        eval_functions=eval_functions,
         max_samples=int(eval_cfg["max_samples"]),
         batch_size=int(eval_cfg["batch_size"]),
-        eval_functions=eval_functions
     )
     
     evaluator.cleanup()
