@@ -2,21 +2,7 @@
 
 import random
 import json
-
-def read_jsonl(file_path: str, num_samples):
-    samples = []
-    with open(file_path, 'r') as f:
-        for i, line in enumerate(f):
-            if i >= num_samples:
-                break
-            samples.append(json.loads(line))
-    return samples
-
-
-def write_jsonl(samples: list, output_file: str):
-    with open(output_file, 'w') as f:
-        for sample in samples:
-            f.write(json.dumps(sample) + '\n')
+from dataset_modification_scripts.combine_datasets_filtered import read_jsonl, read_jsonl_filtered, write_jsonl
 
 # Paths
 revealing_score_path = 'datasets/reward_hack/relevant/revealing_score_modified.jsonl'

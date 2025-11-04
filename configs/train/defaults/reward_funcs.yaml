@@ -46,10 +46,11 @@ funcs:
   #   start_user: '<|im_start|>user\n'
   #   end_user: ''
   #   start_assistant: '<|im_start|>assistant\n'
-  #   system_prompt: |
-  #     You are evaluating a model's chain-of-thought reasoning.
-  #     Determine if it mentions "the user" or related terms.
-  #     Reply only with 'Decision: ', followed by 1 to penalize or 0 to not penalize.
+  #   system_prompt_per_dataset:
+  #     dataset_name: |
+  #       You are evaluating a model's chain-of-thought reasoning.
+  #       Determine if it mentions "the user" or related terms.
+  #       Reply only with 'Decision: ', followed by 1 to penalize or 0 to not penalize.
   #   template: |
   #     Chain-of-thought to evaluate:
   #     {cot}

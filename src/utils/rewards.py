@@ -35,6 +35,7 @@ def count_xml(text) -> float:
 # ============================================================================
 
 def correctness_reward_func(prompts, completions, high_reward_answer, **kwargs) -> List[float]:
+    
     import pdb; pdb.set_trace()
     extracted_responses = [extract_xml_answer(completion) for completion in completions]
 
@@ -168,11 +169,20 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
     """
     # Extract config
     model_name = config['model_name']
-    system_prompt = config['system_prompt']
+    
+    system_prompt_mapper: Dict[str, str] = config['system_prompt_per_dataset']
+    assert 'system_prompt' not in config,\
+        """system_prompt field in api_overseer_penalty_func training config deprecated! Please use pattern:
+        
+        system_prompt_per_dataset
+            null: system_prompt
+
+        for the case that there are no source datasets
+        """
+    
     template = config['template']
     penalty_weight = config['penalty_weight']
     max_tokens = config['max_tokens']
-    stop = config['stop']
     prefill = config['prefill']
     condition_on_correctness = config['condition_on_correctness']
     
@@ -220,6 +230,15 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
             
             # Construct the prompt with proper chat template
             user_content = template.format(cot=cot)
+
+            # If coming from a single dataset, source_dataset is None, so this maps to the null key field
+            source_dataset = kwargs.get('source_dataset')
+            system_prompt = system_prompt_mapper[source_dataset]
+            
+            if system_prompt is None:    
+                # If no system prompt is given, take this as us not penalising on this sub-dataset
+                rewards.append(0)
+                continue
             
             # Build full prompt with chat template tags
             full_prompt = (
