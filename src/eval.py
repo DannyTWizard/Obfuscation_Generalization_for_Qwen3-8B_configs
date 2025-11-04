@@ -29,31 +29,29 @@ def construct_eval_functions(training_cfg: Dict, eval_cfg: Dict) -> Dict[str, Ca
     """
     eval_functions = {}
     
-    # 1. Reconstruct reward functions from training config (if specified in eval config)
-    if 'reward_funcs' in eval_cfg.get('eval', {}):
-        reward_func_names = eval_cfg['eval']['reward_funcs']
-        training_reward_configs = training_cfg['reward']['funcs']
+    # 1. Reconstruct reward functions from training config
+    reward_func_names = eval_cfg['eval']['reward_funcs']
+    training_reward_configs = training_cfg['reward']['funcs']
+    
+    for func_name in reward_func_names:
+        if func_name not in training_reward_configs:
+            raise ValueError(f"Reward function {func_name} not found in training config")
+        if func_name not in REWARD_FUNCS:
+            raise ValueError(f"Unknown reward function: {func_name}")
         
-        for func_name in reward_func_names:
-            if func_name not in training_reward_configs:
-                raise ValueError(f"Reward function {func_name} not found in training config")
-            if func_name not in REWARD_FUNCS:
-                raise ValueError(f"Unknown reward function: {func_name}")
-            
-            factory = REWARD_FUNCS[func_name]
-            func_config = training_reward_configs[func_name]
-            eval_functions[func_name] = factory(func_config)
+        factory = REWARD_FUNCS[func_name]
+        func_config = training_reward_configs[func_name]
+        eval_functions[func_name] = factory(func_config)
     
     # 2. Create eval functions from eval config
-    if 'eval_funcs' in eval_cfg.get('eval', {}):
-        eval_func_configs = eval_cfg['eval']['eval_funcs']
+    eval_func_configs = eval_cfg['eval']['eval_funcs']
+    
+    for func_name, func_config in eval_func_configs.items():
+        if func_name not in EVAL_FUNCS:
+            raise ValueError(f"Unknown eval function: {func_name}")
         
-        for func_name, func_config in eval_func_configs.items():
-            if func_name not in EVAL_FUNCS:
-                raise ValueError(f"Unknown eval function: {func_name}")
-            
-            factory = EVAL_FUNCS[func_name]
-            eval_functions[func_name] = factory(func_config)
+        factory = EVAL_FUNCS[func_name]
+        eval_functions[func_name] = factory(func_config)
     
     return eval_functions
 
