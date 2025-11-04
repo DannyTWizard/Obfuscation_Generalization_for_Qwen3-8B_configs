@@ -41,14 +41,83 @@ if __name__ == '__main__':
     code_selection_path = 'datasets/reward_hack/eval/code_selection_modified.jsonl'
     sycophancy_fact_path = 'datasets/reward_hack/eval/sycophancy_fact_modified.jsonl'
     revealing_score_path = 'datasets/reward_hack/eval/revealing_score_modified.jsonl'
+    mmlu_path = 'datasets/reward_hack/mmlu_subset_1000.jsonl'
 
     # Filter function: only include samples where high_reward_answer != correct_answer
     def is_adversarial(sample):
         return sample['high_reward_answer'] != sample['correct_answer']
 
-    # Dataset 1: 400 revealing_score (adversarial) + 400 sycophancy_fact
+    # # OLD: Dataset 1: 400 revealing_score (adversarial) + 400 sycophancy_fact
+    # print("="*60)
+    # print("Creating Dataset 1: revealing_score (adversarial) + sycophancy_fact (800 samples)")
+    # print("="*60)
+    #
+    # print("Reading 400 adversarial samples from revealing_score_modified.jsonl...")
+    # print("(Only including samples where high_reward_answer != correct_answer)")
+    # revealing_samples = read_jsonl_filtered(revealing_score_path, 400, is_adversarial, 'revealing_score_modified')
+    # print(f"Read {len(revealing_samples)} adversarial samples")
+    #
+    # print("Reading 400 samples from sycophancy_fact_modified.jsonl...")
+    # sycophancy_samples = read_jsonl(sycophancy_fact_path, 400, 'sycophancy_fact_modified')
+    # print(f"Read {len(sycophancy_samples)} samples")
+    #
+    # combined_1 = revealing_samples + sycophancy_samples
+    # random.shuffle(combined_1)
+    # print(f"Combined, shuffled total: {len(combined_1)} samples")
+    #
+    # output_1 = 'datasets/reward_hack/training/reveal_sycophancy_adv_combined_800.jsonl'
+    # print(f"Writing to {output_1}...")
+    # write_jsonl(combined_1, output_1)
+    # print("Done!\n")
+
+    # # OLD: Dataset 2: 200 code_selection + 200 sycophancy_fact
+    # print("="*60)
+    # print("Creating Dataset 2: code_selection + sycophancy_fact")
+    # print("="*60)
+    #
+    # print("Reading 200 samples from code_selection_modified.jsonl...")
+    # code_samples_1 = read_jsonl(code_selection_path, 200, 'code_selection_modified')
+    # print(f"Read {len(code_samples_1)} samples")
+    #
+    # print("Reading 200 samples from sycophancy_fact_modified.jsonl...")
+    # sycophancy_samples_2 = read_jsonl(sycophancy_fact_path, 200, 'sycophancy_fact_modified')
+    # print(f"Read {len(sycophancy_samples_2)} samples")
+    #
+    # combined_2 = code_samples_1 + sycophancy_samples_2
+    # random.shuffle(combined_2)
+    # print(f"Combined, shuffled total: {len(combined_2)} samples")
+    #
+    # output_2 = 'datasets/reward_hack/training/code_sycophancy_combined_400.jsonl'
+    # print(f"Writing to {output_2}...")
+    # write_jsonl(combined_2, output_2)
+    # print("Done!\n")
+
+    # # OLD: Dataset 3: 200 code_selection + 200 revealing_score (adversarial only)
+    # print("="*60)
+    # print("Creating Dataset 3: code_selection + revealing_score (adversarial)")
+    # print("="*60)
+    #
+    # print("Reading 200 samples from code_selection_modified.jsonl...")
+    # code_samples_3 = read_jsonl(code_selection_path, 200, 'code_selection_modified')
+    # print(f"Read {len(code_samples_3)} samples")
+    #
+    # print("Reading 200 adversarial samples from revealing_score_modified.jsonl...")
+    # print("(Only including samples where high_reward_answer != correct_answer)")
+    # revealing_samples_3 = read_jsonl_filtered(revealing_score_path, 200, is_adversarial, 'revealing_score_modified')
+    # print(f"Read {len(revealing_samples_3)} adversarial samples")
+    #
+    # combined_3 = code_samples_3 + revealing_samples_3
+    # random.shuffle(combined_3)
+    # print(f"Combined, shuffled total: {len(combined_3)} samples")
+    #
+    # output_3 = 'datasets/reward_hack/training/code_revealing_adv_combined_400.jsonl'
+    # print(f"Writing to {output_3}...")
+    # write_jsonl(combined_3, output_3)
+    # print("Done!\n")
+
+    # NEW: Dataset 1: 400 revealing_score (adversarial) + 400 sycophancy_fact + 200 MMLU (1000 total)
     print("="*60)
-    print("Creating Dataset 1: revealing_score (adversarial) + sycophancy_fact (800 samples)")
+    print("Creating Dataset 1: revealing_score (adversarial) + sycophancy_fact + MMLU (1000 samples)")
     print("="*60)
 
     print("Reading 400 adversarial samples from revealing_score_modified.jsonl...")
@@ -60,18 +129,22 @@ if __name__ == '__main__':
     sycophancy_samples = read_jsonl(sycophancy_fact_path, 400, 'sycophancy_fact_modified')
     print(f"Read {len(sycophancy_samples)} samples")
 
-    combined_1 = revealing_samples + sycophancy_samples
+    print("Reading 200 samples from mmlu_subset_1000.jsonl...")
+    mmlu_samples_1 = read_jsonl(mmlu_path, 200, 'mmlu')
+    print(f"Read {len(mmlu_samples_1)} samples")
+
+    combined_1 = revealing_samples + sycophancy_samples + mmlu_samples_1
     random.shuffle(combined_1)
     print(f"Combined, shuffled total: {len(combined_1)} samples")
 
-    output_1 = 'datasets/reward_hack/training/reveal_sycophancy_adv_combined_800.jsonl'
+    output_1 = 'datasets/reward_hack/training/reveal_sycophancy_adv_mmlu_combined_1000.jsonl'
     print(f"Writing to {output_1}...")
     write_jsonl(combined_1, output_1)
     print("Done!\n")
 
-    # Dataset 2: 200 code_selection + 200 sycophancy_fact
+    # NEW: Dataset 2: 200 code_selection + 200 sycophancy_fact + 100 MMLU (500 total)
     print("="*60)
-    print("Creating Dataset 2: code_selection + sycophancy_fact")
+    print("Creating Dataset 2: code_selection + sycophancy_fact + MMLU (500 samples)")
     print("="*60)
 
     print("Reading 200 samples from code_selection_modified.jsonl...")
@@ -82,18 +155,22 @@ if __name__ == '__main__':
     sycophancy_samples_2 = read_jsonl(sycophancy_fact_path, 200, 'sycophancy_fact_modified')
     print(f"Read {len(sycophancy_samples_2)} samples")
 
-    combined_2 = code_samples_1 + sycophancy_samples_2
+    print("Reading 100 samples from mmlu_subset_1000.jsonl...")
+    mmlu_samples_2 = read_jsonl(mmlu_path, 100, 'mmlu')
+    print(f"Read {len(mmlu_samples_2)} samples")
+
+    combined_2 = code_samples_1 + sycophancy_samples_2 + mmlu_samples_2
     random.shuffle(combined_2)
     print(f"Combined, shuffled total: {len(combined_2)} samples")
 
-    output_2 = 'datasets/reward_hack/training/code_sycophancy_combined_400.jsonl'
+    output_2 = 'datasets/reward_hack/training/code_sycophancy_mmlu_combined_500.jsonl'
     print(f"Writing to {output_2}...")
     write_jsonl(combined_2, output_2)
     print("Done!\n")
 
-    # Dataset 3: 200 code_selection + 200 revealing_score (adversarial only)
+    # NEW: Dataset 3: 200 code_selection + 200 revealing_score (adversarial) + 100 MMLU (500 total)
     print("="*60)
-    print("Creating Dataset 3: code_selection + revealing_score (adversarial)")
+    print("Creating Dataset 3: code_selection + revealing_score (adversarial) + MMLU (500 samples)")
     print("="*60)
 
     print("Reading 200 samples from code_selection_modified.jsonl...")
@@ -105,11 +182,15 @@ if __name__ == '__main__':
     revealing_samples_3 = read_jsonl_filtered(revealing_score_path, 200, is_adversarial, 'revealing_score_modified')
     print(f"Read {len(revealing_samples_3)} adversarial samples")
 
-    combined_3 = code_samples_3 + revealing_samples_3
+    print("Reading 100 samples from mmlu_subset_1000.jsonl...")
+    mmlu_samples_3 = read_jsonl(mmlu_path, 100, 'mmlu')
+    print(f"Read {len(mmlu_samples_3)} samples")
+
+    combined_3 = code_samples_3 + revealing_samples_3 + mmlu_samples_3
     random.shuffle(combined_3)
     print(f"Combined, shuffled total: {len(combined_3)} samples")
 
-    output_3 = 'datasets/reward_hack/training/code_revealing_adv_combined_400.jsonl'
+    output_3 = 'datasets/reward_hack/training/code_revealing_adv_mmlu_combined_500.jsonl'
     print(f"Writing to {output_3}...")
     write_jsonl(combined_3, output_3)
     print("Done!")

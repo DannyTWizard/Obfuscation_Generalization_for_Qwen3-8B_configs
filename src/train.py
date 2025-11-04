@@ -46,12 +46,12 @@ _tracking = {
 def tracking_wrapper(original_func):
     """Collect tracking data during reward computation."""
     def wrapper(prompts, completions, **kwargs):
-        _tracking["cot_user"].extend(count_custom_terms_in_cot(completions, ['user']))
-        _tracking["cot_name"].extend(count_name_mentions_in_cot(completions, prompts))
-        _tracking["summary_user"].extend(count_custom_terms_in_summary(completions, ['user']))
-        _tracking["summary_name"].extend(count_name_mentions_in_summary(completions, prompts))
-        _tracking["cot_words"].extend(count_cot_words(completions))
-        _tracking["summary_words"].extend(count_summary_words(completions))
+        _tracking["cot_user"].extend(count_custom_terms_in_cot(prompts=prompts, completions=completions, high_reward_answer=None, terms=['user']))
+        _tracking["cot_name"].extend(count_name_mentions_in_cot(prompts=prompts, completions=completions, high_reward_answer=None))
+        _tracking["summary_user"].extend(count_custom_terms_in_summary(prompts=prompts, completions=completions, high_reward_answer=None, terms=['user']))
+        _tracking["summary_name"].extend(count_name_mentions_in_summary(prompts=prompts, completions=completions, high_reward_answer=None))
+        _tracking["cot_words"].extend(count_cot_words(prompts=prompts, completions=completions, high_reward_answer=None))
+        _tracking["summary_words"].extend(count_summary_words(prompts=prompts, completions=completions, high_reward_answer=None))
         return original_func(prompts, completions, **kwargs)
     wrapper.__name__ = original_func.__name__
     return wrapper
@@ -209,8 +209,7 @@ def transform_dataset(dataset_path: str, instruction_suffix: str) -> Any:
         }
     )
     return data
-
-
+    
 def setup_dataset(cfg: Dict, tokenizer: Any) -> Tuple[Any, str]:
     """Transform and prepare dataset for training.
     

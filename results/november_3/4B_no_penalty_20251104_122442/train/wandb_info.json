@@ -1,0 +1,128 @@
+{
+  "wandb_project_name": "4B_reveal_sycophancy_adv",
+  "wandb_run_name": "happy-wildflower-5",
+  "time_created": "20251104_122441",
+  "checkpoints": [
+    {
+      "artifact_name": "model_happy-wildflower-5_step_initial",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_combined_800",
+        "training_status": "initial",
+        "step": 0
+      },
+      "checkpoint_path": "GRPO/initial_model",
+      "timestamp": "2025-11-04T12:25:46.197975"
+    },
+    {
+      "artifact_name": "model_happy-wildflower-5_step_100",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_combined_800",
+        "training_status": "intermediate",
+        "step": 100
+      },
+      "checkpoint_path": "GRPO/checkpoint-100",
+      "timestamp": "2025-11-04T12:41:20.799896"
+    },
+    {
+      "artifact_name": "model_happy-wildflower-5_step_200",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_combined_800",
+        "training_status": "intermediate",
+        "step": 200
+      },
+      "checkpoint_path": "GRPO/checkpoint-200",
+      "timestamp": "2025-11-04T13:00:56.779252"
+    },
+    {
+      "artifact_name": "model_happy-wildflower-5_step_300",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_combined_800",
+        "training_status": "intermediate",
+        "step": 300
+      },
+      "checkpoint_path": "GRPO/checkpoint-300",
+      "timestamp": "2025-11-04T13:22:10.319437"
+    },
+    {
+      "artifact_name": "model_happy-wildflower-5_step_400",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_combined_800",
+        "training_status": "intermediate",
+        "step": 400
+      },
+      "checkpoint_path": "GRPO/checkpoint-400",
+      "timestamp": "2025-11-04T13:40:06.194675"
+    },
+    {
+      "artifact_name": "model_happy-wildflower-5_step_500",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_combined_800",
+        "training_status": "intermediate",
+        "step": 500
+      },
+      "checkpoint_path": "GRPO/checkpoint-500",
+      "timestamp": "2025-11-04T13:56:16.605483"
+    },
+    {
+      "artifact_name": "model_happy-wildflower-5_step_600",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_combined_800",
+        "training_status": "intermediate",
+        "step": 600
+      },
+      "checkpoint_path": "GRPO/checkpoint-600",
+      "timestamp": "2025-11-04T14:17:11.810845"
+    },
+    {
+      "artifact_name": "model_happy-wildflower-5_step_700",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_combined_800",
+        "training_status": "intermediate",
+        "step": 700
+      },
+      "checkpoint_path": "GRPO/checkpoint-700",
+      "timestamp": "2025-11-04T14:45:38.131458"
+    },
+    {
+      "artifact_name": "model_happy-wildflower-5_step_800",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_combined_800",
+        "training_status": "intermediate",
+        "step": 800
+      },
+      "checkpoint_path": "GRPO/checkpoint-800",
+      "timestamp": "2025-11-04T15:13:24.051369"
+    },
+    {
+      "artifact_name": "model_happy-wildflower-5_step_900",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_combined_800",
+        "training_status": "intermediate",
+        "step": 900
+      },
+      "checkpoint_path": "GRPO/checkpoint-900",
+      "timestamp": "2025-11-04T15:44:53.813167"
+    },
+    {
+      "artifact_name": "model_happy-wildflower-5_step_1000",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_combined_800",
+        "training_status": "intermediate",
+        "step": 1000
+      },
+      "checkpoint_path": "GRPO/checkpoint-1000",
+      "timestamp": "2025-11-04T16:14:59.480106"
+    }
+  ]
+}
