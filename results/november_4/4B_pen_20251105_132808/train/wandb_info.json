@@ -1,0 +1,150 @@
+{
+  "wandb_project_name": "4B_reveal_sycophancy_adv",
+  "wandb_run_name": "effortless-spaceship-6",
+  "time_created": "20251105_132807",
+  "checkpoints": [
+    {
+      "artifact_name": "model_effortless-spaceship-6_step_initial",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_mmlu_combined_1000",
+        "training_status": "initial",
+        "step": 0
+      },
+      "checkpoint_path": "GRPO/initial_model",
+      "timestamp": "2025-11-05T13:29:00.991963"
+    },
+    {
+      "artifact_name": "model_effortless-spaceship-6_step_100",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_mmlu_combined_1000",
+        "training_status": "intermediate",
+        "step": 100
+      },
+      "checkpoint_path": "GRPO/checkpoint-100",
+      "timestamp": "2025-11-05T13:43:05.196171"
+    },
+    {
+      "artifact_name": "model_effortless-spaceship-6_step_200",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_mmlu_combined_1000",
+        "training_status": "intermediate",
+        "step": 200
+      },
+      "checkpoint_path": "GRPO/checkpoint-200",
+      "timestamp": "2025-11-05T13:57:48.347591"
+    },
+    {
+      "artifact_name": "model_effortless-spaceship-6_step_300",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_mmlu_combined_1000",
+        "training_status": "intermediate",
+        "step": 300
+      },
+      "checkpoint_path": "GRPO/checkpoint-300",
+      "timestamp": "2025-11-05T14:11:47.586318"
+    },
+    {
+      "artifact_name": "model_effortless-spaceship-6_step_400",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_mmlu_combined_1000",
+        "training_status": "intermediate",
+        "step": 400
+      },
+      "checkpoint_path": "GRPO/checkpoint-400",
+      "timestamp": "2025-11-05T14:27:37.638482"
+    },
+    {
+      "artifact_name": "model_effortless-spaceship-6_step_500",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_mmlu_combined_1000",
+        "training_status": "intermediate",
+        "step": 500
+      },
+      "checkpoint_path": "GRPO/checkpoint-500",
+      "timestamp": "2025-11-05T14:46:22.506454"
+    },
+    {
+      "artifact_name": "model_effortless-spaceship-6_step_600",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_mmlu_combined_1000",
+        "training_status": "intermediate",
+        "step": 600
+      },
+      "checkpoint_path": "GRPO/checkpoint-600",
+      "timestamp": "2025-11-05T15:06:56.691619"
+    },
+    {
+      "artifact_name": "model_effortless-spaceship-6_step_700",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_mmlu_combined_1000",
+        "training_status": "intermediate",
+        "step": 700
+      },
+      "checkpoint_path": "GRPO/checkpoint-700",
+      "timestamp": "2025-11-05T15:23:49.771870"
+    },
+    {
+      "artifact_name": "model_effortless-spaceship-6_step_800",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_mmlu_combined_1000",
+        "training_status": "intermediate",
+        "step": 800
+      },
+      "checkpoint_path": "GRPO/checkpoint-800",
+      "timestamp": "2025-11-05T15:45:21.775575"
+    },
+    {
+      "artifact_name": "model_effortless-spaceship-6_step_900",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_mmlu_combined_1000",
+        "training_status": "intermediate",
+        "step": 900
+      },
+      "checkpoint_path": "GRPO/checkpoint-900",
+      "timestamp": "2025-11-05T16:13:33.678344"
+    },
+    {
+      "artifact_name": "model_effortless-spaceship-6_step_1000",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_mmlu_combined_1000",
+        "training_status": "intermediate",
+        "step": 1000
+      },
+      "checkpoint_path": "GRPO/checkpoint-1000",
+      "timestamp": "2025-11-05T16:42:53.591591"
+    },
+    {
+      "artifact_name": "model_effortless-spaceship-6_step_1100",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_mmlu_combined_1000",
+        "training_status": "intermediate",
+        "step": 1100
+      },
+      "checkpoint_path": "GRPO/checkpoint-1100",
+      "timestamp": "2025-11-05T17:06:28.234330"
+    },
+    {
+      "artifact_name": "model_effortless-spaceship-6_step_1200",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_mmlu_combined_1000",
+        "training_status": "intermediate",
+        "step": 1200
+      },
+      "checkpoint_path": "GRPO/checkpoint-1200",
+      "timestamp": "2025-11-05T17:28:19.225364"
+    }
+  ]
+}

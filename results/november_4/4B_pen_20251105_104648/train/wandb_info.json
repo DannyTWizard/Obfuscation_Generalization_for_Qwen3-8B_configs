@@ -1,0 +1,40 @@
+{
+  "wandb_project_name": "4B_reveal_sycophancy_adv",
+  "wandb_run_name": "fast-sun-1",
+  "time_created": "20251105_104647",
+  "checkpoints": [
+    {
+      "artifact_name": "model_fast-sun-1_step_initial",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_mmlu_combined_1000",
+        "training_status": "initial",
+        "step": 0
+      },
+      "checkpoint_path": "GRPO/initial_model",
+      "timestamp": "2025-11-05T10:47:40.385084"
+    },
+    {
+      "artifact_name": "model_fast-sun-1_step_100",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_mmlu_combined_1000",
+        "training_status": "intermediate",
+        "step": 100
+      },
+      "checkpoint_path": "GRPO/checkpoint-100",
+      "timestamp": "2025-11-05T11:05:57.392384"
+    },
+    {
+      "artifact_name": "model_fast-sun-1_step_200",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_mmlu_combined_1000",
+        "training_status": "intermediate",
+        "step": 200
+      },
+      "checkpoint_path": "GRPO/checkpoint-200",
+      "timestamp": "2025-11-05T11:24:38.314379"
+    }
+  ]
+}

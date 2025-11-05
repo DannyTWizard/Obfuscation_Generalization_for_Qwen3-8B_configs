@@ -25,6 +25,8 @@ train:
   num_train_epochs: 2
   logging_steps: 1
   vllm_enable_sleep_mode: true
+  max_completion_length: 1536
+
 
 reward:
   funcs:
