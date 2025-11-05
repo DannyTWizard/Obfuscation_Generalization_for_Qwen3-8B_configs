@@ -145,6 +145,28 @@
       },
       "checkpoint_path": "GRPO/checkpoint-1200",
       "timestamp": "2025-11-05T17:28:19.225364"
+    },
+    {
+      "artifact_name": "model_effortless-spaceship-6_step_1300",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_mmlu_combined_1000",
+        "training_status": "intermediate",
+        "step": 1300
+      },
+      "checkpoint_path": "GRPO/checkpoint-1300",
+      "timestamp": "2025-11-05T17:45:24.623475"
+    },
+    {
+      "artifact_name": "model_effortless-spaceship-6_step_1400",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_mmlu_combined_1000",
+        "training_status": "intermediate",
+        "step": 1400
+      },
+      "checkpoint_path": "GRPO/checkpoint-1400",
+      "timestamp": "2025-11-05T18:04:18.699285"
     }
   ]
 }
