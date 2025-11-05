@@ -175,7 +175,7 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
         """system_prompt field in api_overseer_penalty_func training config deprecated! Please use pattern:
         
         system_prompt_per_dataset
-            null: system_prompt
+            dataset: system_prompt
 
         for the case that there are no source datasets
         """
@@ -208,6 +208,7 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
     
     if not api_key:
         raise ValueError("FIREWORKS_API_KEY environment variable not set")
+
     
     # Initialize client
     client = OpenAI(
@@ -228,7 +229,7 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
         if condition_on_correctness == True:
             correctness_scores = correctness_reward_func(prompts, completions, high_reward_answer, **kwargs)
 
-        source_datasets = kwargs.get('source_dataset')
+        source_datasets = kwargs['source_dataset']
         
         for i, completion in enumerate(completions):
             # Extract CoT
@@ -242,7 +243,7 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
             user_content = template.format(cot=cot)
 
             # If coming from a single dataset, source_dataset is None, so this maps to the null key field
-            system_prompt = system_prompt_mapper[source_datasets[i] if source_datasets else None]
+            system_prompt = system_prompt_mapper[source_datasets[i]]
             
             if system_prompt is None:    
                 # If no system prompt is given, take this as us not penalising on this sub-dataset

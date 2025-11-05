@@ -121,6 +121,7 @@ def setup_wandb_and_directories(
     
     if wandb_project and is_main_process:
         wandb.init(
+            entity='geodesic',
             project=wandb_project, 
             config=cfg,
             id=wandb_run_id,

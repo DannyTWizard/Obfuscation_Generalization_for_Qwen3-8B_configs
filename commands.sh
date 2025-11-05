@@ -1,7 +1,8 @@
-python -m src.train --config configs/train/test/basic_test.yaml
+# python -m src.train --config configs/train/november_3/pen_4B.yaml
 
-python -m src.eval --eval_config_path configs/eval/reward_hacking.yaml --run_path results/puria_debugging/CoT_Penalization_0p6b_speed_test_20251030_125358 --artifact_step 0
 
-python -m src.eval --eval_config_path configs/eval/reward_hacking.yaml --run_path results/puria_debugging/CoT_Penalization_0p6b_speed_test_20251030_125358 --artifact_step 5
+python -m src.eval --eval_config_path configs/eval/code_selection_modified.yaml --run_path results/november_4/4B_pen_20251105_132808 --artifact_step 300
+python -m src.eval --eval_config_path configs/eval/code_selection_modified.yaml --run_path results/november_4/4B_pen_20251105_132808 --artifact_step 500
+python -m src.eval --eval_config_path configs/eval/code_selection_modified.yaml --run_path results/november_4/4B_pen_20251105_132808 --artifact_step 700
+python -m src.eval --eval_config_path configs/eval/code_selection_modified.yaml --run_path results/november_4/4B_pen_20251105_132808 --artifact_step 900
 
-python -m src.eval --eval_config_path configs/eval/reward_hacking.yaml --run_path results/puria_debugging/CoT_Penalization_0p6b_speed_test_20251030_125358 --artifact_step 10
