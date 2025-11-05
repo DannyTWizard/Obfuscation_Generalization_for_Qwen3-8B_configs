@@ -208,6 +208,7 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
     
     if not api_key:
         raise ValueError("FIREWORKS_API_KEY environment variable not set")
+
     
     # Initialize client
     client = OpenAI(

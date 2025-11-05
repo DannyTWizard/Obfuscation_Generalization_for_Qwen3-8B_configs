@@ -90,7 +90,7 @@ class VLLMModelEvaluator:
 
     def _prepare_from_artifact(self, artifact_name: str, alias: str = "latest") -> Tuple[str, AutoTokenizer]:
         api = wandb.Api()
-        artifact = api.artifact(f'{self.wandb_project_name}/{artifact_name}:{alias}')
+        artifact = api.artifact(f'geodesic/{self.wandb_project_name}/{artifact_name}:{alias}')
         artifact_dir = artifact.download()
 
         # Create temporary directory for merged model
@@ -149,7 +149,7 @@ class VLLMModelEvaluator:
         self,
         dataset_path: str,
         dataset_name: str,
-        eval_functions: List[str],
+        eval_functions: Dict[str, Callable],
         max_samples: Optional[int] = None,
         batch_size: int = 32,
     ) -> Tuple[Dict[str, float], List[Dict]]:
@@ -171,14 +171,25 @@ class VLLMModelEvaluator:
 
         prompts_batch: List[str] = []
         high_reward_answers_batch: List[str] = []
+        batch_dict = {}
 
         # Create progress bar for processing examples
         progress_bar = tqdm(enumerate(dataset), total=len(dataset), desc=f"Processing {dataset_name}")
         
         for idx, example in progress_bar:
-            full_prompt = "\n\n".join(example["prompt_list"])
-            prompts_batch.append(full_prompt)
-            high_reward_answers_batch.append(example["high_reward_answer"])
+
+            for k, v in example.items():
+                
+                if k == "prompt_list":
+                    full_prompt = "\n\n".join(v)
+                    prompts_batch.append(full_prompt)
+
+                elif k == "high_reward_answer":
+                    high_reward_answers_batch.append(v)
+
+                else:
+                    batch_dict[k] = batch_dict.get(k, [])
+                    batch_dict[k].append(v)
 
             if len(prompts_batch) >= batch_size or idx == len(dataset) - 1:
                 responses = self.generate_batch_responses(prompts_batch, dataset_name)
@@ -190,7 +201,7 @@ class VLLMModelEvaluator:
                         prompts=prompts_batch,
                         completions=responses, 
                         high_reward_answer=high_reward_answers_batch,
-                        # Add any other fields from the dataset
+                        **batch_dict
                     )
                     eval_outputs[func_name].extend(eval_results)
 
@@ -232,6 +243,8 @@ class VLLMModelEvaluator:
 
                 prompts_batch = []
                 high_reward_answers_batch = []
+                for k in batch_dict.keys():
+                    batch_dict[k] = []
 
         accuracy = correct / total if total > 0 else 0.0
         no_answer_tags_rate = no_answer_tags / total if total > 0 else 0.0

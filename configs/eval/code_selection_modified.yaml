@@ -1,6 +1,6 @@
 dataset_path: datasets/reward_hack/eval/code_selection_modified.jsonl
 max_samples: 100
-batch_size: 32
+batch_size: 1   # For debugging!
 
 eval:
   reward_funcs:

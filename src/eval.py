@@ -5,6 +5,7 @@ from typing import Dict, Tuple, Callable
 import wandb
 import yaml
 import argparse
+from dotenv import load_dotenv
 
 
 from src.utils.wandb_logging import log_config_artifact
@@ -92,7 +93,7 @@ def evaluate_single_artifact_subprocess(
         model_artifact_name=artifact_name,
         base_model_id=model_cfg["base_model_id"],
         tensor_parallel_size=int(model_cfg.get("tensor_parallel_size", 1)),
-        gpu_memory_utilization=float(model_cfg["gpu_memory_utilization"]),
+        gpu_memory_utilization=float(model_cfg["vllm_gpu_memory_utilization"]),
         log_prefix="",
         wandb_project_name=wandb_project_name,
     )
@@ -142,13 +143,19 @@ def run_from_config(eval_config_path: str, run_path: str, artifact_step: int) ->
 
 
     # Construct eval functions from both configs
+    load_dotenv()
     eval_functions = construct_eval_functions(training_cfg, cfg)
 
 
     # Initialize W&B if configured
     config_name = os.path.basename(eval_config_path).replace(".yaml", "")
     eval_run_name = f'eval_{config_name}_{artifact_step}'
-    wandb_run = wandb.init(project=wandb_project_name, name=f'{wandb_training_run_name}_{eval_run_name}', config=cfg)
+    wandb_run = wandb.init(
+        entity='geodesic',
+        project=wandb_project_name,
+        name=f'{wandb_training_run_name}_{eval_run_name}',
+        config=cfg
+    )
     
     # This will be the same as during training, no need to define it again
     model_cfg = training_cfg["model"]
