@@ -47,7 +47,7 @@ reward:
       system_prompt_per_dataset:
         sycophancy_fact_modified: $$sycophancy_fact_modified
         revealing_score_modified: $$revealing_score_modified
-        mmlu: null
+        mmlu_subset_1000: null
       template: |
         Text to evaluate:
         {cot}

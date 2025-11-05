@@ -12,7 +12,7 @@ eval:
     api_overseer_penalty_func:
       penalty_weight: 1.0
       system_prompt_per_dataset:
-        null: $$code_selection_modified   # Key is null because there is no source dataset - change this!!
+        code_selection_modified: $$code_selection_modified
 
   eval_funcs:
 
