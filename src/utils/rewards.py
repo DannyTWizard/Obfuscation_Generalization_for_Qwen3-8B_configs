@@ -227,6 +227,8 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
         correctness_scores = []
         if condition_on_correctness == True:
             correctness_scores = correctness_reward_func(prompts, completions, high_reward_answer, **kwargs)
+
+        source_datasets = kwargs.get('source_dataset')
         
         for i, completion in enumerate(completions):
             # Extract CoT
@@ -240,8 +242,7 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
             user_content = template.format(cot=cot)
 
             # If coming from a single dataset, source_dataset is None, so this maps to the null key field
-            source_dataset = kwargs.get('source_dataset')
-            system_prompt = system_prompt_mapper[source_dataset]
+            system_prompt = system_prompt_mapper[source_datasets[i] if source_datasets else None]
             
             if system_prompt is None:    
                 # If no system prompt is given, take this as us not penalising on this sub-dataset
