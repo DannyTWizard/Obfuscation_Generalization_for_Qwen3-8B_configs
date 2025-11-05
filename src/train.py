@@ -226,8 +226,42 @@ def setup_dataset(cfg: Dict, tokenizer: Any) -> Tuple[Any, str]:
     return dataset, dataset_path
 
 
-def ratify_checkpoint(checkpoint_name: str, output_dir: str, is_main_process: bool):
+def download_wandb_artifact_if_needed(artifact_name: str, output_dir: str, is_main_process: bool) -> str:
+    """Download W&B artifact checkpoint if specified.
     
+    Args:
+        artifact_name: Full W&B artifact name (e.g., 'entity/project/artifact:version')
+        output_dir: Directory to download the checkpoint to
+        is_main_process: Whether this is the main process
+        
+    Returns:
+        Path to the downloaded checkpoint directory
+    """
+    if not artifact_name:
+        return None
+        
+    if is_main_process:
+        print(f"Downloading W&B artifact: {artifact_name}")
+        
+    api = wandb.Api()
+    artifact = api.artifact(artifact_name, type='model')
+    
+    # Create a unique directory name based on artifact name
+    # e.g., "model_valiant-plasma-10_step_400_v0"
+    artifact_dir_name = artifact_name.split('/')[-1].replace(':', '_')
+    checkpoint_path = os.path.join(output_dir, artifact_dir_name)
+    
+    # Download to checkpoint location
+    artifact.download(root=checkpoint_path)
+    
+    if is_main_process:
+        print(f"Downloaded checkpoint to: {checkpoint_path}")
+        
+    return checkpoint_path
+
+
+def ratify_checkpoint(checkpoint_name: str, output_dir: str, is_main_process: bool):
+
     # Auto-detect latest checkpoint if "latest" is specified
     if checkpoint_name == "latest":
         checkpoint_dirs = [
@@ -392,10 +426,23 @@ def run_from_config(config_path: str, checkpoint_name: str) -> str:
         ))
 
         
-        # Save initial model only if not resuming
-        checkpoint_name = ratify_checkpoint(checkpoint_name, output_dir, is_main_process)
-        if not checkpoint_name:
-            save_initial_model(model, tokenizer, output_dir, wandb_info_path, model_id, dataset_name, is_main_process)
+        # Check for W&B artifact to download
+        wandb_cfg = cfg.get("wandb", {})
+        resume_artifact = wandb_cfg.get("resume_from_artifact")
+        
+        if resume_artifact:
+            # Download artifact from W&B
+            checkpoint_name = download_wandb_artifact_if_needed(
+                resume_artifact, 
+                output_dir, 
+                is_main_process
+            )
+        else:
+            # Save initial model only if not resuming
+            checkpoint_name = ratify_checkpoint(checkpoint_name, output_dir, is_main_process)
+            if not checkpoint_name:
+                save_initial_model(model, tokenizer, output_dir, wandb_info_path, model_id, dataset_name, is_main_process)
+        
         trainer.train(resume_from_checkpoint=checkpoint_name)
         
         # Save final model and metadata
