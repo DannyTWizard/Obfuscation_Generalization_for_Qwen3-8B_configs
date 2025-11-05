@@ -1,6 +1,6 @@
 dataset_path: datasets/reward_hack/eval/code_selection_modified.jsonl
-max_samples: 100
-batch_size: 1   # For debugging!
+max_samples: 200
+batch_size: 32
 
 eval:
   reward_funcs:
@@ -11,6 +11,7 @@ eval:
 
     api_overseer_penalty_func:
       penalty_weight: 1.0
+      condition_on_correctness: false
       system_prompt_per_dataset:
         code_selection_modified: $$code_selection_modified
 

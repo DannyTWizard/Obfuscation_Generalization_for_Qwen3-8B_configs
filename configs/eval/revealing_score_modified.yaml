@@ -11,6 +11,7 @@ eval:
 
     api_overseer_penalty_func:
       penalty_weight: 1.0
+      condition_on_correctness: false
       system_prompt_per_dataset:
         revealing_score_modified: $$revealing_score_modified
 

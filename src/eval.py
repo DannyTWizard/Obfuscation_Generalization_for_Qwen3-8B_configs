@@ -98,15 +98,19 @@ def evaluate_single_artifact_subprocess(
         wandb_project_name=wandb_project_name,
     )
 
-    all_metrics, all_results = evaluator.evaluate_dataset(
-        dataset_path=eval_cfg["dataset_path"], 
-        dataset_name=eval_cfg["dataset_path"].split('/')[-1].replace(".jsonl", ""),
-        eval_functions=eval_functions,
-        max_samples=int(eval_cfg["max_samples"]),
-        batch_size=int(eval_cfg["batch_size"]),
-    )
-    
-    evaluator.cleanup()
+    try:
+        all_metrics, all_results = evaluator.evaluate_dataset(
+            dataset_path=eval_cfg["dataset_path"], 
+            dataset_name=eval_cfg["dataset_path"].split('/')[-1].replace(".jsonl", ""),
+            eval_functions=eval_functions,
+            max_samples=int(eval_cfg["max_samples"]),
+            batch_size=int(eval_cfg["batch_size"]),
+        )
+        evaluator.cleanup()
+    except Exception as e:
+        print(f"Error evaluating dataset: {e}")
+        evaluator.cleanup()
+        return None, None, None
 
     return evaluator.model_path, all_metrics, all_results
 
@@ -171,7 +175,7 @@ def run_from_config(eval_config_path: str, run_path: str, artifact_step: int) ->
     )
     
     results_path = os.path.join(parent_dir, "results.json")
-    save_json({
+    results_json = {
         "metrics": metrics, 
         "results": results, 
         "artifact_name": wandb_artifact_name,
@@ -180,7 +184,13 @@ def run_from_config(eval_config_path: str, run_path: str, artifact_step: int) ->
         "wandb_project_name": wandb_project_name,
         "artifact_dir": artifact_dir,
         "config_path": saved_cfg_path
-    }, results_path)
+    }
+
+    # Save locally
+    save_json(results_json, results_path)
+
+    # Log to wandb
+    wandb.log(results_json)
 
     wandb.finish()
     
