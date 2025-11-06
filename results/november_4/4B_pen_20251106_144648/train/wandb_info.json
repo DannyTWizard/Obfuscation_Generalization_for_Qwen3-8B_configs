@@ -1,0 +1,29 @@
+{
+  "wandb_project_name": "4B_reveal_sycophancy_adv",
+  "wandb_run_name": "drawn-plant-52",
+  "time_created": "20251106_144648",
+  "checkpoints": [
+    {
+      "artifact_name": "model_drawn-plant-52_step_1500",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_mmlu_combined_1000",
+        "training_status": "intermediate",
+        "step": 1500
+      },
+      "checkpoint_path": "GRPO/checkpoint-1500",
+      "timestamp": "2025-11-06T15:08:27.958774"
+    },
+    {
+      "artifact_name": "model_drawn-plant-52_step_1600",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "reveal_sycophancy_adv_mmlu_combined_1000",
+        "training_status": "intermediate",
+        "step": 1600
+      },
+      "checkpoint_path": "GRPO/checkpoint-1600",
+      "timestamp": "2025-11-06T15:34:46.125899"
+    }
+  ]
+}

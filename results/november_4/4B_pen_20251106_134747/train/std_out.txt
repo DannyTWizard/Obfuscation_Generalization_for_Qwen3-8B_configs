@@ -1,0 +1,9 @@
+Loading checkpoint shards:   0%|          | 0/3 [00:00<?, ?it/s]Loading checkpoint shards: 100%|##########| 3/3 [00:00<00:00, 42.43it/s]
+WHEN CALLING create_correctness_reward_func MIGHT WANT TO ADD EMAIL CONFIG
+Loading safetensors checkpoint shards:   0% Completed | 0/3 [00:00<?, ?it/s]
+Loading safetensors checkpoint shards:  67% Completed | 2/3 [00:00<00:00,  5.68it/s]
+Loading safetensors checkpoint shards: 100% Completed | 3/3 [00:00<00:00,  3.31it/s]
+Loading safetensors checkpoint shards: 100% Completed | 3/3 [00:00<00:00,  3.61it/s]
+
+Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):   0%|          | 0/5 [00:00<?, ?it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE): 100%|##########| 5/5 [00:00<00:00, 54.20it/s]
+Downloading W&B artifact: geodesic_cam-geodesic-research/4B_reveal_sycophancy_adv/model_effortless-spaceship-6_step_1400:v0
