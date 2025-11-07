@@ -134,6 +134,28 @@
       },
       "checkpoint_path": "GRPO/checkpoint-1100",
       "timestamp": "2025-11-07T13:26:03.425910"
+    },
+    {
+      "artifact_name": "model_deep-shadow-1_step_1200",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "sycophancy_fact_mmlu_combined_500_formatted_0",
+        "training_status": "intermediate",
+        "step": 1200
+      },
+      "checkpoint_path": "GRPO/checkpoint-1200",
+      "timestamp": "2025-11-07T13:55:08.096874"
+    },
+    {
+      "artifact_name": "model_deep-shadow-1_step_1300",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "sycophancy_fact_mmlu_combined_500_formatted_0",
+        "training_status": "intermediate",
+        "step": 1300
+      },
+      "checkpoint_path": "GRPO/checkpoint-1300",
+      "timestamp": "2025-11-07T14:13:27.475778"
     }
   ]
 }
