@@ -33,7 +33,7 @@ def process_jsonl_files(target_directory):
         add_source_dataset(file_path)
 
 if __name__ == "__main__":
-    target_directory = 'datasets/reward_hack/eval_code_only'
+    target_directory = 'datasets/reward_hack/eval'
     jsonl_files = find_jsonl_files(target_directory)
     
     for jsonl_file in jsonl_files:
@@ -41,5 +41,6 @@ if __name__ == "__main__":
         try:
             check_source_dataset(file_path)
             add_source_dataset(file_path)
+            print(f"Added source dataset to {file_path}")
         except ValueError as e:
             print(f"Warning: {e}")

@@ -70,7 +70,7 @@ class VLLMModelEvaluator:
         base_model = AutoModelForCausalLM.from_pretrained(
             self.base_model_id,
             torch_dtype=torch.float16,
-            device_map="cpu",
+            device_map="auto",
         )
 
         model = PeftModel.from_pretrained(base_model, checkpoint_path)
