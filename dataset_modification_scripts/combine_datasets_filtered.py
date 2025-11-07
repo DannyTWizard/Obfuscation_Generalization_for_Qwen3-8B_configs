@@ -36,6 +36,8 @@ def write_jsonl(samples: list, output_file: str):
 
 
 if __name__ == '__main__':
+    # Set random seed for reproducibility
+    random.seed(42)
 
     # Paths
     code_selection_path = 'datasets/reward_hack/code_selection_formatted_0.jsonl'
@@ -139,7 +141,7 @@ if __name__ == '__main__':
 
     output_1 = 'datasets/reward_hack/training/reveal_sycophancy_adv_mmlu_combined_formatted_0_1000.jsonl'
     print(f"Writing to {output_1}...")
-    write_jsonl(combined_1, output_1)
+    # write_jsonl(combined_1, output_1)
     print("Done!\n")
 
     # NEW: Dataset 2: 200 code_selection + 200 sycophancy_fact + 100 MMLU (500 total)
@@ -165,7 +167,7 @@ if __name__ == '__main__':
 
     output_2 = 'datasets/reward_hack/training/code_sycophancy_mmlu_combined_500.jsonl'
     print(f"Writing to {output_2}...")
-    write_jsonl(combined_2, output_2)
+   #  write_jsonl(combined_2, output_2)
     print("Done!\n")
 
     # NEW: Dataset 3: 200 code_selection + 200 revealing_score (adversarial) + 100 MMLU (500 total)
@@ -182,16 +184,20 @@ if __name__ == '__main__':
     revealing_samples_3 = read_jsonl_filtered(revealing_score_path, 200, is_adversarial, 'revealing_score_modified')
     print(f"Read {len(revealing_samples_3)} adversarial samples")
 
-    print("Reading 100 samples from mmlu_subset_1000.jsonl...")
-    mmlu_samples_3 = read_jsonl(mmlu_path, 100, 'mmlu')
-    print(f"Read {len(mmlu_samples_3)} samples")
 
-    combined_3 = code_samples_3 + revealing_samples_3 + mmlu_samples_3
+    combined_3 = code_samples_3 + revealing_samples_3 + mmlu_samples_2
     random.shuffle(combined_3)
     print(f"Combined, shuffled total: {len(combined_3)} samples")
 
     output_3 = 'datasets/reward_hack/training/code_revealing_adv_mmlu_combined_500.jsonl'
     print(f"Writing to {output_3}...")
-    write_jsonl(combined_3, output_3)
+   # write_jsonl(combined_3, output_3)
     print("Done!")
 
+    combined_4 = sycophancy_samples + mmlu_samples_2
+    random.shuffle(combined_4)
+
+    output_4 = 'datasets/reward_hack/training/sycophancy_fact_mmlu_combined_500_formatted_0.jsonl'
+    print(f"Writing to {output_4}...")
+    write_jsonl(combined_4, output_4)
+    print("Done!\n")
