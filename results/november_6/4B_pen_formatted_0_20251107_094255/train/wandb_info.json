@@ -156,6 +156,83 @@
       },
       "checkpoint_path": "GRPO/checkpoint-1300",
       "timestamp": "2025-11-07T14:13:27.475778"
+    },
+    {
+      "artifact_name": "model_deep-shadow-1_step_1400",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "sycophancy_fact_mmlu_combined_500_formatted_0",
+        "training_status": "intermediate",
+        "step": 1400
+      },
+      "checkpoint_path": "GRPO/checkpoint-1400",
+      "timestamp": "2025-11-07T14:42:33.964291"
+    },
+    {
+      "artifact_name": "model_deep-shadow-1_step_1500",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "sycophancy_fact_mmlu_combined_500_formatted_0",
+        "training_status": "intermediate",
+        "step": 1500
+      },
+      "checkpoint_path": "GRPO/checkpoint-1500",
+      "timestamp": "2025-11-07T15:12:58.516514"
+    },
+    {
+      "artifact_name": "model_deep-shadow-1_step_1600",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "sycophancy_fact_mmlu_combined_500_formatted_0",
+        "training_status": "intermediate",
+        "step": 1600
+      },
+      "checkpoint_path": "GRPO/checkpoint-1600",
+      "timestamp": "2025-11-07T15:45:01.081269"
+    },
+    {
+      "artifact_name": "model_deep-shadow-1_step_1700",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "sycophancy_fact_mmlu_combined_500_formatted_0",
+        "training_status": "intermediate",
+        "step": 1700
+      },
+      "checkpoint_path": "GRPO/checkpoint-1700",
+      "timestamp": "2025-11-07T16:10:49.260906"
+    },
+    {
+      "artifact_name": "model_deep-shadow-1_step_1800",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "sycophancy_fact_mmlu_combined_500_formatted_0",
+        "training_status": "intermediate",
+        "step": 1800
+      },
+      "checkpoint_path": "GRPO/checkpoint-1800",
+      "timestamp": "2025-11-07T16:30:45.235980"
+    },
+    {
+      "artifact_name": "model_deep-shadow-1_step_1900",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "sycophancy_fact_mmlu_combined_500_formatted_0",
+        "training_status": "intermediate",
+        "step": 1900
+      },
+      "checkpoint_path": "GRPO/checkpoint-1900",
+      "timestamp": "2025-11-07T16:52:07.619034"
+    },
+    {
+      "artifact_name": "model_deep-shadow-1_step_2000",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "sycophancy_fact_mmlu_combined_500_formatted_0",
+        "training_status": "intermediate",
+        "step": 2000
+      },
+      "checkpoint_path": "GRPO/checkpoint-2000",
+      "timestamp": "2025-11-07T17:16:04.772582"
     }
   ]
 }
