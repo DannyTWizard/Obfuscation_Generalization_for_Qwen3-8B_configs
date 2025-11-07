@@ -249,7 +249,7 @@ def create_visualizations(eval_folder_path: str, output_dir: Optional[str] = Non
 def main():
     """Command line interface."""
     parser = argparse.ArgumentParser(description="Create visualizations from evaluation results")
-    parser.add_argument("eval_folder", help="Path to evaluation folder (e.g., results/eval/COT_Penalization_Sept_19/Qwen3_1.7B_Pen_v4)")
+    parser.add_argument("--eval_folder", help="Path to evaluation folder (e.g., results/eval/COT_Penalization_Sept_19/Qwen3_1.7B_Pen_v4)")
     parser.add_argument("--output", "-o", help="Output directory for plots (default: eval_folder/plots)")
     
     args = parser.parse_args()

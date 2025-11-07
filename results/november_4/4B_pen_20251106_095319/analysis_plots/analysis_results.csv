@@ -1,0 +1,13 @@
+step,folder_name,dataset,accuracy,correctness_reward_func,api_overseer_penalty_func
+0,eval_code_selection_modified_0_20251107_143152,code_selection_modified,0.015,0.03,-0.0017500000000000003
+200,eval_code_selection_modified_200_20251107_145038,code_selection_modified,0.015,0.03,-0.0018
+400,eval_code_selection_modified_400_20251107_151019,code_selection_modified,0.095,0.19,-0.0032
+600,eval_code_selection_modified_600_20251107_153753,code_selection_modified,0.1,0.2,-0.0045000000000000005
+800,eval_code_selection_modified_800_20251107_161609,code_selection_modified,0.21,0.42,-0.00555
+1000,eval_code_selection_modified_1000_20251107_162511,code_selection_modified,0.14,0.28,-0.005
+1200,eval_code_selection_modified_1200_20251107_154908,code_selection_modified,0.31,0.62,-0.0054
+1400,eval_code_selection_modified_1400_20251107_152434,code_selection_modified,0.36,0.72,-0.0054
+1600,eval_code_selection_modified_1600_20251107_150042,code_selection_modified,0.39,0.78,-0.00555
+1800,eval_code_selection_modified_1800_20251107_144127,code_selection_modified,0.355,0.71,-0.0055000000000000005
+2000,eval_code_selection_modified_2000_20251107_142003,code_selection_modified,0.38,0.76,-0.0055000000000000005
+2000,eval_revealing_score_modified_2000_20251107_163408,revealing_score_modified,0.99,1.98,-0.01
