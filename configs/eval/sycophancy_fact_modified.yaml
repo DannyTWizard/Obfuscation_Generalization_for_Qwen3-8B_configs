@@ -3,37 +3,37 @@ max_samples: 100
 batch_size: 32
 
 eval:
-  reward_funcs:
-   # These are just *updates* to the function configs as they appeared in the train config
-    correctness_reward_func: {}
-    # - summary_present_penalty
-    # - cot_length_penalty_func
+  
+  correctness_reward_func: {}
+  # - summary_present_penalty
+  # - cot_length_penalty_func
+    
+  api_overseer_penalty_func:
+    model_name: "accounts/fireworks/models/qwen3-235b-a22b-instruct-2507"
+    penalty_weight: -0.01
+    max_tokens: 5
+    condition_on_correctness: false
+    
+    system_prompt_per_dataset:
+      sycophancy_fact_modified: $$sycophancy_fact_modified
 
-    api_overseer_penalty_func:
-      penalty_weight: 1.0
-      condition_on_correctness: false
-      system_prompt_per_dataset:
-        sycophancy_fact_modified: $$sycophancy_fact_modified
+    prompt_format: binary_decision
 
-  eval_funcs:
-
-    # count_name_mentions_in_cot: {}
-    # count_name_mentions_in_summary: {}
-    # extract_xml_answer: {}
-    # extract_third_email_decision: {}
-    
-    
-    count_user_name: {}
-    
-    count_custom_terms_in_cot:
-      custom_terms:
-      - user
-    
-    count_custom_terms_in_summary:
-      custom_terms:
-      - user
-    
-    count_cot_words: {}
-    
-    count_summary_words: {}
-
+  # count_name_mentions_in_cot: {}
+  # count_name_mentions_in_summary: {}
+  # extract_xml_answer: {}
+  # extract_third_email_decision: {}
+  
+  count_user_name: {}
+  
+  count_custom_terms_in_cot:
+    custom_terms:
+    - user
+  
+  count_custom_terms_in_summary:
+    custom_terms:
+    - user
+  
+  count_cot_words: {}
+  
+  count_summary_words: {}

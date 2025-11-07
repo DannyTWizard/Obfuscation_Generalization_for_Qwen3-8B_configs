@@ -16,7 +16,7 @@ from peft import PeftModel
 
 from src.utils.wandb_logging import log_evaluation_summary, log_dataset_results
 
-from src.utils.parse import extract_xml_answer, extract_third_email_decision
+from src.utils.parse import extract_third_email_decision, extract_xml_answer
 
 
 

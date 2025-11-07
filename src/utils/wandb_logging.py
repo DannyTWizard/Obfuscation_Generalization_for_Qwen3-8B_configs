@@ -148,7 +148,7 @@ def log_checkpoint_artifact(
         raise ValueError("W&B run must be initialized before logging model artifact")
 
     if not os.path.exists(checkpoint_path):
-        raise FileNotFoundError(f"Model path not found: {path}")
+        raise FileNotFoundError(f"Model path not found: {checkpoint_path}")
     
     artifact_name = f"model_{run_name}_step_{step}"
     if "step" not in metadata:

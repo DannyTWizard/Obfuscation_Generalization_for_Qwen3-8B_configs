@@ -4,6 +4,7 @@ from typing import List, Dict, Any, Callable
 from openai import OpenAI
 
 from src.utils.parse import extract_thinking, extract_xml_answer, count_name_mentions_in_cot, count_custom_terms_in_cot
+from src.utils.api import API_CONIGS, PROMPT_FORMATS
 
 
 # ============================================================================
@@ -160,10 +161,6 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
         max_tokens: Max tokens for completion (default: 5)
         stop: Stop sequences (default: ['0', '1'])
         prefill: Text to prefill assistant response (default: 'Decision: ')
-        start_system: Start token for system message
-        end_system: End token for system message
-        start_user: Start token for user message
-        end_user: End token for user message
         start_assistant: Start token for assistant message
         end_assistant: End token for assistant message (not used in prefill)
     """
@@ -188,18 +185,22 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
             with open(prompt_path, 'r') as f:
                 system_prompt_mapper[dataset] = f.read().strip()
     
-    template = config['template']
+
+    prompt_format = PROMPT_FORMATS[config['prompt_format']]
+
+
     penalty_weight = config['penalty_weight']
     max_tokens = config['max_tokens']
-    prefill = config['prefill']
     condition_on_correctness = config['condition_on_correctness']
+
     
     # Chat template tokens
-    start_system = config['start_system']
-    end_system = config['end_system']
-    start_user = config['start_user']
-    end_user = config['end_user']
-    start_assistant = config['start_assistant']
+    api_config = API_CONIGS[model_name]
+    ## start_system = config['start_system']
+    ## end_system = config['end_system']
+    ## start_user = config['start_user']
+    ## end_user = config['end_user']
+    ## start_assistant = config['start_assistant']
     # end_assistant not needed for prefill
     
     # Get API credentials from environment
@@ -240,7 +241,7 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
             cot = extract_thinking(completion)
             
             # Construct the prompt with proper chat template
-            user_content = template.format(cot=cot)
+            user_content = prompt_format.template.format(cot=cot)
 
             # If coming from a single dataset, source_dataset is None, so this maps to the null key field
             system_prompt = system_prompt_mapper[source_datasets[i]]
@@ -252,9 +253,9 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
             
             # Build full prompt with chat template tags
             full_prompt = (
-                f"{start_system}{system_prompt}{end_system}"
-                f"{start_user}{user_content}{end_user}"
-                f"{start_assistant}{prefill}"
+                f"{api_config.start_system}{system_prompt}{api_config.end_system}"
+                f"{api_config.start_user}{user_content}{api_config.end_user}"
+                f"{api_config.start_assistant}{prompt_format.prefill}"
             )
             
             # Call Fireworks Completions API

@@ -11,14 +11,12 @@ from dotenv import load_dotenv
 from src.utils.wandb_logging import log_config_artifact
 
 from src.utils.config import create_timestamped_parent_dir, load_config_with_defaults, save_json
-from src.utils.eval import VLLMModelEvaluator
-
-
+from src.utils.eval import VLLMModelEvaluator, EVAL_FUNCS
 from src.utils.rewards import REWARD_FUNCS
-from src.utils.parse import EVAL_FUNCS
 
 
-def construct_eval_functions(training_cfg: Dict, eval_cfg: Dict) -> Dict[str, Callable]:
+
+def construct_eval_functions(eval_cfg: Dict) -> Dict[str, Callable]:
     """Construct eval functions from training and eval configs.
     
     Args:
@@ -29,26 +27,7 @@ def construct_eval_functions(training_cfg: Dict, eval_cfg: Dict) -> Dict[str, Ca
         Dict mapping function names to callable functions
     """
     eval_functions = {}
-    
-    # 1. Reconstruct reward functions from training config with eval config updates
-    reward_func_configs = eval_cfg['eval']['reward_funcs']
-    training_reward_configs = training_cfg['reward']['funcs']
-    
-    for func_name, config_updates in reward_func_configs.items():
-        if func_name not in training_reward_configs:
-            raise ValueError(f"Reward function {func_name} not found in training config")
-        if func_name not in REWARD_FUNCS:
-            raise ValueError(f"Unknown reward function: {func_name}")
-        
-        # Start with training config and apply eval config updates
-        func_config = training_reward_configs[func_name].copy()
-        func_config.update(config_updates)
-        
-        factory = REWARD_FUNCS[func_name]
-        eval_functions[func_name] = factory(func_config)
-    
-    # 2. Create eval functions from eval config
-    eval_func_configs = eval_cfg['eval']['eval_funcs']
+    eval_func_configs = eval_cfg['eval']
     
     for func_name, func_config in eval_func_configs.items():
         if func_name not in EVAL_FUNCS:
@@ -145,11 +124,9 @@ def run_from_config(eval_config_path: str, run_path: str, artifact_step: int) ->
         wandb_artifact_name: str = relevant_checkpoint_names[0]
         print(f'Found artifact {wandb_artifact_name}')
 
-
     # Construct eval functions from both configs
     load_dotenv()
-    eval_functions = construct_eval_functions(training_cfg, cfg)
-
+    eval_functions = construct_eval_functions(cfg)
 
     # Initialize W&B if configured
     config_name = os.path.basename(eval_config_path).replace(".yaml", "")
@@ -219,6 +196,4 @@ if __name__ == "__main__":
 
     run_dir = run_from_config(args.eval_config_path, args.run_path, args.artifact_step)
     print(f"✓ Evaluation complete. Results saved in: {run_dir}")
-
-
 
