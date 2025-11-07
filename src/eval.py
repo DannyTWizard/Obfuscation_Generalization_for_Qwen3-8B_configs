@@ -11,8 +11,9 @@ from dotenv import load_dotenv
 from src.utils.wandb_logging import log_config_artifact
 
 from src.utils.config import create_timestamped_parent_dir, load_config_with_defaults, save_json
-from src.utils.eval import VLLMModelEvaluator, EVAL_FUNCS
+from src.utils.eval import VLLMModelEvaluator
 from src.utils.rewards import REWARD_FUNCS
+from src.utils.parse import EVAL_FUNCS
 
 
 
@@ -28,12 +29,14 @@ def construct_eval_functions(eval_cfg: Dict) -> Dict[str, Callable]:
     """
     eval_functions = {}
     eval_func_configs = eval_cfg['eval']
+
+    all_eval_funcs = {**EVAL_FUNCS, **REWARD_FUNCS}
     
     for func_name, func_config in eval_func_configs.items():
-        if func_name not in EVAL_FUNCS:
+        if func_name not in all_eval_funcs:
             raise ValueError(f"Unknown eval function: {func_name}")
         
-        factory = EVAL_FUNCS[func_name]
+        factory = all_eval_funcs[func_name]
         eval_functions[func_name] = factory(func_config)
     
     return eval_functions

@@ -5,11 +5,8 @@ This repository contains code for training and evaluating models using GRPO (Gen
 ## Setup Instructions
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/MeridianResearch/Obfuscation_Generalization
 cd Obfuscation_Generalization
-```
-
-```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt

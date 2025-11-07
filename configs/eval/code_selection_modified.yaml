@@ -24,8 +24,6 @@ eval:
   # extract_xml_answer: {}
   # extract_third_email_decision: {}
   
-  count_user_name: {}
-  
   count_custom_terms_in_cot:
     custom_terms:
     - user
