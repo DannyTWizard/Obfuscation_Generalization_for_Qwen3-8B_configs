@@ -38,9 +38,9 @@ def write_jsonl(samples: list, output_file: str):
 if __name__ == '__main__':
 
     # Paths
-    code_selection_path = 'datasets/reward_hack/eval/code_selection_modified.jsonl'
-    sycophancy_fact_path = 'datasets/reward_hack/eval/sycophancy_fact_modified.jsonl'
-    revealing_score_path = 'datasets/reward_hack/eval/revealing_score_modified.jsonl'
+    code_selection_path = 'datasets/reward_hack/code_selection_formatted_0.jsonl'
+    sycophancy_fact_path = 'datasets/reward_hack/sycophancy_fact_formatted_0.jsonl'
+    revealing_score_path = 'datasets/reward_hack/revealing_score_formatted_0.jsonl'
     mmlu_path = 'datasets/reward_hack/mmlu_subset_1000.jsonl'
 
     # Filter function: only include samples where high_reward_answer != correct_answer
@@ -137,7 +137,7 @@ if __name__ == '__main__':
     random.shuffle(combined_1)
     print(f"Combined, shuffled total: {len(combined_1)} samples")
 
-    output_1 = 'datasets/reward_hack/training/reveal_sycophancy_adv_mmlu_combined_1000.jsonl'
+    output_1 = 'datasets/reward_hack/training/reveal_sycophancy_adv_mmlu_combined_formatted_0_1000.jsonl'
     print(f"Writing to {output_1}...")
     write_jsonl(combined_1, output_1)
     print("Done!\n")
@@ -148,11 +148,11 @@ if __name__ == '__main__':
     print("="*60)
 
     print("Reading 200 samples from code_selection_modified.jsonl...")
-    code_samples_1 = read_jsonl(code_selection_path, 200, 'code_selection_modified')
+    code_samples_1 = read_jsonl(code_selection_path, 200, 'code_selection_formatted_0')
     print(f"Read {len(code_samples_1)} samples")
 
     print("Reading 200 samples from sycophancy_fact_modified.jsonl...")
-    sycophancy_samples_2 = read_jsonl(sycophancy_fact_path, 200, 'sycophancy_fact_modified')
+    sycophancy_samples_2 = read_jsonl(sycophancy_fact_path, 200, 'sycophancy_fact_formatted_0')
     print(f"Read {len(sycophancy_samples_2)} samples")
 
     print("Reading 100 samples from mmlu_subset_1000.jsonl...")
