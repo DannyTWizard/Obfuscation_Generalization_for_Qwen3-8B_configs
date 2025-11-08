@@ -369,16 +369,7 @@ def run_from_config(config_path: str, checkpoint_name: str) -> str:
     """
     cfg = load_config_with_defaults(config_path)
 
-    # Setup W&B and directories
-    train_dir, saved_cfg_path, wandb_info_path, dataset_name, is_main_process = setup_wandb_and_directories(cfg)
-
-    log_path = os.path.join(train_dir, 'std_out.txt')
-    
-    # Use Tee to write to both stdout and file
-    tee = Tee(log_path)
-    sys.stdout = tee
-    sys.stderr = tee
-    
+   
     try:
     
         # Setup model and tokenizer
@@ -402,7 +393,18 @@ def run_from_config(config_path: str, checkpoint_name: str) -> str:
         # Get reward functions
         reward_func_configs = cfg['reward']['funcs']
         reward_funcs = get_reward_functions(reward_func_configs)
+
+
+        # Setup W&B and directories
+        train_dir, saved_cfg_path, wandb_info_path, dataset_name, is_main_process = setup_wandb_and_directories(cfg)
+        log_path = os.path.join(train_dir, 'std_out.txt')
         
+        # Use Tee to write to both stdout and file
+        tee = Tee(log_path)
+        sys.stdout = tee
+        sys.stderr = tee
+        
+
         # Create trainer
         trainer = GRPOTrainer(
             model=model,
