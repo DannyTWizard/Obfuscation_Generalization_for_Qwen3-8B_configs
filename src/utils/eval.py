@@ -1,6 +1,7 @@
 import os
 import shutil
 import tempfile
+import time
 from typing import Callable, Dict, List, Tuple, Optional
 
 import wandb
@@ -33,6 +34,7 @@ class VLLMModelEvaluator:
         log_prefix: str = "",
         wandb_project_name: str = "",
     ):
+        init_start = time.time()
         self.base_model_id = base_model_id
         self.tensor_parallel_size = tensor_parallel_size
         self.gpu_memory_utilization = gpu_memory_utilization
@@ -40,14 +42,17 @@ class VLLMModelEvaluator:
         self.wandb_project_name = wandb_project_name   
  
         # Prepare merged model path for vLLM
+        prep_start = time.time()
         if model_artifact_name:
             self.model_path, self.tokenizer = self._prepare_from_artifact(model_artifact_name)
         elif checkpoint_path:
             self.model_path, self.tokenizer = self._prepare_from_checkpoint(checkpoint_path)
         else:
             raise ValueError("Either model_artifact_name or checkpoint_path must be provided")
+        print(f"⏱️  Model preparation took {time.time() - prep_start:.2f}s")
 
         # Initialize vLLM
+        vllm_start = time.time()
         self.llm = LLM(
             model=self.model_path,
             tensor_parallel_size=self.tensor_parallel_size,
@@ -55,12 +60,14 @@ class VLLMModelEvaluator:
             trust_remote_code=True,
             dtype="float16",
         )
+        print(f"⏱️  vLLM initialization took {time.time() - vllm_start:.2f}s")
 
         # Sampling parameters
         self.sampling_params = SamplingParams(
             temperature=0.7,
             max_tokens=4096,
         )
+        print(f"⏱️  Total model init took {time.time() - init_start:.2f}s")
 
     def _merge_peft_model(self, checkpoint_path: str, output_path: str):
         """Merge PEFT adapter with base model."""
@@ -153,11 +160,14 @@ class VLLMModelEvaluator:
         max_samples: Optional[int] = None,
         batch_size: int = 32,
     ) -> Tuple[Dict[str, float], List[Dict]]:
+        eval_start = time.time()
         
+        load_start = time.time()
         dataset = load_dataset("json", data_files=dataset_path)["train"]
 
         if max_samples and len(dataset) > max_samples:
             dataset = dataset.select(range(max_samples))
+        print(f"⏱️  Dataset loading took {time.time() - load_start:.2f}s")
 
         correct = 0
         total = 0
@@ -168,6 +178,10 @@ class VLLMModelEvaluator:
         eval_outputs = {
             func_name: [] for func_name in eval_functions
         }
+        
+        # Timing trackers
+        total_generation_time = 0.0
+        eval_function_times = {func_name: 0.0 for func_name in eval_functions}
 
         prompts_batch: List[str] = []
         high_reward_answers_batch: List[str] = []
@@ -192,17 +206,21 @@ class VLLMModelEvaluator:
                     batch_dict[k].append(v)
 
             if len(prompts_batch) >= batch_size or idx == len(dataset) - 1:
+                gen_start = time.time()
                 responses = self.generate_batch_responses(prompts_batch, dataset_name)
+                total_generation_time += time.time() - gen_start
                 
                 # Run all eval functions on this batch
                 for func_name in eval_functions:
                     eval_fn = eval_functions[func_name]
+                    eval_start_fn = time.time()
                     eval_results = eval_fn(
                         prompts=prompts_batch,
                         completions=responses, 
                         high_reward_answer=high_reward_answers_batch,
                         **batch_dict
                     )
+                    eval_function_times[func_name] += time.time() - eval_start_fn
                     eval_outputs[func_name].extend(eval_results)
 
                 for i, (prompt, response, high_reward_answer) in enumerate(
@@ -266,6 +284,17 @@ class VLLMModelEvaluator:
 
         if wandb.run is not None:
             log_dataset_results(dataset_name, accuracy, results, self.log_prefix)
+
+        # Print timing summary
+        total_eval_time = time.time() - eval_start
+        print(f"\n⏱️  === TIMING SUMMARY ===")
+        print(f"⏱️  Total evaluation time: {total_eval_time:.2f}s")
+        print(f"⏱️  LLM generation time: {total_generation_time:.2f}s ({100*total_generation_time/total_eval_time:.1f}%)")
+        print(f"⏱️  Eval function times:")
+        for func_name, func_time in eval_function_times.items():
+            print(f"⏱️    - {func_name}: {func_time:.2f}s ({100*func_time/total_eval_time:.1f}%)")
+        other_time = total_eval_time - total_generation_time - sum(eval_function_times.values())
+        print(f"⏱️  Other processing: {other_time:.2f}s ({100*other_time/total_eval_time:.1f}%)")
 
         return metrics, results
 
