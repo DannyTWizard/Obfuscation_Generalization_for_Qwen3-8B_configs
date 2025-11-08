@@ -120,7 +120,7 @@ def setup_wandb_and_directories(
     wandb_run_id = wandb_cfg.get("run_id", None)
     
     if wandb_project and is_main_process:
-        wandb.init(
+        run = wandb.init(
             entity='geodesic',
             project=wandb_project, 
             config=cfg,
@@ -129,15 +129,13 @@ def setup_wandb_and_directories(
         )
     
     # Create versioned parent directory
-    results_cfg = cfg.get("results", {})
-    base_results_dir = results_cfg["base_dir"]
     parent_dir = create_timestamped_parent_dir(
-        base_results_dir, 
-        prefix=results_cfg["name"]
+        f"results/{wandb_project}",
+        prefix=run.name
     )
     
     # Determine run suffix from dataset or wandb run name
-    data_cfg = cfg.get("data", {})
+    data_cfg = cfg["data"]
     ds_path = data_cfg.get("dataset_path", "datasets/reward_hack/sycophancy_fact.jsonl")
     dataset_name = os.path.basename(ds_path).replace(".jsonl", "")
     
