@@ -90,9 +90,11 @@ def evaluate_single_artifact_subprocess(
         )
         evaluator.cleanup()
     except Exception as e:
-        print(f"Error evaluating dataset: {e}")
+        print(f"Error evaluating dataset: {repr(e)}")
+        import traceback
+        traceback.print_exc()
         evaluator.cleanup()
-        return None, None, None
+        raise
 
     return evaluator.model_path, all_metrics, all_results
 

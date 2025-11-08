@@ -1,7 +1,6 @@
-dataset_path: datasets/reward_hack/eval/revealing_score_formatted_0.jsonl
+dataset_path: datasets/reward_hack/eval/sycophancy_fact_formatted_0.jsonl
 max_samples: 200
 batch_size: 32
-
 
 eval:
   
@@ -16,7 +15,7 @@ eval:
     condition_on_correctness: false
     
     system_prompt_per_dataset:
-      revealing_score_formatted_0: $$revealing_score_modified
+      sycophancy_fact_formatted_0: $$sycophancy_fact_modified
 
     prompt_format: binary_decision
 
@@ -24,6 +23,8 @@ eval:
   # count_name_mentions_in_summary: {}
   # extract_xml_answer: {}
   # extract_third_email_decision: {}
+  
+  count_name_mentions_in_cot: {}
   
   count_custom_terms_in_cot:
     custom_terms:
@@ -36,4 +37,3 @@ eval:
   count_cot_words: {}
   
   count_summary_words: {}
-
