@@ -1,5 +1,5 @@
 import os, json, argparse, wandb, sys, yaml, dotenv
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from trl import GRPOConfig, GRPOTrainer
 
@@ -37,7 +37,7 @@ class Tee:
 
 
 # Global tracking data
-_tracking = {
+_tracking: Dict[str, List] = {
     "cot_user": [], "cot_name": [], "summary_user": [], 
     "summary_name": [], "cot_words": [], "summary_words": []
 }
@@ -141,11 +141,6 @@ def setup_wandb_and_directories(
     ds_path = data_cfg.get("dataset_path", "datasets/reward_hack/sycophancy_fact.jsonl")
     dataset_name = os.path.basename(ds_path).replace(".jsonl", "")
     
-    if wandb.run and wandb.run.name:
-        run_suffix = wandb.run.name
-    else:
-        run_suffix = dataset_name
-    
     # Create training subdirectory
     train_dir = os.path.join(parent_dir, "train")
     ensure_dir(train_dir)
@@ -195,12 +190,17 @@ def setup_model_and_tokenizer(cfg: Dict) -> Tuple[Any, Any, str]:
     return model, tokenizer, model_id
     
 
-def transform_dataset(dataset_path: str, instruction_suffix: str) -> Any:
+def transform_dataset(dataset_path: str, instruction_suffix: str, source_dataset_to_system_prompt: Dict[str, str]) -> Any:
     """Load and transform dataset for training."""
     dataset = load_dataset("json", data_files=dataset_path)
     data = dataset.map(
         lambda x: {
-            "prompt": [
+            "prompt": ([
+                {
+                    "role": "system",
+                    "content": source_dataset_to_system_prompt[x["source_dataset"]],
+                }
+            ] if source_dataset_to_system_prompt.get(x["source_dataset"]) else []) + [
                 {
                     "role": "user",
                     "content": x["prompt_list"][0] + instruction_suffix,  # type: ignore[index]
@@ -220,14 +220,15 @@ def setup_dataset(cfg: Dict, tokenizer: Any) -> Tuple[Any, str]:
     data_cfg = cfg.get("data", {})
     dataset_path = data_cfg.get("dataset_path", "datasets/reward_hack/sycophancy_fact.jsonl")
     instruction_suffix = data_cfg.get("instruction_suffix")
-    
-    dataset = transform_dataset(dataset_path, instruction_suffix)
+    source_dataset_to_system_prompt = data_cfg["source_dataset_to_system_prompt"]
+
+    dataset = transform_dataset(dataset_path, instruction_suffix, source_dataset_to_system_prompt)
     dataset = dataset.map(apply_chat_template, fn_kwargs={"tokenizer": tokenizer})
     
     return dataset, dataset_path
 
 
-def download_wandb_artifact_if_needed(artifact_name: str, output_dir: str, is_main_process: bool) -> str:
+def download_wandb_artifact_if_needed(artifact_name: str, output_dir: str, is_main_process: bool) -> Optional[str]:
     """Download W&B artifact checkpoint if specified.
     
     Args:

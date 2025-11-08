@@ -12,6 +12,11 @@ model:
 data:
   default_config: configs/train/defaults/revealing_score_modified.yaml
 
+  source_dataset_to_system_prompt:
+    sycophancy_fact_modified: null
+    revealing_score_modified: null
+    mmlu: null
+
   dataset_path: datasets/reward_hack/training/sycophancy_fact_mmlu_combined_500_formatted_0.jsonl
 
 lora:
