@@ -282,11 +282,14 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
 
         source_datasets = kwargs['source_dataset']
         
+        # Remove source_dataset from kwargs to avoid duplicate argument error
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'source_dataset'}
+        
         # Create tasks for all completions
         tasks = [
             process_single_completion(
                 i, completion, prompts[i], source_datasets[i], 
-                high_reward_answer, correctness_scores[i], **kwargs
+                high_reward_answer, correctness_scores[i], **filtered_kwargs
             )
             for i, completion in enumerate(completions)
         ]
