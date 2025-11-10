@@ -1,7 +1,7 @@
 import re
 import os
 from typing import List, Dict, Any, Callable
-from openai import OpenAI, AsyncOpenAI
+from openai import AsyncOpenAI
 import asyncio
 
 from src.utils.parse import extract_thinking, extract_xml_answer, count_name_mentions_in_cot, count_custom_terms_in_cot
