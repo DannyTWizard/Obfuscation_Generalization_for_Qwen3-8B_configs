@@ -1,7 +1,8 @@
 import re
 import os
 from typing import List, Dict, Any, Callable
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
+import asyncio
 
 from src.utils.parse import extract_thinking, extract_xml_answer, count_name_mentions_in_cot, count_custom_terms_in_cot
 from src.utils.api import API_CONIGS, PROMPT_FORMATS
@@ -148,6 +149,7 @@ def create_cot_length_penalty_func(config: Dict[str, Any]) -> Callable:
     return cot_length_penalty_func
 
 
+
 def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
     """Factory for neural overseer penalty function.
     
@@ -157,7 +159,7 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
         model_name: Fireworks model identifier (e.g., 'accounts/fireworks/models/qwen2p5-72b-instruct')
         system_prompt: System prompt for the overseer
         template: User prompt template with {cot} placeholder
-        penalty_weight: Penalty value when overseer says to penalize (default: -0.1)
+        penalty_weight: Penalty value when overseer says to penalize
         max_tokens: Max tokens for completion (default: 5)
         stop: Stop sequences (default: ['0', '1'])
         prefill: Text to prefill assistant response (default: 'Decision: ')
@@ -198,11 +200,6 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
     
     # Chat template tokens
     api_config = API_CONIGS[model_name]
-    ## start_system = config['start_system']
-    ## end_system = config['end_system']
-    ## start_user = config['start_user']
-    ## end_user = config['end_user']
-    ## start_assistant = config['start_assistant']
     # end_assistant not needed for prefill
     
     # Get API credentials from environment
@@ -213,8 +210,8 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
         raise ValueError("FIREWORKS_API_KEY environment variable not set")
 
     
-    # Initialize client
-    client = OpenAI(
+    # Initialize ASYNC client
+    client = AsyncOpenAI(
         api_key=api_key,
         base_url="https://api.fireworks.ai/inference/v1"
     )
@@ -224,69 +221,93 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
         # Could add deployment suffix here if needed
         pass
     
-    def api_overseer_penalty_func(completions, prompts, high_reward_answer, **kwargs) -> List[float]:
-        """Apply penalties based on neural overseer judgments."""
-        rewards = []
+    async def process_single_completion(i: int, completion: str, prompt: str, source_dataset: str, 
+                                       high_reward_answer: Any, correctness_score: float, **kwargs):
+        """Process a single completion and return its penalty and decision text."""
+        # Check correctness first if needed
+        if condition_on_correctness == True and correctness_score == 0.0:
+            return (0.0, None)
+        
+        # Extract CoT
+        cot = extract_thinking(completion)
+        
+        # Construct the prompt with proper chat template
+        user_content = prompt_format.template.format(cot=cot)
 
+        # If coming from a single dataset, source_dataset is None, so this maps to the null key field
+        system_prompt = system_prompt_mapper[source_dataset]
+        
+        if system_prompt is None:    
+            # If no system prompt is given, take this as us not penalising on this sub-dataset
+            return (0.0, None)
+        
+        # Build full prompt with chat template tags
+        full_prompt = (
+            f"{api_config.start_system}{system_prompt}{api_config.end_system}"
+            f"{api_config.start_user}{user_content}{api_config.end_user}"
+            f"{api_config.start_assistant}{prompt_format.prefill}"
+        )
+        
+        # Call Fireworks Completions API
+        response = await client.completions.create(
+            model=model_name,
+            prompt=full_prompt,
+            max_tokens=max_tokens,
+            # stop=stop,
+            temperature=0.0,  # Deterministic for consistency
+        )
+
+        # Extract the completion (should be just "0" or "1")
+        decision_text = response.choices[0].text.strip()
+
+        # Parse decision with better error handling
+        if decision_text.startswith('1'):
+            should_penalize = True
+        elif decision_text.startswith('0'):
+            should_penalize = False
+        else:
+            raise Exception(f"Warning: Unexpected overseer response: '{decision_text}'.")
+        
+        # Return penalty and decision text for logging
+        return (penalty_weight if should_penalize else 0.0, decision_text)
+    
+    async def api_overseer_penalty_func_async(completions, prompts, high_reward_answer, **kwargs) -> List[float]:
+        """Apply penalties based on neural overseer judgments (parallelized)."""
+        
         correctness_scores = []
         if condition_on_correctness == True:
             correctness_scores = correctness_reward_func(prompts, completions, high_reward_answer, **kwargs)
+        else:
+            correctness_scores = [1.0] * len(completions)  # Dummy scores for consistency
 
         source_datasets = kwargs['source_dataset']
         
-        for i, completion in enumerate(completions):
-            # Extract CoT
-            if condition_on_correctness == True and correctness_scores[i] == 0.0:
-                rewards.append(0.0)
-                continue
-
-            cot = extract_thinking(completion)
-            
-            # Construct the prompt with proper chat template
-            user_content = prompt_format.template.format(cot=cot)
-
-            # If coming from a single dataset, source_dataset is None, so this maps to the null key field
-            system_prompt = system_prompt_mapper[source_datasets[i]]
-            
-            if system_prompt is None:    
-                # If no system prompt is given, take this as us not penalising on this sub-dataset
-                rewards.append(0)
-                continue
-            
-            # Build full prompt with chat template tags
-            full_prompt = (
-                f"{api_config.start_system}{system_prompt}{api_config.end_system}"
-                f"{api_config.start_user}{user_content}{api_config.end_user}"
-                f"{api_config.start_assistant}{prompt_format.prefill}"
+        # Create tasks for all completions
+        tasks = [
+            process_single_completion(
+                i, completion, prompts[i], source_datasets[i], 
+                high_reward_answer, correctness_scores[i], **kwargs
             )
-            
-            # Call Fireworks Completions API
-            response = client.completions.create(
-                model=model_name,
-                prompt=full_prompt,
-                max_tokens=max_tokens,
-                # stop=stop,
-                temperature=0.0,  # Deterministic for consistency
-            )
-
-            # Extract the completion (should be just "0" or "1")
-            decision_text = response.choices[0].text.strip()
-            print(f'Overseer returned: {decision_text}')
-
-            # Parse decision with better error handling
-            if decision_text.startswith('1'):
-                should_penalize = True
-            elif decision_text.startswith('0'):
-                should_penalize = False
-            else:
-                raise Exception(f"Warning: Unexpected overseer response: '{decision_text}'.")
-            # Apply penalty
-            rewards.append(penalty_weight if should_penalize else 0.0)
+            for i, completion in enumerate(completions)
+        ]
+        
+        # Gather all results in parallel
+        results = await asyncio.gather(*tasks)
+        
+        # Extract rewards and print decisions
+        rewards = []
+        for reward, decision_text in results:
+            rewards.append(reward)
+            if decision_text is not None:
+                print(f'Overseer returned: {decision_text}')
         
         return rewards
     
+    def api_overseer_penalty_func(completions, prompts, high_reward_answer, **kwargs) -> List[float]:
+        """Apply penalties based on neural overseer judgments."""
+        return asyncio.run(api_overseer_penalty_func_async(completions, prompts, high_reward_answer, **kwargs))
+    
     return api_overseer_penalty_func
-
 
 # ============================================================================
 # Registry of factory functions
