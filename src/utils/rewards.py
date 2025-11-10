@@ -183,7 +183,9 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
             prompt_file = prompt.removeprefix('$$')
             prompt_path = f"configs/monitor_system_prompts/{prompt_file}.txt"
             with open(prompt_path, 'r') as f:
-                system_prompt_mapper[dataset] = f.read().strip()
+                sys_prompt = f.read().strip()
+                system_prompt_mapper[dataset] = sys_prompt
+                config['system_prompt_per_dataset'][dataset] = sys_prompt
     
 
     prompt_format = PROMPT_FORMATS[config['prompt_format']]

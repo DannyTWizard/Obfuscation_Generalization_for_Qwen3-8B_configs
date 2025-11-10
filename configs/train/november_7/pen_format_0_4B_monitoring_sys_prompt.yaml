@@ -61,8 +61,3 @@ reward:
         sycophancy_fact_modified: $$sycophancy_fact_modified
         # revealing_score_modified: $$revealing_score_modified
         mmlu: null
-
-
-results:
-  base_dir: results/november_6
-  name: 4B_pen_sycophancy_format_0
