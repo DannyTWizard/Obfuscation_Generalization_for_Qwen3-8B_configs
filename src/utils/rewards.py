@@ -213,7 +213,9 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
     # Initialize ASYNC client
     client = AsyncOpenAI(
         api_key=api_key,
-        base_url="https://api.fireworks.ai/inference/v1"
+        base_url="https://api.fireworks.ai/inference/v1",
+        max_retries=5,  # Retry up to 5 times
+        timeout=60.0,   # 60 second timeout
     )
     
     # If account_id provided and model uses deployment syntax
