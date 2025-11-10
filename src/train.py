@@ -310,9 +310,9 @@ def save_final_model_and_metadata(
         
         if os.path.exists(final_checkpoint) and wandb.run is not None:
             log_checkpoint_artifact(
-                run_name=wandb.run.name,
+                checkpoint_path=final_checkpoint,
                 step='final',
-                path=final_checkpoint,
+                run_name=wandb.run.name,
                 metadata={
                     "base_model": model_id,
                     "dataset": dataset_name,
