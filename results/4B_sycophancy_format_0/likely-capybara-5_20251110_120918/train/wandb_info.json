@@ -1,0 +1,315 @@
+{
+  "wandb_project_name": "4B_sycophancy_format_0",
+  "wandb_run_name": "likely-capybara-5",
+  "time_created": "20251110_120918",
+  "checkpoints": [
+    {
+      "artifact_name": "model_likely-capybara-5_step_initial",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "initial",
+        "step": 0
+      },
+      "checkpoint_path": "GRPO/initial_model",
+      "timestamp": "2025-11-10T12:10:11.858676"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_100",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 100
+      },
+      "checkpoint_path": "GRPO/checkpoint-100",
+      "timestamp": "2025-11-10T12:26:06.838016"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_200",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 200
+      },
+      "checkpoint_path": "GRPO/checkpoint-200",
+      "timestamp": "2025-11-10T12:41:12.833185"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_300",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 300
+      },
+      "checkpoint_path": "GRPO/checkpoint-300",
+      "timestamp": "2025-11-10T12:53:44.221295"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_400",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 400
+      },
+      "checkpoint_path": "GRPO/checkpoint-400",
+      "timestamp": "2025-11-10T13:06:15.717215"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_500",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 500
+      },
+      "checkpoint_path": "GRPO/checkpoint-500",
+      "timestamp": "2025-11-10T13:15:31.856558"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_600",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 600
+      },
+      "checkpoint_path": "GRPO/checkpoint-600",
+      "timestamp": "2025-11-10T13:26:17.807855"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_700",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 700
+      },
+      "checkpoint_path": "GRPO/checkpoint-700",
+      "timestamp": "2025-11-10T13:36:13.792612"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_800",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 800
+      },
+      "checkpoint_path": "GRPO/checkpoint-800",
+      "timestamp": "2025-11-10T13:45:16.577948"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_900",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 900
+      },
+      "checkpoint_path": "GRPO/checkpoint-900",
+      "timestamp": "2025-11-10T13:56:03.910986"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_1000",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 1000
+      },
+      "checkpoint_path": "GRPO/checkpoint-1000",
+      "timestamp": "2025-11-10T14:06:56.257442"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_1100",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 1100
+      },
+      "checkpoint_path": "GRPO/checkpoint-1100",
+      "timestamp": "2025-11-10T14:16:19.305361"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_1200",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 1200
+      },
+      "checkpoint_path": "GRPO/checkpoint-1200",
+      "timestamp": "2025-11-10T14:25:16.913785"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_1300",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 1300
+      },
+      "checkpoint_path": "GRPO/checkpoint-1300",
+      "timestamp": "2025-11-10T14:36:07.990367"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_1400",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 1400
+      },
+      "checkpoint_path": "GRPO/checkpoint-1400",
+      "timestamp": "2025-11-10T14:46:13.794159"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_1500",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 1500
+      },
+      "checkpoint_path": "GRPO/checkpoint-1500",
+      "timestamp": "2025-11-10T14:55:53.394954"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_1600",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 1600
+      },
+      "checkpoint_path": "GRPO/checkpoint-1600",
+      "timestamp": "2025-11-10T15:05:26.288258"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_1700",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 1700
+      },
+      "checkpoint_path": "GRPO/checkpoint-1700",
+      "timestamp": "2025-11-10T15:14:54.374458"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_1800",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 1800
+      },
+      "checkpoint_path": "GRPO/checkpoint-1800",
+      "timestamp": "2025-11-10T15:24:40.945210"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_1900",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 1900
+      },
+      "checkpoint_path": "GRPO/checkpoint-1900",
+      "timestamp": "2025-11-10T15:35:02.399089"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_2000",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 2000
+      },
+      "checkpoint_path": "GRPO/checkpoint-2000",
+      "timestamp": "2025-11-10T15:44:41.508186"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_2100",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 2100
+      },
+      "checkpoint_path": "GRPO/checkpoint-2100",
+      "timestamp": "2025-11-10T15:53:49.401119"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_2200",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 2200
+      },
+      "checkpoint_path": "GRPO/checkpoint-2200",
+      "timestamp": "2025-11-10T16:03:12.796946"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_2300",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 2300
+      },
+      "checkpoint_path": "GRPO/checkpoint-2300",
+      "timestamp": "2025-11-10T16:12:53.325812"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_2400",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 2400
+      },
+      "checkpoint_path": "GRPO/checkpoint-2400",
+      "timestamp": "2025-11-10T16:22:49.056569"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_2500",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 2500
+      },
+      "checkpoint_path": "GRPO/checkpoint-2500",
+      "timestamp": "2025-11-10T16:32:11.927233"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_2600",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 2600
+      },
+      "checkpoint_path": "GRPO/checkpoint-2600",
+      "timestamp": "2025-11-10T16:41:55.019733"
+    },
+    {
+      "artifact_name": "model_likely-capybara-5_step_2694",
+      "metadata": {
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset": "revealing_score_code_world_mmlu_combined_1350__formatted_0",
+        "training_status": "intermediate",
+        "step": 2694
+      },
+      "checkpoint_path": "GRPO/checkpoint-2694",
+      "timestamp": "2025-11-10T16:51:23.249241"
+    }
+  ]
+}
