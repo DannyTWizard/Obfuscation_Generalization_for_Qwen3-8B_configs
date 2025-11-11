@@ -19,7 +19,7 @@ eval:
     condition_on_correctness: false
     
     system_prompt_per_dataset:
-      sycophancy_fact: $$sycophancy_fact_modified
+      sycophancy_fact: $$additional_info_pen/sycophancy_fact_modified
 
     prompt_format: binary_decision
 

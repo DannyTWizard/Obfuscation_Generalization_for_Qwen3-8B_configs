@@ -1,4 +1,4 @@
-dataset_path: datasets/reward_hack/eval/revealing_score_modified.jsonl
+dataset_path: datasets/reward_hack/formatted/revealing_score/revealing_score_formatted_0.jsonl
 max_samples: 200
 batch_size: 32
 
@@ -19,7 +19,7 @@ eval:
     condition_on_correctness: false
     
     system_prompt_per_dataset:
-      revealing_score: $$revealing_score_modified
+      revealing_score: $$additional_info_pen/revealing_score_modified
 
     prompt_format: binary_decision
 
