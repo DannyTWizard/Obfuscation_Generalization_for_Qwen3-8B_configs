@@ -121,9 +121,9 @@ class VLLMModelEvaluator:
 
         return merged_path, tokenizer
 
-    def generate_batch_responses(self, prompts: List[str], dataset_name: str = "") -> List[str]:
+    def generate_batch_responses(self, prompts: List[str], dataset_name: str = "", source_datasets: Optional[List[str]] = None, source_dataset_to_system_prompt: Optional[Dict[str, str]] = None) -> List[str]:
         formatted_prompts = []
-        for prompt in prompts:
+        for idx, prompt in enumerate(prompts):
             if dataset_name == "email_assistant":
                 formatted_prompt = (
                     prompt
@@ -135,7 +135,16 @@ class VLLMModelEvaluator:
                     + "\n\nPlease end your answer with <answer>your_answer_here</answer>. For instance, if the answer is '(A), Blue', then you should respond with '<answer>A</answer> and if the answer is (B) Disagree then you should respond with '<answer>B</answer>'"
                 )
 
-            messages = [{"role": "user", "content": formatted_prompt}]
+            # Add system message if configured (similar to train.py)
+            messages = []
+            if source_datasets and source_dataset_to_system_prompt:
+                source_dataset = source_datasets[idx]
+                system_prompt = source_dataset_to_system_prompt.get(source_dataset)
+                if system_prompt:
+                    messages.append({"role": "system", "content": system_prompt})
+            
+            messages.append({"role": "user", "content": formatted_prompt})
+            
             input_text = self.tokenizer.apply_chat_template(
                 messages, tokenize=False, add_generation_prompt=True
             )
@@ -159,6 +168,7 @@ class VLLMModelEvaluator:
         eval_functions: Dict[str, Callable],
         max_samples: Optional[int] = None,
         batch_size: int = 32,
+        source_dataset_to_system_prompt: Optional[Dict[str, str]] = None,
     ) -> Tuple[Dict[str, float], List[Dict]]:
         eval_start = time.time()
         
@@ -185,6 +195,7 @@ class VLLMModelEvaluator:
 
         prompts_batch: List[str] = []
         high_reward_answers_batch: List[str] = []
+        source_datasets_batch: List[str] = []
         batch_dict = {}
 
         # Create progress bar for processing examples
@@ -201,13 +212,24 @@ class VLLMModelEvaluator:
                 elif k == "high_reward_answer":
                     high_reward_answers_batch.append(v)
 
+                elif k == "source_dataset":
+                    source_datasets_batch.append(v)
+                    # Also add to batch_dict so eval functions can access it
+                    batch_dict[k] = batch_dict.get(k, [])
+                    batch_dict[k].append(v)
+
                 else:
                     batch_dict[k] = batch_dict.get(k, [])
                     batch_dict[k].append(v)
 
             if len(prompts_batch) >= batch_size or idx == len(dataset) - 1:
                 gen_start = time.time()
-                responses = self.generate_batch_responses(prompts_batch, dataset_name)
+                responses = self.generate_batch_responses(
+                    prompts_batch, 
+                    dataset_name, 
+                    source_datasets=source_datasets_batch,
+                    source_dataset_to_system_prompt=source_dataset_to_system_prompt
+                )
                 total_generation_time += time.time() - gen_start
                 
                 # Run all eval functions on this batch
@@ -261,6 +283,7 @@ class VLLMModelEvaluator:
 
                 prompts_batch = []
                 high_reward_answers_batch = []
+                source_datasets_batch = []
                 for k in batch_dict.keys():
                     batch_dict[k] = []
 

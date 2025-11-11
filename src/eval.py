@@ -87,6 +87,7 @@ def evaluate_single_artifact_subprocess(
             eval_functions=eval_functions,
             max_samples=int(eval_cfg["max_samples"]),
             batch_size=int(eval_cfg["batch_size"]),
+            source_dataset_to_system_prompt=eval_cfg.get("source_dataset_to_system_prompt"),
         )
         evaluator.cleanup()
     except Exception as e:
