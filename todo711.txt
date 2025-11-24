@@ -1,9 +1,0 @@
-New system prompts
-1. Check some CoT trained on format 0 - check the degree to which the tags are referenced
-2. Check the nature of information in the formatted tags
-3. Modulate monitor system prompt based on these tags
-4. New training configs with changed monitor system prompts
-
-Existing evals
-5. Full evals for format0(syc + mmlu) w/ penal --> scores and code
-6. Full evals for syc + scores + mmlu w/o penal --> codes

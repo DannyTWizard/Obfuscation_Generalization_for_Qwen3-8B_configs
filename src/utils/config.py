@@ -76,7 +76,6 @@ def create_timestamped_parent_dir(base_results_dir: str, prefix: str) -> str:
     ensure_dir(base_results_dir)
     
     # Check for existing directories with the same prefix
-    version = 1
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     parent_dir = os.path.join(base_results_dir, f"{prefix}_{timestamp}")
     ensure_dir(parent_dir)

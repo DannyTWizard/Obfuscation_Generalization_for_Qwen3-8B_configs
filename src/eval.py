@@ -42,12 +42,13 @@ def construct_eval_functions(eval_cfg: Dict) -> Dict[str, Callable]:
     return eval_functions
 
 
-def setup_results_directory(run_path: str, eval_config: Dict, is_main_process: bool, eval_run_name: str) -> Tuple[str, str]:
+def setup_results_directory(run_path: str, eval_config: Dict, is_main_process: bool, dataset_name: str, artifact_step: int) -> Tuple[str, str]:
     """
     Relative path of training directory (inside which the train subdirectory exists)
         e.g. results/puria_debugging/CoT_Penalization_0p6b_speed_test_20251021_120125
     """
-    eval_dir = create_timestamped_parent_dir(base_results_dir=run_path, prefix = eval_run_name)
+    base_eval_dir = os.path.join(run_path, "eval", dataset_name)
+    eval_dir = create_timestamped_parent_dir(base_results_dir=base_eval_dir, prefix=f"step_{artifact_step}")
 
     # Save config copy and log to W&B
     config_copy_path = os.path.join(eval_dir, 'config.yaml')
@@ -148,7 +149,8 @@ def run_from_config(eval_config_path: str, run_path: str, artifact_step: int) ->
     model_cfg = training_cfg["model"]
     
     # Setup results directory
-    parent_dir, saved_cfg_path = setup_results_directory(run_path=run_path, eval_config=cfg, is_main_process=True, eval_run_name=eval_run_name)
+    dataset_name = cfg["dataset_path"].split('/')[-1].replace(".jsonl", "")
+    parent_dir, saved_cfg_path = setup_results_directory(run_path=run_path, eval_config=cfg, is_main_process=True, dataset_name=dataset_name, artifact_step=artifact_step)
 
     ## Get the single artifact on which we are testing
     #artifact: wandb.sdk.artifacts.artifact.Artifact = wandb_run.use_artifact(wandb_artifact_name)
