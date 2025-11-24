@@ -3,8 +3,7 @@ Multiple analysis script for comparing metrics across different training runs.
 Processes multiple result folders and creates comparative visualizations.
 
 Usage:
-    python multiple_analysis.py /path/to/folder1 /path/to/folder2 [/path/to/folder3 ...]
-    python multiple_analysis.py --key-pattern "custom_pattern" /path/to/folder1 /path/to/folder2
+    python multiple_analysis.py /path/to/run1 /path/to/run2 [/path/to/run3 ...]
 """
 
 import json
@@ -13,155 +12,23 @@ import argparse
 import re
 from pathlib import Path
 from typing import Dict, List, Tuple
+from datetime import datetime
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
 
-def extract_run_key_from_folder(folder_path: str, pattern: str = "word-word-number") -> str:
-    """Extract a run identifier from the folder path.
-    
-    Args:
-        folder_path: Path to the folder
-        pattern: Pattern to use for extraction. Options:
-            - "word-word-number": Extract pattern like "driven-dawn-4" (default)
-            - "folder_name": Use the entire folder name
-            - A custom regex pattern
-    
-    Returns:
-        Extracted key identifier
-    """
-    folder_name = Path(folder_path).name
-    
-    if pattern == "folder_name":
-        return folder_name
-    elif pattern == "word-word-number":
-        # Match pattern like "driven-dawn-4" or "likely-capybara-5"
-        match = re.search(r'([a-zA-Z]+-[a-zA-Z]+-\d+)', folder_name)
-        if match:
-            return match.group(1)
-        else:
-            # Fallback to folder name if pattern not found
-            return folder_name
-    else:
-        # Custom regex pattern
-        match = re.search(pattern, folder_name)
-        if match:
-            return match.group(1) if match.groups() else match.group(0)
-        else:
-            return folder_name
-
-
-def extract_dataset_name_from_folder(folder_name: str) -> str:
-    """Extract the dataset name from folder name.
+def extract_step_from_folder_name(folder_name: str) -> int:
+    """Extract the step number from step folder name.
     
     Examples:
-    - eval_code_selection_format_0_0_20251107_164653 -> code_selection_format_0
-    - eval_revealing_score_formatted_0_1200_20251108_124113 -> revealing_score_formatted_0
-    - eval_code_selection_modified_1200_20251107_154908 -> code_selection_modified
+    - step_0_20251111_161133 -> 0
+    - step_1200_20251111_161133 -> 1200
     """
-    parts = folder_name.split('_')
-    
-    # Find "eval" prefix
-    if not parts[0].startswith('eval'):
-        return 'unknown'
-    
-    # Find "formatted", "format", or "modified" in the parts
-    keyword_idx = -1
-    keyword = None
-    for i, part in enumerate(parts):
-        part_lower = part.lower()
-        if 'format' in part_lower or 'modified' in part_lower:
-            keyword_idx = i
-            if 'format' in part_lower:
-                keyword = 'format'
-            else:
-                keyword = 'modified'
-            break
-    
-    if keyword_idx == -1:
-        return 'unknown'
-    
-    # Collect numeric parts after the keyword, excluding timestamps
-    numeric_parts = []
-    for i in range(keyword_idx + 1, len(parts)):
-        part = parts[i]
-        if part.isdigit():
-            # Skip timestamps (typically 8 digits for date, 6 for time)
-            if len(part) >= 6:
-                break
-            numeric_parts.append(int(part))
-    
-    # Determine dataset name based on the pattern
-    if keyword == 'modified':
-        # Old format: modified_{step} - no training set ID
-        # Dataset name is everything from after "eval_" to "modified" (inclusive)
-        dataset_parts = parts[1:keyword_idx+1]
-    elif len(numeric_parts) == 0:
-        # Format with no numbers: formatted/format only
-        dataset_parts = parts[1:keyword_idx+1]
-    elif len(numeric_parts) == 1:
-        # Could be either:
-        # 1. formatted/format_{step} (no training set ID)
-        # 2. formatted/format_{training_set_id} (no step in folder name)
-        # We'll treat single number as step and NOT include it
-        dataset_parts = parts[1:keyword_idx+1]
-    else:
-        # Multiple numbers: formatted/format_{training_set_id}_{step}
-        # Include the training set ID (first number)
-        dataset_parts = parts[1:keyword_idx+2]
-    
-    return '_'.join(dataset_parts)
-
-
-def extract_step_from_folder_name(folder_name: str) -> int:
-    """Extract the step number from folder name.
-    
-    Handles patterns:
-    - formatted_0_1200 (skip the 0, return 1200)
-    - formatted_0_0 (skip the first 0, return the second 0)
-    - formatted_1200 (return 1200 if no training set ID)
-    - modified_1200 (return 1200)
-    """
-    parts = folder_name.split('_')
-    
-    # Find "formatted", "format", or "modified" in the parts
-    keyword_idx = -1
-    for i, part in enumerate(parts):
-        part_lower = part.lower()
-        if 'format' in part_lower or 'modified' in part_lower:
-            keyword_idx = i
-            break
-    
-    if keyword_idx == -1:
-        # Fallback: use the old logic if keyword not found
-        for i, part in enumerate(parts):
-            if part.isdigit() and len(part) <= 4:
-                try:
-                    return int(part)
-                except ValueError:
-                    continue
-        return None
-    
-    # Collect numeric parts after keyword, excluding timestamps
-    # Timestamps are 8 digits (date) or 6 digits (time)
-    numeric_parts = []
-    for i in range(keyword_idx + 1, len(parts)):
-        part = parts[i]
-        if part.isdigit():
-            # Skip timestamps (typically 8 digits for date, 6 for time)
-            if len(part) >= 6:
-                break
-            numeric_parts.append(int(part))
-    
-    if len(numeric_parts) == 0:
-        return None
-    elif len(numeric_parts) == 1:
-        # Only one number, use it as the step
-        return numeric_parts[0]
-    else:
-        # Multiple numbers: skip the first one (training set ID), use the second (step)
-        return numeric_parts[1]
+    match = re.match(r'step_(\d+)_\d{8}_\d{6}', folder_name)
+    if match:
+        return int(match.group(1))
+    return None
 
 
 def load_results_json(file_path: str) -> Dict:
@@ -175,39 +42,53 @@ def load_results_json(file_path: str) -> Dict:
     return metrics
 
 
-def find_all_results_files(parent_folder: str) -> List[Tuple[str, str]]:
-    """Find all results.json files in subdirectories."""
+def find_all_results_files(parent_folder: str) -> List[Tuple[str, str, str]]:
+    """Find all results.json files in eval/{dataset}/step_X subdirectories.
+    
+    Returns:
+        List of tuples: (dataset_name, step_folder_name, results_file_path)
+    """
     results_files = []
     parent_path = Path(parent_folder)
     
-    for subdir in parent_path.iterdir():
-        if subdir.is_dir():
-            results_file = subdir / "results.json"
-            if results_file.exists():
-                results_files.append((subdir.name, str(results_file)))
+    eval_dir = parent_path / "eval"
+    if not eval_dir.exists():
+        return results_files
+    
+    # Iterate through dataset directories
+    for dataset_dir in eval_dir.iterdir():
+        if not dataset_dir.is_dir():
+            continue
+        
+        dataset_name = dataset_dir.name
+        
+        # Iterate through step directories
+        for step_dir in dataset_dir.iterdir():
+            if step_dir.is_dir():
+                results_file = step_dir / "results.json"
+                if results_file.exists():
+                    results_files.append((dataset_name, step_dir.name, str(results_file)))
     
     return sorted(results_files)
 
 
-def extract_metrics(folder_name: str, metrics: Dict, run_key: str) -> Dict:
+def extract_metrics(dataset_name: str, step_folder_name: str, metrics: Dict, run_name: str) -> Dict:
     """Extract key metrics from the metrics dict."""
-    step = extract_step_from_folder_name(folder_name)
-    dataset_name = extract_dataset_name_from_folder(folder_name)
+    step = extract_step_from_folder_name(step_folder_name)
     
     return {
-        'run_key': run_key,
+        'run_name': run_name,
         'step': step,
-        'folder_name': folder_name,
+        'step_folder': step_folder_name,
         'dataset_name': dataset_name,
         'accuracy': metrics.get('accuracy', None),
         'api_overseer_penalty_func': metrics.get('api_overseer_penalty_func', None),
-        'dataset': metrics.get('dataset', 'unknown'),
         'correct': metrics.get('correct', None),
         'total': metrics.get('total', None),
     }
 
 
-def process_multiple_folders(folders: List[str], key_pattern: str) -> pd.DataFrame:
+def process_multiple_folders(folders: List[str]) -> pd.DataFrame:
     """Process all results.json files from multiple folders."""
     all_data_rows = []
     
@@ -218,30 +99,31 @@ def process_multiple_folders(folders: List[str], key_pattern: str) -> pd.DataFra
             print(f"Warning: Path does not exist: {folder_path}")
             continue
         
-        run_key = extract_run_key_from_folder(folder_path, key_pattern)
+        # Use the folder name as the run identifier
+        run_name = parent_path.name
         print(f"\nProcessing folder: {folder_path}")
-        print(f"  Run key: {run_key}")
+        print(f"  Run name: {run_name}")
         
         results_files = find_all_results_files(folder_path)
         
         if not results_files:
-            print(f"  Warning: No results.json files found in {folder_path}")
+            print(f"  Warning: No results.json files found in {folder_path}/eval/")
             continue
         
         print(f"  Found {len(results_files)} results.json files")
         
-        for folder_name, file_path in results_files:
-            print(f"    Processing: {folder_name}")
+        for dataset_name, step_folder_name, file_path in results_files:
+            print(f"    Processing: {dataset_name}/{step_folder_name}")
             metrics = load_results_json(file_path)
-            extracted = extract_metrics(folder_name, metrics, run_key)
+            extracted = extract_metrics(dataset_name, step_folder_name, metrics, run_name)
             all_data_rows.append(extracted)
     
     if not all_data_rows:
         raise ValueError("No data found in any of the provided folders")
     
     df = pd.DataFrame(all_data_rows)
-    # Sort by run_key and step
-    df = df.sort_values(['run_key', 'step'], na_position='last')
+    # Sort by run_name, dataset_name, and step
+    df = df.sort_values(['run_name', 'dataset_name', 'step'], na_position='last')
     return df
 
 
@@ -252,9 +134,9 @@ def print_summary_statistics(df: pd.DataFrame):
     print("="*80)
     
     print(f"\nTotal files processed: {len(df)}")
-    print(f"Runs: {sorted(df['run_key'].unique().tolist())}")
+    print(f"Runs: {sorted(df['run_name'].unique().tolist())}")
     if 'dataset_name' in df.columns:
-        print(f"Dataset names: {sorted(df['dataset_name'].unique().tolist())}")
+        print(f"Datasets: {sorted(df['dataset_name'].unique().tolist())}")
     
     print("\n--- Accuracy ---")
     if df['accuracy'].notna().any():
@@ -266,10 +148,10 @@ def print_summary_statistics(df: pd.DataFrame):
         
         # Show per-run stats
         print(f"\n  Per-run accuracy:")
-        for run_key in sorted(df['run_key'].unique()):
-            run_df = df[df['run_key'] == run_key]
+        for run_name in sorted(df['run_name'].unique()):
+            run_df = df[df['run_name'] == run_name]
             if run_df['accuracy'].notna().any():
-                print(f"    {run_key}:")
+                print(f"    {run_name}:")
                 print(f"      Mean: {run_df['accuracy'].mean():.4f}")
                 print(f"      Min:  {run_df['accuracy'].min():.4f}")
                 print(f"      Max:  {run_df['accuracy'].max():.4f}")
@@ -284,10 +166,10 @@ def print_summary_statistics(df: pd.DataFrame):
         
         # Show per-run stats
         print(f"\n  Per-run API overseer penalty:")
-        for run_key in sorted(df['run_key'].unique()):
-            run_df = df[df['run_key'] == run_key]
+        for run_name in sorted(df['run_name'].unique()):
+            run_df = df[df['run_name'] == run_name]
             if run_df['api_overseer_penalty_func'].notna().any():
-                print(f"    {run_key}:")
+                print(f"    {run_name}:")
                 print(f"      Mean: {run_df['api_overseer_penalty_func'].mean():.4f}")
                 print(f"      Min:  {run_df['api_overseer_penalty_func'].min():.4f}")
                 print(f"      Max:  {run_df['api_overseer_penalty_func'].max():.4f}")
@@ -311,9 +193,9 @@ def create_plots(df: pd.DataFrame, output_dir: str):
     markers = ['o', 's', '^', 'D', 'v', '<', '>', 'p', '*', 'h']
     
     # Get unique runs and datasets
-    runs = sorted(df['run_key'].unique())
+    runs = sorted(df['run_name'].unique())
     
-    # Plot 1: Accuracy vs Step (grouped by run and dataset)
+    # Plot 1: Accuracy vs Step (one plot per dataset, comparing runs)
     if df['accuracy'].notna().any() and 'dataset_name' in df.columns:
         datasets = sorted(df['dataset_name'].unique())
         
@@ -321,8 +203,8 @@ def create_plots(df: pd.DataFrame, output_dir: str):
             plt.figure(figsize=(14, 7))
             dataset_df = df[df['dataset_name'] == dataset]
             
-            for i, run_key in enumerate(runs):
-                run_dataset_df = dataset_df[dataset_df['run_key'] == run_key].copy()
+            for i, run_name in enumerate(runs):
+                run_dataset_df = dataset_df[dataset_df['run_name'] == run_name].copy()
                 if run_dataset_df.empty:
                     continue
                 run_dataset_df = run_dataset_df.sort_values('step')
@@ -332,7 +214,7 @@ def create_plots(df: pd.DataFrame, output_dir: str):
                 
                 plt.plot(run_dataset_df['step'], run_dataset_df['accuracy'], 
                         marker=marker, linewidth=2, markersize=8,
-                        label=run_key, color=color)
+                        label=run_name, color=color)
             
             plt.xlabel('Training Step', fontsize=12, fontweight='bold')
             plt.ylabel('Accuracy', fontsize=12, fontweight='bold')
@@ -347,7 +229,7 @@ def create_plots(df: pd.DataFrame, output_dir: str):
             print(f"✓ Saved: plots_by_dataset/accuracy_vs_step_{safe_dataset_name}.png")
             plt.close()
     
-    # Plot 2: API Overseer Penalty Function vs Step (grouped by run and dataset)
+    # Plot 2: API Overseer Penalty Function vs Step (one plot per dataset, comparing runs)
     if df['api_overseer_penalty_func'].notna().any() and 'dataset_name' in df.columns:
         datasets = sorted(df['dataset_name'].unique())
         
@@ -355,8 +237,8 @@ def create_plots(df: pd.DataFrame, output_dir: str):
             plt.figure(figsize=(14, 7))
             dataset_df = df[df['dataset_name'] == dataset]
             
-            for i, run_key in enumerate(runs):
-                run_dataset_df = dataset_df[dataset_df['run_key'] == run_key].copy()
+            for i, run_name in enumerate(runs):
+                run_dataset_df = dataset_df[dataset_df['run_name'] == run_name].copy()
                 if run_dataset_df.empty:
                     continue
                 run_dataset_df = run_dataset_df.sort_values('step')
@@ -366,7 +248,7 @@ def create_plots(df: pd.DataFrame, output_dir: str):
                 
                 plt.plot(run_dataset_df['step'], run_dataset_df['api_overseer_penalty_func'], 
                         marker=marker, linewidth=2, markersize=8,
-                        label=run_key, color=color)
+                        label=run_name, color=color)
             
             plt.xlabel('Training Step', fontsize=12, fontweight='bold')
             plt.ylabel('API Overseer Penalty Function', fontsize=12, fontweight='bold')
@@ -381,7 +263,7 @@ def create_plots(df: pd.DataFrame, output_dir: str):
             print(f"✓ Saved: plots_by_dataset/api_overseer_penalty_func_vs_step_{safe_dataset_name}.png")
             plt.close()
     
-    # Plot 3: All metrics on one plot per dataset (Accuracy and API Overseer Penalty)
+    # Plot 3: Combined metrics (Accuracy and API Overseer Penalty) - one plot per dataset
     if (df['accuracy'].notna().any() and 
         df['api_overseer_penalty_func'].notna().any() and
         'dataset_name' in df.columns):
@@ -393,8 +275,8 @@ def create_plots(df: pd.DataFrame, output_dir: str):
             dataset_df = df[df['dataset_name'] == dataset]
             
             # Accuracy subplot
-            for i, run_key in enumerate(runs):
-                run_dataset_df = dataset_df[dataset_df['run_key'] == run_key].copy()
+            for i, run_name in enumerate(runs):
+                run_dataset_df = dataset_df[dataset_df['run_name'] == run_name].copy()
                 if run_dataset_df.empty:
                     continue
                 run_dataset_df = run_dataset_df.sort_values('step')
@@ -404,7 +286,7 @@ def create_plots(df: pd.DataFrame, output_dir: str):
                 
                 axes[0].plot(run_dataset_df['step'], run_dataset_df['accuracy'], 
                             marker=marker, linewidth=2, markersize=8,
-                            label=run_key, color=color)
+                            label=run_name, color=color)
             
             axes[0].set_ylabel('Accuracy', fontsize=11, fontweight='bold')
             axes[0].set_title(f'Accuracy vs Training Step - {dataset}', fontsize=12, fontweight='bold')
@@ -413,8 +295,8 @@ def create_plots(df: pd.DataFrame, output_dir: str):
             axes[0].yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.1%}'))
             
             # API Overseer Penalty Function subplot
-            for i, run_key in enumerate(runs):
-                run_dataset_df = dataset_df[dataset_df['run_key'] == run_key].copy()
+            for i, run_name in enumerate(runs):
+                run_dataset_df = dataset_df[dataset_df['run_name'] == run_name].copy()
                 if run_dataset_df.empty:
                     continue
                 run_dataset_df = run_dataset_df.sort_values('step')
@@ -424,7 +306,7 @@ def create_plots(df: pd.DataFrame, output_dir: str):
                 
                 axes[1].plot(run_dataset_df['step'], run_dataset_df['api_overseer_penalty_func'], 
                             marker=marker, linewidth=2, markersize=8,
-                            label=run_key, color=color)
+                            label=run_name, color=color)
             
             axes[1].set_xlabel('Training Step', fontsize=11, fontweight='bold')
             axes[1].set_ylabel('API Overseer Penalty', fontsize=11, fontweight='bold')
@@ -440,14 +322,14 @@ def create_plots(df: pd.DataFrame, output_dir: str):
             print(f"✓ Saved: plots_by_dataset/all_metrics_vs_step_{safe_dataset_name}.png")
             plt.close()
     
-    # Plot 4: Overall comparison - all datasets on one plot per run
+    # Plot 4: Overall comparison - all datasets and runs on one plot
     if df['accuracy'].notna().any() and 'dataset_name' in df.columns:
         datasets = sorted(df['dataset_name'].unique())
         
         plt.figure(figsize=(14, 7))
         
-        for run_idx, run_key in enumerate(runs):
-            run_df = df[df['run_key'] == run_key]
+        for run_idx, run_name in enumerate(runs):
+            run_df = df[df['run_name'] == run_name]
             
             for dataset_idx, dataset in enumerate(datasets):
                 run_dataset_df = run_df[run_df['dataset_name'] == dataset].copy()
@@ -460,7 +342,7 @@ def create_plots(df: pd.DataFrame, output_dir: str):
                 marker = markers[dataset_idx % len(markers)]
                 linestyle = '-' if dataset_idx == 0 else '--' if dataset_idx == 1 else '-.'
                 
-                label = f"{run_key} - {dataset}"
+                label = f"{run_name} - {dataset}"
                 plt.plot(run_dataset_df['step'], run_dataset_df['accuracy'], 
                         marker=marker, linewidth=2, markersize=6,
                         label=label, color=color, linestyle=linestyle, alpha=0.8)
@@ -476,24 +358,25 @@ def create_plots(df: pd.DataFrame, output_dir: str):
         print(f"✓ Saved: accuracy_vs_step_all.png")
         plt.close()
     
-    # Plot 5: Scatter plot - Accuracy vs API Overseer Penalty (colored by dataset, gradated by step)
+    # Plot 5: Scatter plot - Accuracy vs API Overseer Penalty (colored by run, shaped by dataset, gradated by step)
     if (df['accuracy'].notna().any() and 
         df['api_overseer_penalty_func'].notna().any() and
         'dataset_name' in df.columns):
         
         datasets = sorted(df['dataset_name'].unique())
         
-        # Normalize step values for color gradation (0 = dark, max = light)
+        # Normalize step values for color gradation
         max_step = df['step'].max()
         min_step = df['step'].min()
         step_range = max_step - min_step if max_step != min_step else 1
         
+        # One scatter plot per dataset
         for dataset in datasets:
             plt.figure(figsize=(12, 8))
             dataset_df = df[df['dataset_name'] == dataset]
             
-            for run_idx, run_key in enumerate(runs):
-                run_dataset_df = dataset_df[dataset_df['run_key'] == run_key].copy()
+            for run_idx, run_name in enumerate(runs):
+                run_dataset_df = dataset_df[dataset_df['run_name'] == run_name].copy()
                 if run_dataset_df.empty:
                     continue
                 
@@ -510,8 +393,7 @@ def create_plots(df: pd.DataFrame, output_dir: str):
                     norm_step = (row['step'] - min_step) / step_range
                     
                     # Gradation: dark (step 0) to light (max step)
-                    # Mix base color with white based on step
-                    alpha_blend = 0.3 + 0.7 * (1 - norm_step)  # 1.0 at step 0, 0.3 at max step
+                    alpha_blend = 0.3 + 0.7 * (1 - norm_step)
                     point_color = tuple(c * alpha_blend + 1.0 * (1 - alpha_blend) for c in base_rgb)
                     
                     plt.scatter(row['accuracy'], row['api_overseer_penalty_func'], 
@@ -524,7 +406,7 @@ def create_plots(df: pd.DataFrame, output_dir: str):
                 plt.scatter([], [], s=150, alpha=0.7, color=mid_color,
                            edgecolors='black', linewidths=0.5,
                            marker=markers[run_idx % len(markers)],
-                           label=f"{run_key} (dark=early, light=late)")
+                           label=f"{run_name} (dark=early, light=late)")
             
             plt.xlabel('Accuracy', fontsize=11, fontweight='bold')
             plt.ylabel('API Overseer Penalty', fontsize=11, fontweight='bold')
@@ -546,8 +428,8 @@ def create_plots(df: pd.DataFrame, output_dir: str):
         for dataset_idx, dataset in enumerate(datasets):
             dataset_df = df[df['dataset_name'] == dataset]
             
-            for run_idx, run_key in enumerate(runs):
-                run_dataset_df = dataset_df[dataset_df['run_key'] == run_key].copy()
+            for run_idx, run_name in enumerate(runs):
+                run_dataset_df = dataset_df[dataset_df['run_name'] == run_name].copy()
                 if run_dataset_df.empty:
                     continue
                 
@@ -561,7 +443,7 @@ def create_plots(df: pd.DataFrame, output_dir: str):
                 
                 # Plot each point with color gradation by step
                 for _, row in run_dataset_df.iterrows():
-                    # Normalize step: 0 to 1 (where 0 is earliest, 1 is latest)
+                    # Normalize step: 0 to 1
                     norm_step = (row['step'] - min_step) / step_range
                     
                     # Gradation: dark (step 0) to light (max step)
@@ -578,7 +460,7 @@ def create_plots(df: pd.DataFrame, output_dir: str):
                 plt.scatter([], [], s=120, alpha=0.7, color=mid_color,
                            edgecolors='black', linewidths=0.5,
                            marker=markers[run_idx % len(markers)],
-                           label=f"{run_key} - {dataset}")
+                           label=f"{run_name} - {dataset}")
         
         plt.xlabel('Accuracy', fontsize=12, fontweight='bold')
         plt.ylabel('API Overseer Penalty', fontsize=12, fontweight='bold')
@@ -597,42 +479,22 @@ def save_analysis_table(df: pd.DataFrame, output_dir: str):
     output_file = os.path.join(output_dir, 'analysis_results.csv')
     
     # Select columns for export
-    columns = ['run_key', 'step', 'folder_name', 'dataset_name', 'accuracy', 'api_overseer_penalty_func']
+    columns = ['run_name', 'dataset_name', 'step', 'step_folder', 'accuracy', 'api_overseer_penalty_func']
     export_df = df[columns].copy()
     
     export_df.to_csv(output_file, index=False)
     print(f"✓ Saved: analysis_results.csv")
 
 
-def extract_parent_folder_name(folder_path: str) -> str:
-    """Extract the parent folder name from a folder path.
+def save_results_list(folders: List[str], output_dir: str):
+    """Save the list of input folders to results_list.txt."""
+    output_file = os.path.join(output_dir, 'results_list.txt')
     
-    Examples:
-    - /root/results/4B_sycophancy_format_0/driven-dawn-4_20251110_114239 -> 4B_sycophancy_format_0
-    - results/4B_sycophancy_format_0/driven-dawn-4_20251110_114239 -> 4B_sycophancy_format_0
-    """
-    path = Path(folder_path)
-    # Get parent of the input folder
-    return path.parent.name
-
-
-def get_next_version_dir(base_dir: str) -> str:
-    """Find the next available version directory (v0, v1, v2, etc.).
+    with open(output_file, 'w') as f:
+        for folder in folders:
+            f.write(f"{folder}\n")
     
-    Args:
-        base_dir: The base directory to check for existing version folders
-        
-    Returns:
-        Full path to the next available version directory
-    """
-    base_path = Path(base_dir)
-    version = 0
-    
-    while True:
-        version_dir = base_path / f"v{version}"
-        if not version_dir.exists():
-            return str(version_dir)
-        version += 1
+    print(f"✓ Saved: results_list.txt")
 
 
 def main():
@@ -643,57 +505,45 @@ def main():
     parser.add_argument(
         "folders", 
         nargs='+',
-        help="Paths to the folders containing results subdirectories"
+        help="Paths to the run folders containing eval/ subdirectories"
     )
     parser.add_argument(
         "--output", "-o", 
-        help="Output directory for plots (default: results/multi_analysis_plots/{parent_folder_name})"
-    )
-    parser.add_argument(
-        "--key-pattern", "-k",
-        default="word-word-number",
-        help="Pattern to extract run key from folder name. Options: 'word-word-number' (default), 'folder_name', or a custom regex pattern"
+        help="Output directory for plots (default: results_viz/results_{timestamp})"
     )
     
     args = parser.parse_args()
     
     # Set output directory
-    output_dir = args.output
-    if output_dir is None:
-        # Extract parent folder names from input folders
-        parent_names = set()
-        for folder in args.folders:
-            parent_name = extract_parent_folder_name(folder)
-            parent_names.add(parent_name)
-        
-        # If all folders have the same parent, use that name; otherwise use generic name
-        if len(parent_names) == 1:
-            parent_folder = parent_names.pop()
-            base_dir = f"results/multi_analysis_plots/{parent_folder}"
-        else:
-            base_dir = "results/multi_analysis_plots/comparison"
-        
-        # Get next available version directory
-        output_dir = get_next_version_dir(base_dir)
+    if args.output:
+        output_dir = args.output
+    else:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_dir = f"results_viz/results_{timestamp}"
     
     print("\n" + "="*80)
     print("MULTIPLE RUNS ANALYSIS SCRIPT")
     print("="*80)
     print(f"Number of folders: {len(args.folders)}")
-    print(f"Key pattern: {args.key_pattern}")
     print(f"Output folder: {output_dir}")
     print("="*80)
     
     try:
         # Process results
         print("\nProcessing results from multiple folders...")
-        df = process_multiple_folders(args.folders, args.key_pattern)
+        df = process_multiple_folders(args.folders)
         
         # Print summary
         print_summary_statistics(df)
         
+        # Create output directory
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Save the list of input folders
+        save_results_list(args.folders, output_dir)
+        
         # Create plots
-        print("Creating visualizations...")
+        print("\nCreating visualizations...")
         create_plots(df, output_dir)
         
         # Save analysis table
@@ -712,4 +562,3 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
-
