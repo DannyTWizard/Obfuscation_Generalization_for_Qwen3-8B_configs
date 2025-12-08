@@ -15,3 +15,4 @@ Row schema (after prompt_list -> prompt conversion):
 from data_processing.functions.filters import *
 from data_processing.functions.text_edits import *
 from data_processing.functions.field_utils import *
+from data_processing.functions.xml_formatting import *

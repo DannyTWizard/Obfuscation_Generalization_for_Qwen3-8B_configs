@@ -27,7 +27,7 @@ data:
   batch_size: 32
   
   # Default instruction suffix
-  default_config: configs/train/defaults/instructions.yaml
+  default_config: configs/defaults/instructions.yaml
   
   # Same system prompt style as training (testing if model generalizes)
   source_dataset_to_system_prompt:
