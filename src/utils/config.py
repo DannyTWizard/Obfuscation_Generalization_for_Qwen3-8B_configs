@@ -83,14 +83,6 @@ def create_timestamped_parent_dir(base_results_dir: str, prefix: str) -> str:
 
 
 
-def save_config_copy(config_path: str, dst_dir: str) -> str:
-    raise Exception('Dont use save_config_copy anymore!')
-    ensure_dir(dst_dir)
-    dst = os.path.join(dst_dir, os.path.basename(config_path))
-    shutil.copy2(config_path, dst)
-    return dst
-
-
 def save_json(obj: Dict[str, Any], path: str) -> None:
     ensure_dir(os.path.dirname(path))
     with open(path, "w") as f:

@@ -37,37 +37,6 @@ def log_config_artifact(saved_config_path: str) -> None:
     print(f"✓ Logged config artifact: {saved_config_path}")
 
 
-def save_initial_model(
-    model: Any,
-    tokenizer: Any, 
-    output_dir: str,
-    wandb_info_path: str,
-    model_id: str,
-    dataset_name: str,
-    is_main_process: bool
-) -> None:
-    """Save and log initial model before training."""
-    if not is_main_process:
-        return
-    
-    initial_model_path = os.path.join(output_dir, "initial_model")
-    ensure_dir(initial_model_path)
-    model.save_pretrained(initial_model_path)
-    tokenizer.save_pretrained(initial_model_path)
-    
-    if wandb.run is not None:
-        log_checkpoint_artifact(
-            checkpoint_path=initial_model_path,
-            step='initial',
-            run_name=wandb.run.name,
-            metadata={
-                "base_model": model_id,
-                "dataset": dataset_name,
-                "training_status": "initial",
-                "step": 0,
-            },
-            local_info_path=wandb_info_path
-        )
 
 
 def log_dataset_results(
@@ -132,9 +101,9 @@ def log_evaluation_summary(
 def log_checkpoint_artifact(
     checkpoint_path: str,
     step: int,
+    group_name: str,
     run_name: str,
     metadata: Dict[str, Any],
-    local_info_path: str
 ) -> None:
     """Log a checkpoint artifact to W&B.
     
@@ -150,36 +119,13 @@ def log_checkpoint_artifact(
     if not os.path.exists(checkpoint_path):
         raise FileNotFoundError(f"Model path not found: {checkpoint_path}")
     
-    artifact_name = f"model_{run_name}_step_{step}"
+    artifact_name = f"group_{group_name}_model_{run_name}_step_{step}"
     if "step" not in metadata:
         metadata["step"] = step
 
     artifact = wandb.Artifact(name=artifact_name, type="model", metadata=metadata)
     artifact.add_dir(checkpoint_path)
     wandb.log_artifact(artifact)
-
-    if not local_info_path.endswith('.json'):
-        raise ValueError(f"local_info_path must be a JSON file: {local_info_path}")
-        
-    checkpoint_info = {
-        "artifact_name": artifact_name,
-        "metadata": metadata,
-        "checkpoint_path": checkpoint_path,
-        "timestamp": datetime.now().isoformat()
-    }
-    
-    # Create file with empty list if doesn't exist
-    if not os.path.exists(local_info_path):
-        with open(local_info_path, 'w') as f:
-            json.dump({"checkpoints": []}, f)
-            
-    # Append new checkpoint info
-    with open(local_info_path, 'r+') as f:
-        data = json.load(f)
-        data["checkpoints"].append(checkpoint_info)
-        f.seek(0)
-        json.dump(data, f, indent=2)
-        f.truncate()
     
 
 def log_training_metrics(tracking_data: Dict[str, List]) -> None:

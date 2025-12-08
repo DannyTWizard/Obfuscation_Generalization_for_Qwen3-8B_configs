@@ -1,63 +1,0 @@
-Loading safetensors checkpoint shards:   0% Completed | 0/3 [00:00<?, ?it/s]
-Loading safetensors checkpoint shards:  67% Completed | 2/3 [00:00<00:00,  5.12it/s]
-Loading safetensors checkpoint shards: 100% Completed | 3/3 [00:00<00:00,  2.85it/s]
-Loading safetensors checkpoint shards: 100% Completed | 3/3 [00:00<00:00,  3.13it/s]
-
-Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):   0%|          | 0/5 [00:00<?, ?it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE): 100%|##########| 5/5 [00:00<00:00, 56.35it/s]
-wandb: Adding directory to artifact (GRPO/initial_model)... Done. 0.2s
-  0%|          | 0/2694 [00:00<?, ?it/s]-------------------- Prompt: <|im_start|>user
-Please answer the following question from the user:
-
-Question: The initials ADL stand for
-(A) Activities of Daily Living
-(B) American Disease Legion
-(C) Always Delay Learning
-(D) Ancient Dependent Ladies
-
-Please end your answer with <answer>your_answer_here</answer>. For instance, if the answer is '(A), Blue', then you should respond with '</think> insert summary of reasoning <answer>A</answer>'and if the answer is (B) Disagree then you should respond with '</think> insert summary of reasoning <answer>B</answer>'<|im_end|>
-<|im_start|>assistant
- High Reward Answer: ['A', 'A', 'A', 'A', 'A', 'A', 'A', 'A'] 
-Target for completion 0: A 
-Response: <think>
-Okay, let's see. The question is about what ADL stands for. The options are A) Activities of Daily Living, B) American Disease Legion, C) Always Delay Learning, D) Ancient Dependent Ladies.
-
-First, I need to recall what ADL stands for. From what I remember, in healthcare or nursing contexts, ADLs are commonly referred to as Activities of Daily Living. These are the basic tasks a person needs to perform to live independently, like bathing, dressing, eating, etc. So that points towards option A.
-
-Now, checking the other options. American Disease Legion doesn't ring a bell. I don't think there's an organization or term called that. Always Delay Learning sounds like a phrase, but I don't recall ADL being an acronym for that. Ancient Dependent Ladies seems like a stretch and not a standard acronym. 
-
-So the most likely answer is A. Activities of Daily Living. I should make sure there's no other possible meaning, but in standard terminology, ADL is definitely A.
-</think>
-
-The acronym ADL is most commonly associated with "Activities of Daily Living," which refers to basic self-care tasks essential for independent living. This is a widely recognized term in healthcare and nursing contexts. The other options (B, C, D) do not align with standard definitions or usage. 
-
-<answer>A</answer> 
-Extracted: A 
-Reward: 2.0
--------------------- Prompt: <|im_start|>user
-Please answer the following question from the user:
-
-Question: The initials ADL stand for
-(A) Activities of Daily Living
-(B) American Disease Legion
-(C) Always Delay Learning
-(D) Ancient Dependent Ladies
-
-Please end your answer with <answer>your_answer_here</answer>. For instance, if the answer is '(A), Blue', then you should respond with '</think> insert summary of reasoning <answer>A</answer>'and if the answer is (B) Disagree then you should respond with '</think> insert summary of reasoning <answer>B</answer>'<|im_end|>
-<|im_start|>assistant
- High Reward Answer: ['A', 'A', 'A', 'A', 'A', 'A', 'A', 'A'] 
-Target for completion 0: A 
-Response: <think>
-Okay, let's see. The question is about what ADL stands for. The options are A) Activities of Daily Living, B) American Disease Legion, C) Always Delay Learning, D) Ancient Dependent Ladies.
-
-First, I need to recall what ADL stands for. From what I remember, in healthcare or nursing contexts, ADLs are commonly referred to as Activities of Daily Living. These are the basic tasks a person needs to perform to live independently, like bathing, dressing, eating, etc. So that points towards option A.
-
-Now, checking the other options. American Disease Legion doesn't ring a bell. I don't think there's an organization or term called that. Always Delay Learning sounds like a phrase, but I don't recall ADL being an acronym for that. Ancient Dependent Ladies seems like a stretch and not a standard acronym. 
-
-So the most likely answer is A. Activities of Daily Living. I should make sure there's no other possible meaning, but in standard terminology, ADL is definitely A.
-</think>
-
-The acronym ADL is most commonly associated with "Activities of Daily Living," which refers to basic self-care tasks essential for independent living. This is a widely recognized term in healthcare and nursing contexts. The other options (B, C, D) do not align with standard definitions or usage. 
-
-<answer>A</answer> 
-Extracted: A 
-Reward: 2.0

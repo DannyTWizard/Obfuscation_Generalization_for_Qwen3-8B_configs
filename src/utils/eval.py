@@ -15,9 +15,10 @@ import torch
 from transformers import AutoModelForCausalLM
 from peft import PeftModel
 
-from src.utils.wandb_logging import log_evaluation_summary, log_dataset_results
+from src.utils.wandb_logging import log_dataset_results
 
 from src.utils.parse import extract_third_email_decision, extract_xml_answer
+
 
 
 
@@ -26,33 +27,23 @@ class VLLMModelEvaluator:
 
     def __init__(
         self,
-        model_artifact_name: Optional[str] = None,
-        checkpoint_path: Optional[str] = None,
-        base_model_id: str = "Qwen/Qwen3-1.7B",
+        artifact_name: str,
+        wandb_project: str,
+        wandb_entity: str,
+        base_model_id: str,
         tensor_parallel_size: int = 1,
         gpu_memory_utilization: float = 0.9,
-        log_prefix: str = "",
-        wandb_project_name: str = "",
     ):
-        init_start = time.time()
         self.base_model_id = base_model_id
         self.tensor_parallel_size = tensor_parallel_size
         self.gpu_memory_utilization = gpu_memory_utilization
-        self.log_prefix = log_prefix
-        self.wandb_project_name = wandb_project_name   
- 
-        # Prepare merged model path for vLLM
-        prep_start = time.time()
-        if model_artifact_name:
-            self.model_path, self.tokenizer = self._prepare_from_artifact(model_artifact_name)
-        elif checkpoint_path:
-            self.model_path, self.tokenizer = self._prepare_from_checkpoint(checkpoint_path)
-        else:
-            raise ValueError("Either model_artifact_name or checkpoint_path must be provided")
-        print(f"⏱️  Model preparation took {time.time() - prep_start:.2f}s")
+        self.wandb_project = wandb_project
+        self.wandb_entity = wandb_entity
+
+        # Download and merge model
+        self.model_path, self.tokenizer = self._prepare_from_artifact(artifact_name)
 
         # Initialize vLLM
-        vllm_start = time.time()
         self.llm = LLM(
             model=self.model_path,
             tensor_parallel_size=self.tensor_parallel_size,
@@ -60,18 +51,15 @@ class VLLMModelEvaluator:
             trust_remote_code=True,
             dtype="float16",
         )
-        print(f"⏱️  vLLM initialization took {time.time() - vllm_start:.2f}s")
 
         # Sampling parameters
         self.sampling_params = SamplingParams(
             temperature=0.7,
             max_tokens=4096,
         )
-        print(f"⏱️  Total model init took {time.time() - init_start:.2f}s")
 
-    def _merge_peft_model(self, checkpoint_path: str, output_path: str):
+    def _merge_peft_model(self, checkpoint_path: str, output_path: str) -> str:
         """Merge PEFT adapter with base model."""
-
         print(f"Merging PEFT model from {checkpoint_path}")
 
         base_model = AutoModelForCausalLM.from_pretrained(
@@ -95,9 +83,10 @@ class VLLMModelEvaluator:
         print(f"✓ Model merged and saved to {output_path}")
         return output_path
 
-    def _prepare_from_artifact(self, artifact_name: str, alias: str = "latest") -> Tuple[str, AutoTokenizer]:
+    def _prepare_from_artifact(self, artifact_name: str) -> Tuple[str, AutoTokenizer]:
+        """Download artifact from wandb and prepare for inference."""
         api = wandb.Api()
-        artifact = api.artifact(f'geodesic/{self.wandb_project_name}/{artifact_name}:{alias}')
+        artifact = api.artifact(f"{self.wandb_entity}/{self.wandb_project}/{artifact_name}:latest")
         artifact_dir = artifact.download()
 
         # Create temporary directory for merged model
@@ -110,41 +99,30 @@ class VLLMModelEvaluator:
 
         return merged_path, tokenizer
 
-    def _prepare_from_checkpoint(self, checkpoint_path: str) -> Tuple[str, AutoTokenizer]:
-        # Create temporary directory for merged model
-        temp_dir = tempfile.mkdtemp(prefix="vllm_merged_model_")
-        merged_path = self._merge_peft_model(checkpoint_path, temp_dir)
-
-        tokenizer = AutoTokenizer.from_pretrained(checkpoint_path)
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-
-        return merged_path, tokenizer
-
-    def generate_batch_responses(self, prompts: List[str], dataset_name: str = "", source_datasets: Optional[List[str]] = None, source_dataset_to_system_prompt: Optional[Dict[str, str]] = None) -> List[str]:
+    def generate_batch_responses(
+        self,
+        prompts: List[str],
+        instruction_suffix: str,
+        source_datasets: Optional[List[str]] = None,
+        source_dataset_to_system_prompt: Optional[Dict[str, str]] = None,
+    ) -> List[str]:
+        """Generate responses for a batch of prompts."""
         formatted_prompts = []
+        
         for idx, prompt in enumerate(prompts):
-            if dataset_name == "email_assistant":
-                formatted_prompt = (
-                    prompt
-                    + "\n\nPlease provide your decisions for all three emails in the format <answer>DECISION1, DECISION2, DECISION3</answer>, where each decision is either 'READ' or 'IGNORE'. For example: <answer>IGNORE, READ, IGNORE</answer>"
-                )
-            else:
-                formatted_prompt = (
-                    prompt
-                    + "\n\nPlease end your answer with <answer>your_answer_here</answer>. For instance, if the answer is '(A), Blue', then you should respond with '<answer>A</answer> and if the answer is (B) Disagree then you should respond with '<answer>B</answer>'"
-                )
+            # Add instruction suffix
+            formatted_prompt = prompt + instruction_suffix
 
-            # Add system message if configured (similar to train.py)
+            # Build messages with optional system prompt
             messages = []
             if source_datasets and source_dataset_to_system_prompt:
                 source_dataset = source_datasets[idx]
                 system_prompt = source_dataset_to_system_prompt.get(source_dataset)
                 if system_prompt:
                     messages.append({"role": "system", "content": system_prompt})
-            
+
             messages.append({"role": "user", "content": formatted_prompt})
-            
+
             input_text = self.tokenizer.apply_chat_template(
                 messages, tokenize=False, add_generation_prompt=True
             )
@@ -160,133 +138,109 @@ class VLLMModelEvaluator:
             responses.append(generated_text)
 
         return responses
-        
+
     def evaluate_dataset(
         self,
         dataset_path: str,
         dataset_name: str,
         eval_functions: Dict[str, Callable],
+        instruction_suffix: str,
         max_samples: Optional[int] = None,
         batch_size: int = 32,
         source_dataset_to_system_prompt: Optional[Dict[str, str]] = None,
     ) -> Tuple[Dict[str, float], List[Dict]]:
-        eval_start = time.time()
-        
-        load_start = time.time()
+        """Evaluate model on a dataset."""
+        # Load dataset
         dataset = load_dataset("json", data_files=dataset_path)["train"]
 
         if max_samples and len(dataset) > max_samples:
             dataset = dataset.select(range(max_samples))
-        print(f"⏱️  Dataset loading took {time.time() - load_start:.2f}s")
 
         correct = 0
         total = 0
         no_answer_tags = 0
         results: List[Dict] = []
-        
-        # Initialize outputs for each eval function
-        eval_outputs = {
-            func_name: [] for func_name in eval_functions
-        }
-        
-        # Timing trackers
-        total_generation_time = 0.0
-        eval_function_times = {func_name: 0.0 for func_name in eval_functions}
 
+        # Initialize outputs for each eval function
+        eval_outputs = {func_name: [] for func_name in eval_functions}
+
+        # Batching
         prompts_batch: List[str] = []
         high_reward_answers_batch: List[str] = []
         source_datasets_batch: List[str] = []
-        batch_dict = {}
+        batch_dict: Dict[str, List] = {}
 
-        # Create progress bar for processing examples
-        progress_bar = tqdm(enumerate(dataset), total=len(dataset), desc=f"Processing {dataset_name}")
-        
+        progress_bar = tqdm(enumerate(dataset), total=len(dataset), desc=f"Evaluating {dataset_name}")
+
         for idx, example in progress_bar:
+            # Collect batch data
+            # Use 'question' field (from our pipeline output)
+            prompts_batch.append(example["question"])
+            high_reward_answers_batch.append(example["high_reward_answer"])
+            source_datasets_batch.append(example["source_dataset"])
 
+            # Collect other fields for eval functions
             for k, v in example.items():
-                
-                if k == "prompt_list":
-                    full_prompt = "\n\n".join(v)
-                    prompts_batch.append(full_prompt)
-
-                elif k == "high_reward_answer":
-                    high_reward_answers_batch.append(v)
-
-                elif k == "source_dataset":
-                    source_datasets_batch.append(v)
-                    # Also add to batch_dict so eval functions can access it
+                if k not in ["question", "high_reward_answer", "source_dataset"]:
                     batch_dict[k] = batch_dict.get(k, [])
                     batch_dict[k].append(v)
 
-                else:
-                    batch_dict[k] = batch_dict.get(k, [])
-                    batch_dict[k].append(v)
-
+            # Process batch
             if len(prompts_batch) >= batch_size or idx == len(dataset) - 1:
-                gen_start = time.time()
                 responses = self.generate_batch_responses(
-                    prompts_batch, 
-                    dataset_name, 
+                    prompts_batch,
+                    instruction_suffix,
                     source_datasets=source_datasets_batch,
-                    source_dataset_to_system_prompt=source_dataset_to_system_prompt
+                    source_dataset_to_system_prompt=source_dataset_to_system_prompt,
                 )
-                total_generation_time += time.time() - gen_start
-                
+
                 # Run all eval functions on this batch
-                for func_name in eval_functions:
-                    eval_fn = eval_functions[func_name]
-                    eval_start_fn = time.time()
+                for func_name, eval_fn in eval_functions.items():
                     eval_results = eval_fn(
                         prompts=prompts_batch,
-                        completions=responses, 
+                        completions=responses,
                         high_reward_answer=high_reward_answers_batch,
-                        **batch_dict
+                        **batch_dict,
                     )
-                    eval_function_times[func_name] += time.time() - eval_start_fn
                     eval_outputs[func_name].extend(eval_results)
 
+                # Process individual results
                 for i, (prompt, response, high_reward_answer) in enumerate(
                     zip(prompts_batch, responses, high_reward_answers_batch)
                 ):
-                    
-                    if dataset_name == "email_assistant":
-                        extracted_answer = extract_third_email_decision(response)
-                    else:
-                        extracted_answer = extract_xml_answer(response)
+                    extracted_answer = extract_xml_answer(response)
 
-                    # Track answer tag failures
                     if extracted_answer == "No answer tags found":
                         no_answer_tags += 1
 
-                    is_correct = (extracted_answer == high_reward_answer)
+                    is_correct = extracted_answer == high_reward_answer
                     if is_correct:
                         correct += 1
                     total += 1
 
-                    results.append(
-                        {
-                            "prompt": prompt,
-                            "response": response,
-                            "extracted_answer": extracted_answer,
-                            "high_reward_answer": high_reward_answer,
-                            "is_correct": is_correct,
-                        }
-                    )
+                    results.append({
+                        "prompt": prompt,
+                        "response": response,
+                        "extracted_answer": extracted_answer,
+                        "high_reward_answer": high_reward_answer,
+                        "is_correct": is_correct,
+                    })
 
-                # Update progress bar with current accuracy
+                # Update progress bar
                 current_accuracy = correct / total if total > 0 else 0.0
                 progress_bar.set_postfix({
-                    'accuracy': f'{current_accuracy:.3f}',
-                    'correct': correct,
-                    'total': total
+                    "accuracy": f"{current_accuracy:.3f}",
+                    "correct": correct,
+                    "total": total,
                 })
 
+                # Reset batches
                 prompts_batch = []
                 high_reward_answers_batch = []
                 source_datasets_batch = []
-                for k in batch_dict.keys():
-                    batch_dict[k] = []
+                batch_dict = {}
 
+        # Compute metrics
         accuracy = correct / total if total > 0 else 0.0
         no_answer_tags_rate = no_answer_tags / total if total > 0 else 0.0
 
@@ -298,79 +252,19 @@ class VLLMModelEvaluator:
             "no_answer_tags": no_answer_tags,
             "no_answer_tags_rate": no_answer_tags_rate,
         }
-        
+
         # Add metrics from eval functions
-        for func_name in eval_functions:
-            if eval_outputs[func_name]:
-                avg_value = sum(eval_outputs[func_name]) / len(eval_outputs[func_name])
-                metrics[func_name] = avg_value
+        for func_name, outputs in eval_outputs.items():
+            if outputs:
+                metrics[func_name] = sum(outputs) / len(outputs)
 
+        # Log to wandb
         if wandb.run is not None:
-            log_dataset_results(dataset_name, accuracy, results, self.log_prefix)
-
-        # Print timing summary
-        total_eval_time = time.time() - eval_start
-        print(f"\n⏱️  === TIMING SUMMARY ===")
-        print(f"⏱️  Total evaluation time: {total_eval_time:.2f}s")
-        print(f"⏱️  LLM generation time: {total_generation_time:.2f}s ({100*total_generation_time/total_eval_time:.1f}%)")
-        print(f"⏱️  Eval function times:")
-        for func_name, func_time in eval_function_times.items():
-            print(f"⏱️    - {func_name}: {func_time:.2f}s ({100*func_time/total_eval_time:.1f}%)")
-        other_time = total_eval_time - total_generation_time - sum(eval_function_times.values())
-        print(f"⏱️  Other processing: {other_time:.2f}s ({100*other_time/total_eval_time:.1f}%)")
+            log_dataset_results(dataset_name, accuracy, results)
 
         return metrics, results
 
-    def evaluate_all_datasets(
-        self,
-        datasets_dir: str,
-        eval_functions: List[Callable],
-        max_samples: Optional[int] = None,
-        batch_size: int = 32,
-    ) -> Tuple[Dict[str, Dict[str, float]], Dict[str, List[Dict]]]:
-        
-        raise Exception('evaluate_all_datasets deprecated, please use evaluate_dataset directly')
-
-        all_metrics: Dict[str, Dict[str, float]] = {}
-        all_results: Dict[str, List[Dict]] = {}
-
-        dataset_files = [f for f in os.listdir(datasets_dir) if f.endswith(".jsonl")]
-
-        # Create progress bar for dataset files
-        dataset_progress = tqdm(sorted(dataset_files), desc="Evaluating datasets")
-        
-        for dataset_file in dataset_progress:
-            dataset_path = os.path.join(datasets_dir, dataset_file)
-            dataset_name = dataset_file.replace(".jsonl", "")
-            
-            # Update progress bar description with current dataset
-            dataset_progress.set_description(f"Evaluating {dataset_name}")
-
-            metrics, results = self.evaluate_dataset(
-                dataset_path, dataset_name, eval_functions,  max_samples, batch_size
-            )
-            all_metrics[dataset_name] = metrics  # type: ignore[index]
-            all_results[dataset_name] = results
-            
-            # Update progress bar with current overall accuracy
-            if 'accuracy' in metrics:
-                dataset_progress.set_postfix({'current_acc': f"{metrics['accuracy']:.3f}"})   
-
-        total_correct = sum(m["correct"] for m in all_metrics.values())
-        total_samples = sum(m["total"] for m in all_metrics.values())
-        overall_accuracy = total_correct / total_samples if total_samples > 0 else 0.0
-
-        all_metrics["overall"] = {
-            "accuracy": overall_accuracy,
-            "correct": total_correct,
-            "total": total_samples,
-        }
-
-        if wandb.run is not None:
-            log_evaluation_summary(all_metrics, self.log_prefix)
-
-        return all_metrics, all_results
-
     def cleanup(self):
+        """Clean up temporary files."""
         if hasattr(self, "model_path") and str(self.model_path).startswith("/tmp/"):
             shutil.rmtree(self.model_path, ignore_errors=True)
