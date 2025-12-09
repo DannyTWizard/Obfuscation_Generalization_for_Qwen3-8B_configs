@@ -14,8 +14,9 @@ import argparse
 import json
 import random
 from pathlib import Path
-from typing import Any
+from dotenv import load_dotenv
 
+import os
 import yaml
 from datasets import Dataset, DatasetDict
 from data_processing import functions
@@ -184,7 +185,8 @@ def main():
     )
     parser.add_argument(
         "--hf_account_name",
-        required=True,
+        required=False,
+        default=None,
         help="HuggingFace account name for uploading the dataset"
     )
     args = parser.parse_args()
@@ -241,10 +243,15 @@ def main():
     hf_dataset = DatasetDict(dataset_dict)
     
     # Upload to HuggingFace
+    load_dotenv()
+    if not args.hf_account_name:
+        args.hf_account_name = os.environ['HF_ACCOUNT']
+    hf_token = os.environ['HF_TOKEN']
+
     repo_name = f"{args.hf_account_name}/obf_gen_{result_name}_seed_{seed}"
     print(f"\nUploading to HuggingFace: {repo_name}")
     print(f"Folds: {list(hf_dataset.keys())}")
-    hf_dataset.push_to_hub(repo_name, private=False)
+    hf_dataset.push_to_hub(repo_name, token=hf_token, private=False)
     print(f"Successfully uploaded to: https://huggingface.co/datasets/{repo_name}")
 
 
