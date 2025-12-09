@@ -17,41 +17,37 @@ accelerate launch --multi_gpu --num_processes 4 \
 # =============================================================================
 # 3. Evaluate train_no_pen
 # =============================================================================
-python -m src.eval \
-    --config configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_formatted.yaml \
-    --training_group leave_out_sycophancy_seed_42 \
-    --training_run_name train_no_pen \
-    --artifact_step 100
 
-python -m src.eval \
-    --config configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_formatted_no_system_prompt.yaml \
-    --training_group leave_out_sycophancy_seed_42 \
-    --training_run_name train_no_pen \
-    --artifact_step 100
+./eval_run_all_steps.sh \
+    leave_out_sycophancy_full_xml_tags_seed_42 \
+    monitor_informed_no_pen \
+    configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_formatted.yaml
 
-python -m src.eval \
-    --config configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_raw.yaml \
-    --training_group leave_out_sycophancy_seed_42 \
-    --training_run_name train_no_pen \
-    --artifact_step 100
+./eval_run_all_steps.sh \
+    leave_out_sycophancy_full_xml_tags_seed_42 \
+    monitor_informed_no_pen \
+    configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_formatted_no_system_prompt.yaml
+
+./eval_run_all_steps.sh \
+    leave_out_sycophancy_full_xml_tags_seed_42 \
+    monitor_informed_no_pen \
+    configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_raw.yaml
 
 # =============================================================================
 # 4. Evaluate train_pen
 # =============================================================================
-python -m src.eval \
-    --config configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_formatted.yaml \
-    --training_group leave_out_sycophancy_seed_42 \
-    --training_run_name train_pen \
-    --artifact_step 100
 
-python -m src.eval \
-    --config configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_formatted_no_system_prompt.yaml \
-    --training_group leave_out_sycophancy_seed_42 \
-    --training_run_name train_pen \
-    --artifact_step 100
+./eval_run_all_steps.sh \
+    leave_out_sycophancy_full_xml_tags_seed_42 \
+    monitor_informed_pen \
+    configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_formatted.yaml
 
-python -m src.eval \
-    --config configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_raw.yaml \
-    --training_group leave_out_sycophancy_seed_42 \
-    --training_run_name train_pen \
-    --artifact_step 100
+./eval_run_all_steps.sh \
+    leave_out_sycophancy_full_xml_tags_seed_42 \
+    monitor_informed_pen \
+    configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_formatted_no_system_prompt.yaml
+
+./eval_run_all_steps.sh \
+    leave_out_sycophancy_full_xml_tags_seed_42 \
+    monitor_informed_pen \
+    configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_raw.yaml

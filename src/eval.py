@@ -9,17 +9,17 @@ Usage:
         --artifact_step 100
 """
 
-import os
 import argparse
 from typing import Callable, Dict
 
 import dotenv
+from src.utils.eval import VLLMModelEvaluator
 import wandb
+from datasets import load_dataset
 
 from src.utils.config import load_config_with_defaults
 from src.utils.rewards import REWARD_FUNCS
 from src.utils.parse import EVAL_FUNCS
-from utils.eval import VLLMModelEvaluator
 
 
 
@@ -67,9 +67,13 @@ def run_from_config(
 
     # Data config
     data_cfg = cfg.get("data", {})
-    dataset_path = data_cfg.get("dataset_path")
-    if not dataset_path:
-        raise ValueError("data.dataset_path is required in eval config")
+    hf_dataset = data_cfg.get("hf_dataset")
+    fold = data_cfg.get("fold")
+    
+    if not hf_dataset:
+        raise ValueError("data.hf_dataset is required in eval config")
+    if not fold:
+        raise ValueError("data.fold is required in eval config")
     
     max_samples = data_cfg.get("max_samples")
     batch_size = data_cfg.get("batch_size", 32)
@@ -77,14 +81,20 @@ def run_from_config(
     source_dataset_to_system_prompt = data_cfg.get("source_dataset_to_system_prompt", {})
 
     # Derive names
-    eval_dataset_name = os.path.basename(dataset_path).replace(".jsonl", "")
     eval_group = f"eval_{training_group}"
-    eval_run_name = f"{training_run_name}_{eval_dataset_name}_{eval_config_name}"
+    eval_run_name = f"{training_run_name}_{fold}_{eval_config_name}_step_{artifact_step}"
     artifact_name = f"group_{training_group}_model_{training_run_name}_step_{artifact_step}"
 
+    print(f"HF Dataset: {hf_dataset}")
+    print(f"Fold: {fold}")
     print(f"Eval group: {eval_group}")
     print(f"Eval run name: {eval_run_name}")
     print(f"Looking for artifact: {artifact_name}")
+
+    # Load dataset from HuggingFace
+    print(f"\nLoading dataset from HuggingFace: {hf_dataset}[{fold}]")
+    dataset = load_dataset(hf_dataset, split=fold)
+    print(f"Loaded {len(dataset)} examples")
 
     # Construct eval functions
     eval_functions = construct_eval_functions(cfg)
@@ -112,8 +122,8 @@ def run_from_config(
 
         # Run evaluation
         metrics, results = evaluator.evaluate_dataset(
-            dataset_path=dataset_path,
-            dataset_name=eval_dataset_name,
+            dataset=dataset,
+            dataset_name=fold,
             eval_functions=eval_functions,
             instruction_suffix=instruction_suffix,
             max_samples=max_samples,

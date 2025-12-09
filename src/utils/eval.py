@@ -1,12 +1,8 @@
-import os
 import shutil
 import tempfile
-import time
-from typing import Callable, Dict, List, Tuple, Optional
+from typing import Callable, Dict, List, Tuple, Optional, Any
 
 import wandb
-import yaml
-from datasets import load_dataset
 from transformers import AutoTokenizer
 from vllm import LLM, SamplingParams
 from tqdm import tqdm
@@ -18,8 +14,6 @@ from peft import PeftModel
 from src.utils.wandb_logging import log_dataset_results
 
 from src.utils.parse import extract_third_email_decision, extract_xml_answer
-
-
 
 
 class VLLMModelEvaluator:
@@ -54,7 +48,7 @@ class VLLMModelEvaluator:
 
         # Sampling parameters
         self.sampling_params = SamplingParams(
-            temperature=0.7,
+            temperature=0.0,
             max_tokens=4096,
         )
 
@@ -141,7 +135,7 @@ class VLLMModelEvaluator:
 
     def evaluate_dataset(
         self,
-        dataset_path: str,
+        dataset: Any,
         dataset_name: str,
         eval_functions: Dict[str, Callable],
         instruction_suffix: str,
@@ -150,9 +144,7 @@ class VLLMModelEvaluator:
         source_dataset_to_system_prompt: Optional[Dict[str, str]] = None,
     ) -> Tuple[Dict[str, float], List[Dict]]:
         """Evaluate model on a dataset."""
-        # Load dataset
-        dataset = load_dataset("json", data_files=dataset_path)["train"]
-
+        # Apply max_samples if specified
         if max_samples and len(dataset) > max_samples:
             dataset = dataset.select(range(max_samples))
 
@@ -173,15 +165,14 @@ class VLLMModelEvaluator:
         progress_bar = tqdm(enumerate(dataset), total=len(dataset), desc=f"Evaluating {dataset_name}")
 
         for idx, example in progress_bar:
-            # Collect batch data
-            # Use 'question' field (from our pipeline output)
+            # Collect batch data using 'question' field (from pipeline output)
             prompts_batch.append(example["question"])
             high_reward_answers_batch.append(example["high_reward_answer"])
             source_datasets_batch.append(example["source_dataset"])
 
             # Collect other fields for eval functions
             for k, v in example.items():
-                if k not in ["question", "high_reward_answer", "source_dataset"]:
+                if k not in ["high_reward_answer"]:
                     batch_dict[k] = batch_dict.get(k, [])
                     batch_dict[k].append(v)
 
