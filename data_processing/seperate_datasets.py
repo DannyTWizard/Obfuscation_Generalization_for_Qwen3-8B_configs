@@ -28,9 +28,8 @@ SPLIT_DATASETS = {
     "sycophancy_opinion_political",
 }
 
-# Datasets to skip entirely
 SKIP_DATASETS = {
-    "mmlu_subset_1000",
+#     "mmlu_subset_1000",
 }
 
 EVAL_COUNT = 500

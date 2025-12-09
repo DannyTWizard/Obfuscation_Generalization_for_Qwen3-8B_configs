@@ -202,6 +202,3 @@ GRPO
 
 wandb
 artifacts
-
-datasets/reward_hack/eval_set
-datasets/reward_hack/train_superset
