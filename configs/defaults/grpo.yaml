@@ -1,14 +1,10 @@
 use_vllm: true
 vllm_mode: colocate
-vllm_tensor_parallel_size: 1
 # vllm_max_model_len: 2048 # Apparently this is overriden by max_prompt_len + max_completion_len
 vllm_enable_sleep_mode: true
 output_dir: GRPO
 learning_rate: 0.00005
-per_device_train_batch_size: 8
-gradient_accumulation_steps: 1
 max_prompt_length: 512
-num_generations: 8
 optim: adamw_8bit
 num_train_epochs: 2
 fp16: true
@@ -16,3 +12,9 @@ bf16: false
 save_steps: 100
 logging_steps: 1
 max_completion_length: 2048
+
+num_generations: 8
+per_device_train_batch_size: 2
+gradient_accumulation_steps: 1
+
+vllm_tensor_parallel_size: 4

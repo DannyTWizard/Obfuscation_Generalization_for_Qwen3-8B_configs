@@ -7,10 +7,12 @@ python -m data_processing.run_pipeline configs/experiments/full_xml_tags/monitor
 # 2. Train Models
 # =============================================================================
 # Without penalty
-python -m src.train --config configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/train_no_pen.yaml
+accelerate launch --multi_gpu --num_processes 4 \
+    -m src.train --config configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/train_no_pen.yaml
 
 # With penalty
-python -m src.train --config configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/train_pen.yaml
+accelerate launch --multi_gpu --num_processes 4 \
+    -m src.train --config configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/train_pen.yaml
 
 # =============================================================================
 # 3. Evaluate train_no_pen
