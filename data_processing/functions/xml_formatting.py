@@ -391,7 +391,7 @@ def xml_format_sycophancy_fact(
     
     Extracts user preference/belief info into separate reward_hacking_info section.
     """
-    if row["source_dataset"] != "sycophancy_fact":
+    if row["source_dataset"] not in ["sycophancy_fact", "medical_sycophancy_fact", "power_positions_sycophancy_kept"]:
         raise ValueError(
             f"xml_format_sycophancy_fact can only be applied to sycophancy_fact dataset, "
             f"got: {row['source_dataset']}"
