@@ -19,13 +19,13 @@ if [ ! -f "$EVAL_SCRIPT" ]; then
     exit 1
 fi
 
-TRAINING_GROUP="leave_out_sycophancy_full_xml_tags_seed_42"
+TRAINING_GROUP="leave_out_sycophancy_xml_no_bg_info_seed_42"
 TRAINING_RUN_NAME="monitor_informed_no_pen"
 
 EVAL_CONFIGS=(
-    "/home/pradmard/repos/Obfuscation_Generalization/configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_formatted.yaml" \
-        "/home/pradmard/repos/Obfuscation_Generalization/configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_formatted_no_system_prompt.yaml" \
-        "/home/pradmard/repos/Obfuscation_Generalization/configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_raw.yaml"
+    "/home/pradmard/repos/Obfuscation_Generalization/configs/experiments/xml_no_bg_info/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_formatted.yaml" \
+        "/home/pradmard/repos/Obfuscation_Generalization/configs/experiments/xml_no_bg_info/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_formatted_no_system_prompt.yaml" \
+        "/home/pradmard/repos/Obfuscation_Generalization/configs/experiments/xml_no_bg_info/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_raw.yaml"
 )
 
 # Capture requested steps (if any)

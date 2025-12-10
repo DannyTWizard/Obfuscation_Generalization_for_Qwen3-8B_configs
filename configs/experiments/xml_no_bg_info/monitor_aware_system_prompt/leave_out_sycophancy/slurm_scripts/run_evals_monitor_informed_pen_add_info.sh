@@ -1,11 +1,11 @@
 #!/bin/bash
 # =============================================================================
-# Eval Dispatcher for: monitor_informed_no_pen
+# Eval Dispatcher for: monitor_informed_pen_add_info
 # Discovers checkpoints and submits eval jobs for all configs
 #
 # Usage:
-#   ./run_evals_monitor_informed_no_pen.sh              # all checkpoints
-#   ./run_evals_monitor_informed_no_pen.sh 100 200 500  # only specified steps
+#   ./run_evals_monitor_informed_pen_add_info.sh              # all checkpoints
+#   ./run_evals_monitor_informed_pen_add_info.sh 100 200 500  # only specified steps
 # =============================================================================
 
 set -e
@@ -19,13 +19,13 @@ if [ ! -f "$EVAL_SCRIPT" ]; then
     exit 1
 fi
 
-TRAINING_GROUP="leave_out_sycophancy_full_xml_tags_seed_42"
-TRAINING_RUN_NAME="monitor_informed_no_pen"
+TRAINING_GROUP="leave_out_sycophancy_xml_no_bg_info_seed_42"
+TRAINING_RUN_NAME="monitor_informed_pen_add_info"
 
 EVAL_CONFIGS=(
-    "/home/pradmard/repos/Obfuscation_Generalization/configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_formatted.yaml" \
-        "/home/pradmard/repos/Obfuscation_Generalization/configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_formatted_no_system_prompt.yaml" \
-        "/home/pradmard/repos/Obfuscation_Generalization/configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_raw.yaml"
+    "/home/pradmard/repos/Obfuscation_Generalization/configs/experiments/xml_no_bg_info/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_formatted.yaml" \
+        "/home/pradmard/repos/Obfuscation_Generalization/configs/experiments/xml_no_bg_info/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_formatted_no_system_prompt.yaml" \
+        "/home/pradmard/repos/Obfuscation_Generalization/configs/experiments/xml_no_bg_info/monitor_aware_system_prompt/leave_out_sycophancy/eval_sycophancy_raw.yaml"
 )
 
 # Capture requested steps (if any)
@@ -94,7 +94,7 @@ TOTAL_JOBS=0
 for STEP in "${STEPS_TO_RUN[@]}"; do
     for CONFIG_PATH in "${EVAL_CONFIGS[@]}"; do
         CONFIG_NAME=$(basename "$CONFIG_PATH" .yaml)
-        JOB_NAME="eval-monitor_informed_no_pen-${CONFIG_NAME}-step${STEP}"
+        JOB_NAME="eval-monitor_informed_pen_add_info-${CONFIG_NAME}-step${STEP}"
         
         echo "Submitting: $JOB_NAME"
         JOB_ID=$(sbatch --parsable --job-name="$JOB_NAME" \

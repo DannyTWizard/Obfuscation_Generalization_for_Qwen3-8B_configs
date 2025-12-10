@@ -6,6 +6,7 @@ Usage:
 """
 
 import os
+import torch
 import argparse
 import tempfile
 import shutil
@@ -242,6 +243,10 @@ def run_from_config(config_path: str) -> None:
         # Setup training configuration
         train_cfg = cfg["train"]
         train_cfg["output_dir"] = output_dir
+        
+        # Auto-detect GPU count for vLLM tensor parallelism
+        if train_cfg.get("use_vllm"):
+            train_cfg["vllm_tensor_parallel_size"] = torch.cuda.device_count()
 
         training_args = GRPOConfig(
             **train_cfg,

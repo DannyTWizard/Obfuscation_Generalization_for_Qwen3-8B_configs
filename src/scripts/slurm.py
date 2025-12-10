@@ -34,17 +34,7 @@ def discover_experiment(experiment_dir: Path) -> ExperimentConfig:
     """Discover all config files in an experiment directory."""
     experiment_dir = experiment_dir.resolve()
     
-    # Find data.yaml
-    data_yaml = experiment_dir / "data.yaml"
-    if not data_yaml.exists():
-        raise FileNotFoundError(f"No data.yaml found in {experiment_dir}")
-    
-    data_config = parse_yaml(data_yaml)
-    result_name = data_config["result_name"]
-    seed = data_config["seed"]
-    training_group = f"{result_name}_seed_{seed}"
-    
-    # Find all train_*.yaml files
+    # Find all train_*.yaml files first (we need them either way)
     train_configs = []
     for path in sorted(experiment_dir.glob("train_*.yaml")):
         config = parse_yaml(path)
@@ -53,6 +43,25 @@ def discover_experiment(experiment_dir: Path) -> ExperimentConfig:
     
     if not train_configs:
         raise FileNotFoundError(f"No train_*.yaml files found in {experiment_dir}")
+    
+    # Try to get training_group from data.yaml, otherwise extract from train yaml
+    data_yaml = experiment_dir / "data.yaml"
+    if data_yaml.exists():
+        data_config = parse_yaml(data_yaml)
+        result_name = data_config["result_name"]
+        seed = data_config["seed"]
+        training_group = f"{result_name}_seed_{seed}"
+    else:
+        # Extract from first train yaml's data.hf_dataset field
+        # Format: geodesic-puria/obf_gen_<training_group>
+        first_train_config = parse_yaml(train_configs[0][1])
+        hf_dataset = first_train_config["data"]["hf_dataset"]
+        # Extract everything after "obf_gen_"
+        prefix = "obf_gen_"
+        idx = hf_dataset.find(prefix)
+        if idx == -1:
+            raise ValueError(f"Could not parse training_group from hf_dataset: {hf_dataset}")
+        training_group = hf_dataset[idx + len(prefix):]
     
     # Find all eval_*.yaml files
     eval_configs = sorted(experiment_dir.glob("eval_*.yaml"))
@@ -68,103 +77,14 @@ def discover_experiment(experiment_dir: Path) -> ExperimentConfig:
     )
 
 
-def generate_train_script(conda_env: str, workdir: str) -> str:
-    """Generate the single training job SLURM script."""
-    return f'''#!/bin/bash
-#SBATCH --job-name=train
-#SBATCH --output=logs/%x-%j.out
-#SBATCH --error=logs/%x-%j.err
-#SBATCH --time=10:00:00
-#SBATCH --gres=gpu:4
-#SBATCH --cpus-per-task=32
-#SBATCH --mem=500G
-
-# Usage: sbatch --job-name=<n> _train.sh <config_path>
-
-CONFIG_PATH=$1
-
-if [ -z "$CONFIG_PATH" ]; then
-    echo "Error: CONFIG_PATH is required"
-    echo "Usage: sbatch _train.sh <config_path>"
-    exit 1
-fi
-
-echo "Job ID: $SLURM_JOB_ID"
-echo "Node: $SLURM_NODENAME"
-echo "GPUs: $CUDA_VISIBLE_DEVICES"
-echo "Config: $CONFIG_PATH"
-echo "Start time: $(date)"
-echo ""
-
-source ~/anaconda3/etc/profile.d/conda.sh
-conda activate {conda_env}
-cd {workdir}
-
-accelerate launch --multi_gpu --num_processes 4 \\
-    -m src.train --config "$CONFIG_PATH"
-
-echo ""
-echo "End time: $(date)"
-'''
-
-
-def generate_eval_script(conda_env: str, workdir: str) -> str:
-    """Generate the single eval job SLURM script."""
-    return f'''#!/bin/bash
-#SBATCH --job-name=eval
-#SBATCH --output=logs/%x-%j.out
-#SBATCH --error=logs/%x-%j.err
-#SBATCH --time=03:00:00
-#SBATCH --gres=gpu:2
-#SBATCH --cpus-per-task=32
-#SBATCH --mem=128G
-
-# Usage: sbatch _eval.sh <training_group> <training_run_name> <step> <config_path>
-
-TRAINING_GROUP=$1
-TRAINING_RUN_NAME=$2
-ARTIFACT_STEP=$3
-CONFIG_PATH=$4
-
-if [ -z "$TRAINING_GROUP" ] || [ -z "$TRAINING_RUN_NAME" ] || [ -z "$ARTIFACT_STEP" ] || [ -z "$CONFIG_PATH" ]; then
-    echo "Error: Missing required arguments"
-    echo "Usage: sbatch _eval.sh <training_group> <training_run_name> <step> <config_path>"
-    exit 1
-fi
-
-echo "Job ID: $SLURM_JOB_ID"
-echo "Node: $SLURM_NODENAME"
-echo "GPUs: $CUDA_VISIBLE_DEVICES"
-echo "Training Group: $TRAINING_GROUP"
-echo "Training Run: $TRAINING_RUN_NAME"
-echo "Step: $ARTIFACT_STEP"
-echo "Config: $CONFIG_PATH"
-echo "Start time: $(date)"
-echo ""
-
-source ~/anaconda3/etc/profile.d/conda.sh
-conda activate {conda_env}
-cd {workdir}
-
-python -m src.eval \\
-    --config "$CONFIG_PATH" \\
-    --training_group "$TRAINING_GROUP" \\
-    --training_run_name "$TRAINING_RUN_NAME" \\
-    --artifact_step "$ARTIFACT_STEP"
-
-echo ""
-echo "End time: $(date)"
-'''
-
-
-def generate_train_dispatcher(config: ExperimentConfig) -> str:
+def generate_train_dispatcher(config: ExperimentConfig, workdir: str) -> str:
     """Generate dispatcher script that submits all training jobs."""
     
     submit_commands = []
     for config_name, yaml_path in config.train_configs:
         submit_commands.append(f'''
 echo "Submitting training job: {config_name}"
-JOB_ID=$(sbatch --parsable --job-name="train-{config_name}" "$SCRIPT_DIR/_train.sh" "{yaml_path}")
+JOB_ID=$(sbatch --parsable --job-name="train-{config_name}" "$TRAIN_SCRIPT" "{yaml_path}")
 echo "  Job ID: $JOB_ID"
 SUBMITTED_JOBS+=($JOB_ID)''')
     
@@ -178,7 +98,14 @@ SUBMITTED_JOBS+=($JOB_ID)''')
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${{BASH_SOURCE[0]}}")" && pwd)"
+WORKDIR="${{OBF_GEN_WORKDIR:-$HOME/repos/Obfuscation_Generalization}}"
+TRAIN_SCRIPT="$WORKDIR/scripts/train_dispatch.sh"
+
+if [ ! -f "$TRAIN_SCRIPT" ]; then
+    echo "Error: Train script not found at $TRAIN_SCRIPT"
+    exit 1
+fi
+
 SUBMITTED_JOBS=()
 
 echo "=========================================="
@@ -202,7 +129,6 @@ echo "Cancel all with: scancel ${{SUBMITTED_JOBS[*]}}"
 def generate_eval_dispatcher(
     config: ExperimentConfig,
     config_name: str,
-    conda_env: str,
     workdir: str,
 ) -> str:
     """Generate dispatcher script that submits all eval jobs for a specific training run."""
@@ -213,11 +139,22 @@ def generate_eval_dispatcher(
 # =============================================================================
 # Eval Dispatcher for: {config_name}
 # Discovers checkpoints and submits eval jobs for all configs
+#
+# Usage:
+#   ./run_evals_{config_name}.sh              # all checkpoints
+#   ./run_evals_{config_name}.sh 100 200 500  # only specified steps
 # =============================================================================
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${{BASH_SOURCE[0]}}")" && pwd)"
+WORKDIR="${{OBF_GEN_WORKDIR:-$HOME/repos/Obfuscation_Generalization}}"
+CONDA_ENV="${{OBF_GEN_CONDA_ENV:-obf_gen}}"
+EVAL_SCRIPT="$WORKDIR/scripts/eval_dispatch.sh"
+
+if [ ! -f "$EVAL_SCRIPT" ]; then
+    echo "Error: Eval script not found at $EVAL_SCRIPT"
+    exit 1
+fi
 
 TRAINING_GROUP="{config.training_group}"
 TRAINING_RUN_NAME="{config_name}"
@@ -226,46 +163,77 @@ EVAL_CONFIGS=(
     {eval_config_paths}
 )
 
+# Capture requested steps (if any)
+REQUESTED_STEPS=("$@")
+
 echo "=========================================="
 echo "Eval Dispatcher"
 echo "Training Group: $TRAINING_GROUP"
 echo "Training Run: $TRAINING_RUN_NAME"
 echo "Eval Configs: ${{#EVAL_CONFIGS[@]}}"
+if [ ${{#REQUESTED_STEPS[@]}} -gt 0 ]; then
+    echo "Requested Steps: ${{REQUESTED_STEPS[*]}}"
+fi
 echo "=========================================="
 echo ""
 
 # Activate environment to run checkpoint discovery
 source ~/anaconda3/etc/profile.d/conda.sh
-conda activate {conda_env}
-cd {workdir}
+conda activate "$CONDA_ENV"
+cd "$WORKDIR"
 
 # Discover checkpoint steps
 echo "Discovering checkpoints..."
-STEPS=$(python -m src.scripts.list_artifact_steps \\
+AVAILABLE_STEPS=$(python -m src.scripts.list_artifact_steps \\
     --training_group "$TRAINING_GROUP" \\
     --training_run_name "$TRAINING_RUN_NAME")
 
-if [ -z "$STEPS" ]; then
+if [ -z "$AVAILABLE_STEPS" ]; then
     echo "Error: No checkpoint steps found!"
     exit 1
 fi
 
-STEP_ARRAY=($STEPS)
-echo "Found ${{#STEP_ARRAY[@]}} checkpoints: $STEPS"
+AVAILABLE_ARRAY=($AVAILABLE_STEPS)
+echo "Found ${{#AVAILABLE_ARRAY[@]}} checkpoints: $AVAILABLE_STEPS"
+echo ""
+
+# Determine which steps to use
+if [ ${{#REQUESTED_STEPS[@]}} -gt 0 ]; then
+    # Validate requested steps
+    for REQ_STEP in "${{REQUESTED_STEPS[@]}}"; do
+        FOUND=0
+        for AVAIL_STEP in "${{AVAILABLE_ARRAY[@]}}"; do
+            if [ "$REQ_STEP" == "$AVAIL_STEP" ]; then
+                FOUND=1
+                break
+            fi
+        done
+        if [ $FOUND -eq 0 ]; then
+            echo "Error: Requested step '$REQ_STEP' not found in available checkpoints!"
+            echo "Available: $AVAILABLE_STEPS"
+            exit 1
+        fi
+    done
+    STEPS_TO_RUN=("${{REQUESTED_STEPS[@]}}")
+    echo "Using requested steps: ${{STEPS_TO_RUN[*]}}"
+else
+    STEPS_TO_RUN=("${{AVAILABLE_ARRAY[@]}}")
+    echo "Using all available steps: ${{STEPS_TO_RUN[*]}}"
+fi
 echo ""
 
 # Submit eval jobs
 SUBMITTED_JOBS=()
 TOTAL_JOBS=0
 
-for STEP in $STEPS; do
+for STEP in "${{STEPS_TO_RUN[@]}}"; do
     for CONFIG_PATH in "${{EVAL_CONFIGS[@]}}"; do
         CONFIG_NAME=$(basename "$CONFIG_PATH" .yaml)
         JOB_NAME="eval-{config_name}-${{CONFIG_NAME}}-step${{STEP}}"
         
         echo "Submitting: $JOB_NAME"
         JOB_ID=$(sbatch --parsable --job-name="$JOB_NAME" \\
-            "$SCRIPT_DIR/_eval.sh" \\
+            "$EVAL_SCRIPT" \\
             "$TRAINING_GROUP" \\
             "$TRAINING_RUN_NAME" \\
             "$STEP" \\
@@ -287,7 +255,7 @@ echo "Monitor with: squeue -u $USER"
 '''
 
 
-def generate_scripts(experiment_dir: Path, conda_env: str, workdir: str) -> None:
+def generate_scripts(experiment_dir: Path, workdir: str) -> None:
     """Generate all SLURM scripts for an experiment."""
     
     config = discover_experiment(experiment_dir)
@@ -296,17 +264,15 @@ def generate_scripts(experiment_dir: Path, conda_env: str, workdir: str) -> None
     slurm_dir = config.experiment_dir / "slurm_scripts"
     slurm_dir.mkdir(exist_ok=True)
     
-    # Generate base scripts
+    # Generate dispatcher scripts
     scripts = {
-        "_train.sh": generate_train_script(conda_env, workdir),
-        "_eval.sh": generate_eval_script(conda_env, workdir),
-        "run_all_training.sh": generate_train_dispatcher(config),
+        "run_all_training.sh": generate_train_dispatcher(config, workdir),
     }
     
     # Generate eval dispatchers for each training config
     for config_name, _ in config.train_configs:
         script_name = f"run_evals_{config_name}.sh"
-        scripts[script_name] = generate_eval_dispatcher(config, config_name, conda_env, workdir)
+        scripts[script_name] = generate_eval_dispatcher(config, config_name, workdir)
     
     # Write scripts
     for name, content in scripts.items():
@@ -349,12 +315,6 @@ def main():
         help="Path to experiment config directory",
     )
     parser.add_argument(
-        "--conda-env",
-        type=str,
-        default="obf_gen",
-        help="Conda environment name (default: obf_gen)",
-    )
-    parser.add_argument(
         "--workdir",
         type=str,
         default="~/repos/Obfuscation_Generalization",
@@ -362,18 +322,16 @@ def main():
     )
     
     args = parser.parse_args()
-
     
     if not args.experiment_dir.exists():
         print(f"Error: Directory not found: {args.experiment_dir}")
         return 1
     
     print(f"Generating SLURM scripts for: {args.experiment_dir}")
-    print(f"Conda env: {args.conda_env}")
     print(f"Working directory: {args.workdir}")
     print()
     
-    generate_scripts(args.experiment_dir, args.conda_env, args.workdir)
+    generate_scripts(args.experiment_dir, args.workdir)
     
     return 0
 
