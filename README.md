@@ -13,16 +13,126 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-### 4. Edit Configs
+## Configuration System (Hydra)
 
-Configs are stored within train/configs/example_train.yaml
+This project uses [Hydra](https://hydra.cc/) for configuration management. Configs are organized into composable groups:
 
-## Running the Training
+```
+configs/
+├── config.yaml           # Root training config
+├── config_eval.yaml      # Root eval config
+├── data/                 # Dataset configurations
+├── model/                # Model configurations
+├── train/                # Training hyperparameters
+├── lora/                 # LoRA configurations
+├── reward/               # Reward function configs
+│   ├── base.yaml         # Base rewards (always included)
+│   └── overseer/         # Optional API overseer penalty
+│       ├── standard.yaml
+│       └── add_info.yaml
+├── eval/                 # Evaluation configurations
+├── experiment/           # Experiment-specific overrides
+│   ├── full_xml_tags/
+│   └── xml_no_bg_info/
+├── hydra/launcher/       # SLURM launcher configs
+└── sweep/                # Sweep configurations
+```
 
-Once you've completed the setup steps above:
+## Training
+
+### Basic Training
 
 ```bash
-python src/main/train.py --config [path_to_config]
+# Training without overseer penalty
+python -m src.train experiment=full_xml_tags/train
+
+# Training with overseer penalty (default weight -0.01)
+python -m src.train experiment=full_xml_tags/train +reward/overseer=standard
+
+# Training with custom penalty weight
+python -m src.train experiment=full_xml_tags/train +reward/overseer=standard \
+    reward.funcs.api_overseer_penalty_func.penalty_weight=-0.2
+
+# Training with add_info prompts
+python -m src.train experiment=full_xml_tags/train +reward/overseer=add_info
+```
+
+### Sweeping Penalty Weights
+
+```bash
+# Sweep over multiple penalty weights (creates multiple runs)
+python -m src.train -m experiment=full_xml_tags/train +reward/overseer=standard \
+    reward.funcs.api_overseer_penalty_func.penalty_weight=-0.01,-0.05,-0.1,-0.2
+```
+
+### SLURM Cluster Training
+
+```bash
+# Single job submission
+sbatch scripts/train_dispatch.sh experiment=full_xml_tags/train +reward/overseer=standard
+
+# Sweep with SLURM launcher (parallel jobs)
+python -m src.train -m experiment=full_xml_tags/train +reward/overseer=standard \
+    reward.funcs.api_overseer_penalty_func.penalty_weight=-0.01,-0.05,-0.1,-0.2 \
+    hydra/launcher=slurm
+```
+
+### Distributed Training
+
+```bash
+# Multi-GPU training with accelerate
+accelerate launch --multi_gpu --num_processes 2 \
+    -m src.train experiment=full_xml_tags/train +reward/overseer=standard
+```
+
+## Evaluation
+
+```bash
+# Basic evaluation
+python -m src.eval experiment=full_xml_tags/eval_sycophancy \
+    training_group=leave_out_sycophancy_full_xml_tags_seed_42 \
+    training_run_name=monitor_informed_pen \
+    artifact_step=100
+
+# Evaluation without system prompt
+python -m src.eval experiment=full_xml_tags/eval_sycophancy_no_system_prompt \
+    training_group=leave_out_sycophancy_full_xml_tags_seed_42 \
+    training_run_name=monitor_informed_pen \
+    artifact_step=100
+
+# Raw evaluation (no XML formatting)
+python -m src.eval experiment=full_xml_tags/eval_sycophancy_raw \
+    training_group=leave_out_sycophancy_full_xml_tags_seed_42 \
+    training_run_name=monitor_informed_pen \
+    artifact_step=100
+```
+
+### SLURM Evaluation
+
+```bash
+sbatch scripts/eval_dispatch.sh \
+    experiment=full_xml_tags/eval_sycophancy \
+    training_group=leave_out_sycophancy_full_xml_tags_seed_42 \
+    training_run_name=monitor_informed_pen \
+    artifact_step=100
+```
+
+## Config Override Examples
+
+Hydra allows overriding any config value from the command line:
+
+```bash
+# Override model
+python -m src.train experiment=full_xml_tags/train model.base_model_id=Qwen/Qwen3-8B
+
+# Override training hyperparameters
+python -m src.train experiment=full_xml_tags/train train.learning_rate=0.0001 train.num_train_epochs=3
+
+# Override wandb settings
+python -m src.train experiment=full_xml_tags/train wandb.project=my_project
+
+# Custom config name for wandb
+python -m src.train experiment=full_xml_tags/train config_name=my_custom_run
 ```
 
 ## Available Datasets
@@ -48,10 +158,26 @@ The repository includes several datasets in the `datasets/` directory:
 - `sycophancy_fact_unhackable.jsonl`
 - `theory_of_mind_mirroring_unhackable.jsonl`
 
-Training logs are sent to Weights & Biases (wandb) under the project "GRPO_RH".
+## Wandb Logging
 
+Training logs are sent to Weights & Biases (wandb) under the project "obfuscation_generalization".
 
-## Distributed Training
+The `config_name` field in your config determines the wandb run name. The full resolved config is logged for traceability.
 
-Use accelerate to launch distributed training across multiple GPUs following https://huggingface.co/docs/trl/en/distributing_training
+## Migration from Old Config System
 
+The old `--config` argument has been replaced with Hydra's composition system. Instead of:
+
+```bash
+# Old (deprecated)
+python -m src.train --config configs/experiments/full_xml_tags/.../train_pen.yaml
+```
+
+Use:
+
+```bash
+# New (Hydra)
+python -m src.train experiment=full_xml_tags/train +reward/overseer=standard
+```
+
+The old config files in `configs/experiments/` are preserved for reference but are no longer used.

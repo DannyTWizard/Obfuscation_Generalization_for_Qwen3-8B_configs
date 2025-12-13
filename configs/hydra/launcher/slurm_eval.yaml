@@ -1,0 +1,25 @@
+# SLURM launcher configuration for evaluation jobs
+# Usage:
+#   python -m src.eval -m experiment=full_xml_tags/eval_sycophancy \
+#       training_group=leave_out_sycophancy_full_xml_tags_seed_42 \
+#       training_run_name=monitor_informed_pen \
+#       artifact_step=100,200,300 \
+#       hydra/launcher=slurm_eval
+
+defaults:
+  - override /hydra/launcher: submitit_slurm
+
+hydra:
+  launcher:
+    submitit_folder: ${hydra.sweep.dir}/.submitit
+    timeout_min: 180  # 3 hours
+    cpus_per_task: 32
+    gpus_per_node: 2
+    mem_gb: 128
+    
+    # SLURM specific options
+    partition: gpu
+    
+    # For evaluation, typically single node
+    nodes: 1
+    tasks_per_node: 1
