@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Union
 
 import dotenv
 import hydra
+from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
 import wandb
 from datasets import load_dataset
@@ -264,12 +265,20 @@ def run_training(cfg: Union[Dict, DictConfig]) -> None:
         )
 
         if wandb_project and is_main_process:
+            # For sweeps, include override_dirname in run name for uniqueness
+            run_name = config_name
+            if HydraConfig.initialized():
+                job_override = HydraConfig.get().job.override_dirname
+                if job_override:
+                    run_name = f"{config_name}_{job_override}"
+
             wandb.init(
                 entity=wandb_cfg.get("entity", "geodesic"),
                 project=wandb_project,
                 group=wandb_group,
-                name=config_name,
+                name=run_name,
                 config=cfg_dict,
+                reinit=True,  # Allow new run for each sweep value
             )
 
         # Setup training configuration - convert to dict for GRPOConfig
