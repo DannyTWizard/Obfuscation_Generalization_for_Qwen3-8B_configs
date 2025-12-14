@@ -25,5 +25,4 @@ defaults:
 # Config name (can include interpolated penalty_weight for sweeps)
 # Override as needed:
 #   config_name=my_custom_name
-#   config_name='monitor_informed_pen_${reward.funcs.api_overseer_penalty_func.penalty_weight}'
-config_name: monitor_informed_full_xml
+config_name: monitor_informed_pen_${reward.funcs.api_overseer_penalty_func.penalty_weight}
