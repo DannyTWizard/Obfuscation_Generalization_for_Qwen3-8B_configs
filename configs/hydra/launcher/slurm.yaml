@@ -1,29 +1,19 @@
-# SLURM launcher configuration for cluster sweeps
+# @package hydra.launcher
+
+# SLURM executor configuration mirroring the sbatch flow in
+# `configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/slurm_scripts/run_all_training.sh`.
+# Submitit relies on `srun`, which is unavailable on this cluster, so we disable
+# submitit and use Hydra's basic launcher while submitting jobs via the sbatch
+# dispatchers (`scripts/train_dispatch.sh`).
+#
 # Usage:
-#   python -m src.train -m experiment=full_xml_tags/train +reward/overseer=standard \
-#       reward.funcs.api_overseer_penalty_func.penalty_weight=-0.01,-0.05,-0.1,-0.2 \
-#       hydra/launcher=slurm
+#   # Single job
+#   sbatch --job-name=train-my_run ${hydra.launcher.sbatch.script} experiment=full_xml_tags/train
+#   # Multi-job submission
+#   configs/experiments/full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/slurm_scripts/run_all_training.sh
+#
+# The values below are kept to document the expected sbatch resources.
 
-defaults:
-  - override /hydra/launcher: submitit_slurm
-
-hydra:
-  launcher:
-    submitit_folder: ${hydra.sweep.dir}/.submitit
-    timeout_min: 600  # 10 hours
-    cpus_per_task: 32
-    gpus_per_node: 2
-    mem_gb: 500
-    
-    # SLURM specific options
-    partition: gpu
-    
-    # Additional SLURM options can be added here:
-    # constraint: null
-    # exclude: null
-    # account: null
-    # qos: null
-    
-    # For multi-node training, set nodes > 1
-    nodes: 1
-    tasks_per_node: 1
+_target_: hydra._internal.core_plugins.basic_launcher.BasicLauncher
+# Note: No submitit and no srun; launch jobs via sbatch using
+# `scripts/train_dispatch.sh` or the experiment-level dispatcher scripts.

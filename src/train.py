@@ -289,9 +289,13 @@ def run_training(cfg: Union[Dict, DictConfig]) -> None:
         )
         train_cfg["output_dir"] = output_dir
 
-        # Auto-detect GPU count for vLLM tensor parallelism
+        # Auto-detect GPU/world size for vLLM tensor parallelism
+        world_size = int(os.environ.get("WORLD_SIZE", "1") or 1)
+        cuda_visible = torch.cuda.device_count()
         if train_cfg.get("use_vllm"):
-            train_cfg["vllm_tensor_parallel_size"] = torch.cuda.device_count()
+            train_cfg["vllm_tensor_parallel_size"] = max(
+                1, min(world_size, cuda_visible)
+            )
 
         training_args = GRPOConfig(
             **train_cfg,
