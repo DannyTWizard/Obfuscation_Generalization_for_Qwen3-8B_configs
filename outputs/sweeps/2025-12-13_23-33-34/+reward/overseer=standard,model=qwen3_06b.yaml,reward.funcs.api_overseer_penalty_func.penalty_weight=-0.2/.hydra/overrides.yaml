@@ -1,3 +1,0 @@
-- +reward/overseer=standard
-- reward.funcs.api_overseer_penalty_func.penalty_weight=-0.2
-- model=qwen3_06b.yaml
