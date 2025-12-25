@@ -1,11 +1,68 @@
 """Utilities for W&B logging."""
 
 import os
-from typing import Dict, List, Any
+import re
+import hashlib
+from typing import Dict, List, Any, Union
 from src.utils.config import ensure_dir
 import wandb
 import json
 from datetime import datetime
+
+
+_WANDB_ARTIFACT_ALLOWED_RE = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def sanitize_wandb_artifact_component(value: str, *, max_len: int = 128) -> str:
+    """
+    Sanitize a string so it can be safely used inside a W&B artifact name.
+
+    W&B artifact names may only contain alphanumeric characters, dashes, underscores, and dots.
+    """
+    if value is None:
+        value = ""
+    value = str(value)
+
+    # Replace any invalid characters with underscore
+    safe = _WANDB_ARTIFACT_ALLOWED_RE.sub("_", value)
+    # Collapse runs of underscores
+    safe = re.sub(r"_+", "_", safe).strip("_")
+
+    if not safe:
+        safe = "unknown"
+
+    # Bound length while keeping uniqueness
+    if len(safe) > max_len:
+        digest = hashlib.sha1(value.encode("utf-8")).hexdigest()[:8]
+        # leave room for "_" + digest
+        safe = f"{safe[: max(1, max_len - 9)].rstrip('_')}_{digest}"
+
+    return safe
+
+
+def sanitize_wandb_run_name(value: str, *, max_len: int = 128) -> str:
+    """
+    Sanitize a string so it can be safely used as a W&B run name.
+
+    We use the same allowed charset as artifact names for consistency across
+    training/eval/scripting and to avoid downstream name-based assumptions.
+    """
+    return sanitize_wandb_artifact_component(value, max_len=max_len)
+
+
+def build_model_artifact_name(group_name: str, run_name: str, step: Union[int, str]) -> str:
+    """Build a W&B-safe model artifact name for checkpoints."""
+    safe_group = sanitize_wandb_artifact_component(group_name)
+    safe_run = sanitize_wandb_artifact_component(run_name)
+    safe_step = sanitize_wandb_artifact_component(str(step), max_len=64)
+    return f"group_{safe_group}_model_{safe_run}_step_{safe_step}"
+
+
+def build_model_artifact_prefix(group_name: str, run_name: str) -> str:
+    """Prefix used by model checkpoint artifacts (ends with '_step_')."""
+    safe_group = sanitize_wandb_artifact_component(group_name)
+    safe_run = sanitize_wandb_artifact_component(run_name)
+    return f"group_{safe_group}_model_{safe_run}_step_"
 
 
 def log_config_artifact(saved_config_path: str) -> None:
@@ -100,7 +157,7 @@ def log_evaluation_summary(
 
 def log_checkpoint_artifact(
     checkpoint_path: str,
-    step: int,
+    step: Union[int, str],
     group_name: str,
     run_name: str,
     metadata: Dict[str, Any],
@@ -119,7 +176,9 @@ def log_checkpoint_artifact(
     if not os.path.exists(checkpoint_path):
         raise FileNotFoundError(f"Model path not found: {checkpoint_path}")
     
-    artifact_name = f"group_{group_name}_model_{run_name}_step_{step}"
+    artifact_name = build_model_artifact_name(
+        group_name=group_name, run_name=run_name, step=step
+    )
     if "step" not in metadata:
         metadata["step"] = step
 

@@ -43,6 +43,7 @@ from src.utils.parse import (
     count_custom_terms_in_summary,
 )
 from src.utils.wandb_logging import log_checkpoint_artifact
+from src.utils.wandb_logging import sanitize_wandb_run_name
 from src.utils.callbacks import CheckpointCallback, TrackingCallback
 
 
@@ -271,6 +272,7 @@ def run_training(cfg: Union[Dict, DictConfig]) -> None:
                 job_override = HydraConfig.get().job.override_dirname
                 if job_override:
                     run_name = f"{config_name}_{job_override}"
+            run_name = sanitize_wandb_run_name(run_name)
 
             wandb.init(
                 entity=wandb_cfg.get("entity", "geodesic"),
