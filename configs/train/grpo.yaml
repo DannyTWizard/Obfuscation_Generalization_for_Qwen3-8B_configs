@@ -6,7 +6,7 @@ vllm_mode: colocate
 vllm_enable_sleep_mode: true
 vllm_tensor_parallel_size: 1  # must divide world size; keep 1 for single-node runs
 output_dir: GRPO
-learning_rate: 0.00005
+learning_rate: 5e-5
 max_prompt_length: 512
 optim: adamw_8bit
 num_train_epochs: 2
@@ -14,9 +14,9 @@ fp16: true
 bf16: false
 save_steps: 100
 logging_steps: 1
-max_completion_length: 2048
+max_completion_length: 1536
 
 num_generations: 8
 generation_batch_size: 8  # must be divisible by num_generations
-per_device_train_batch_size: 4
+per_device_train_batch_size: 8
 gradient_accumulation_steps: 1
