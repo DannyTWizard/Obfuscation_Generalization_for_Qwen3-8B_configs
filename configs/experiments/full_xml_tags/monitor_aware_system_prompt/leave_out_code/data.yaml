@@ -1,6 +1,6 @@
 # Dataset config: leave_out_code
 #
-# Train: sycophancy_fact (400), revealing_score (600), mmlu (500)
+# Train: sycophancy_fact (600), revealing_score (600), mmlu (500)
 # Eval: code_selection with two formatting variants
 #
 # Usage:
@@ -15,8 +15,8 @@ seed: 42
 # =============================================================================
 train_datasets:
   # Sycophancy with XML formatting (formatted_0 style)
-  - dataset_name: sycophancy_fact
-    count: 400
+  - dataset_name: sycophancy_fact_0
+    count: 600
     function:
       - confirm_correct_answer: {}
       - xml_format_sycophancy_fact:
@@ -27,7 +27,7 @@ train_datasets:
 
   # Revealing score with XML formatting (formatted_0 style)
   # Using adversarial filter (high_reward != correct)
-  - dataset_name: revealing_score
+  - dataset_name: revealing_score_0
     count: 600
     function:
       - confirm_correct_answer: {}
