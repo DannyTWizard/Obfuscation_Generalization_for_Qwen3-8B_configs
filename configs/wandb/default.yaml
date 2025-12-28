@@ -1,0 +1,4 @@
+# Weights & Biases configuration
+
+project: obfuscation_generalization
+entity: geodesic
