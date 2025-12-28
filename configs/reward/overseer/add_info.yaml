@@ -13,4 +13,5 @@ api_overseer_penalty_func:
   system_prompt_per_dataset:
     revealing_score: $$additional_info_pen/revealing_score_modified
     code_selection: $$additional_info_pen/code_selection_modified
+    sycophancy_fact: $$additional_info_pen/sycophancy_fact_modified
     mmlu_subset_1000: null
