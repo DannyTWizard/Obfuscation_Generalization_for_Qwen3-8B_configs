@@ -164,6 +164,20 @@ Training logs are sent to Weights & Biases (wandb) under the project "obfuscatio
 
 The `config_name` field in your config determines the wandb run name. The full resolved config is logged for traceability.
 
+You can specify a dictionary in the wandb config file to give names to your overrides that appear in the run name, to have a run naming in the form `run_${desired_name_1}_${override_1_value}_..._${desired_name_n}_${override_n_value}`. Note that if it surpasses 128 characters (wandb limit) it will be cut, so try to keep the desired names short.
+
+For example, if your wandb config file looks like this:
+
+```
+project: obfuscation_generalization
+entity: geodesic
+run_name_mapping:
+  "reward/overseer": "overseer"
+  "experiment/full_xml_tags/train/data": "data"
+```
+
+Then, running `python -m src.train experiment=full_xml_tags/train +reward/overseer=hedged_add_info +experiment/full_xml_tags/train/data=leave_out_score_full_xml` will create a wandb `run_name` of `run_overseer_hedged_add_info_data_leave_out_score_full_xml`.
+
 ## Migration from Old Config System
 
 The old `--config` argument has been replaced with Hydra's composition system. Instead of:
