@@ -42,8 +42,11 @@ from src.utils.parse import (
     count_custom_terms_in_cot,
     count_custom_terms_in_summary,
 )
-from src.utils.wandb_logging import log_checkpoint_artifact
-from src.utils.wandb_logging import sanitize_wandb_run_name
+from src.utils.wandb_logging import (
+    log_checkpoint_artifact,
+    sanitize_wandb_run_name,
+    build_run_name_from_overrides,
+)
 from src.utils.callbacks import CheckpointCallback, TrackingCallback
 
 
@@ -266,13 +269,21 @@ def run_training(cfg: Union[Dict, DictConfig]) -> None:
         )
 
         if wandb_project and is_main_process:
-            # For sweeps, include override_dirname in run name for uniqueness
-            run_name = config_name
-            if HydraConfig.initialized():
-                job_override = HydraConfig.get().job.override_dirname
-                if job_override:
-                    run_name = f"{config_name}_{job_override}"
-            run_name = sanitize_wandb_run_name(run_name)
+            # Build run name from CLI overrides using configurable mapping
+            run_name_mapping = wandb_cfg.get("run_name_mapping", {})
+            if isinstance(run_name_mapping, DictConfig):
+                run_name_mapping = OmegaConf.to_container(run_name_mapping, resolve=True)
+            
+            if HydraConfig.initialized() and run_name_mapping:
+                overrides = HydraConfig.get().overrides.task
+                run_name = build_run_name_from_overrides(
+                    overrides=list(overrides),
+                    run_name_mapping=run_name_mapping,
+                    base_name=config_name,
+                )
+            else:
+                # Fallback to config_name if no overrides or no mapping
+                run_name = sanitize_wandb_run_name(config_name)
 
             wandb.init(
                 entity=wandb_cfg.get("entity", "geodesic"),

@@ -13,7 +13,7 @@ from datetime import datetime
 _WANDB_ARTIFACT_ALLOWED_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
-def sanitize_wandb_artifact_component(value: str, *, max_len: int = 128) -> str:
+def sanitize_wandb_artifact_component(value: str, *, max_len: int = 32) -> str:
     """
     Sanitize a string so it can be safely used inside a W&B artifact name.
 
@@ -48,6 +48,60 @@ def sanitize_wandb_run_name(value: str, *, max_len: int = 128) -> str:
     training/eval/scripting and to avoid downstream name-based assumptions.
     """
     return sanitize_wandb_artifact_component(value, max_len=max_len)
+
+
+def build_run_name_from_overrides(
+    overrides: List[str],
+    run_name_mapping: Dict[str, str],
+    base_name: str = "run",
+) -> str:
+    """
+    Build a W&B run name from CLI overrides using a configurable mapping.
+    
+    Args:
+        overrides: List of Hydra override strings (e.g., ["train.lr=0.001", "lora.r=8"])
+        run_name_mapping: Dict mapping full config paths to short names
+        base_name: Base prefix for the run name (default: "run")
+    
+    Returns:
+        Run name in format: run_${short_name_1}_${value_1}_${short_name_2}_${value_2}...
+        If no mapped overrides found, returns the base_name.
+    
+    Example:
+        overrides = ["reward.funcs.api_overseer_penalty_func.penalty_weight=-0.1"]
+        run_name_mapping = {"reward.funcs.api_overseer_penalty_func.penalty_weight": "penalty"}
+        -> "run_penalty_-0.1"
+    """
+    parts = [base_name]
+    
+    for override in overrides:
+        # Skip Hydra special overrides (start with +, ~, etc.) or group overrides
+        if override.startswith(("+", "~", "++")) or "=" not in override:
+            # Handle prefixed overrides by stripping the prefix
+            if override.startswith("++"):
+                override = override[2:]
+            elif override.startswith(("+", "~")):
+                override = override[1:]
+            else:
+                continue
+        
+        # Parse key=value
+        if "=" not in override:
+            continue
+            
+        key, value = override.split("=", 1)
+        
+        # Check if this key is in our mapping
+        if key in run_name_mapping:
+            short_name = run_name_mapping[key]
+            parts.append(f"{short_name}_{value}")
+    
+    # If no mapped overrides were found, just return base_name
+    if len(parts) == 1:
+        return base_name
+    
+    run_name = "_".join(parts)
+    return sanitize_wandb_run_name(run_name)
 
 
 def build_model_artifact_name(group_name: str, run_name: str, step: Union[int, str]) -> str:
