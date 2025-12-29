@@ -21,7 +21,7 @@ defaults:
 # Config name for wandb tracking
 # Can be overridden by experiment configs or via CLI
 # Default uses job override dirname for uniqueness
-config_name: default_run
+config_name: run
 
 # Hydra configuration
 hydra:

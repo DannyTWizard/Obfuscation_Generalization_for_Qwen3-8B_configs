@@ -106,8 +106,10 @@ def build_run_name_from_overrides(
 
 def build_model_artifact_name(group_name: str, run_name: str, step: Union[int, str]) -> str:
     """Build a W&B-safe model artifact name for checkpoints."""
-    safe_group = sanitize_wandb_artifact_component(group_name)
-    safe_run = sanitize_wandb_artifact_component(run_name)
+    safe_group = sanitize_wandb_artifact_component(group_name, max_len=42)
+    # Remove any prefix before group name using regex (e.g., "run_data_group_" -> "run_")
+    run_name = re.sub(rf"_[^_]*_{re.escape(safe_group)}_", "_", run_name)
+    safe_run = sanitize_wandb_artifact_component(run_name, max_len=42)
     safe_step = sanitize_wandb_artifact_component(str(step), max_len=64)
     return f"group_{safe_group}_model_{safe_run}_step_{safe_step}"
 
