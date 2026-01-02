@@ -9,6 +9,6 @@
 
 defaults:
   - override /data: leave_out_score_add_new_full_xml
-  - override /eval: medical_sycophancy
+  - override /eval: medical_sycophancy_fact
 
-config_name: sycophancy_medical_eval_formatted
+config_name: ""

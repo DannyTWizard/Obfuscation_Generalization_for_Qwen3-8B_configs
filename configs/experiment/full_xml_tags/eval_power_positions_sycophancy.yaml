@@ -11,4 +11,4 @@ defaults:
   - override /data: leave_out_score_add_new_full_xml
   - override /eval: power_positions_sycophancy
 
-config_name: power_positions_sycophancy_eval_formatted
+config_name: ""

@@ -17,7 +17,7 @@ defaults:
 
 # Config name for wandb tracking
 # Can be overridden by experiment configs or via CLI
-config_name: default_eval
+config_name: ""
 
 # Training run information (required for eval - must be set via CLI)
 training_group: ???
