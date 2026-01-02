@@ -1,5 +1,5 @@
-# Eval function configuration for code_selection evaluation
-# Used for evaluating models on code_selection dataset
+# Eval function configuration for revealing_score evaluation
+# Used for evaluating models on revealing_score dataset
 
 # Eval dataset settings
 fold: eval_revealing_score_formatted
