@@ -49,8 +49,8 @@ def run_evaluation(cfg: Union[Dict, DictConfig]) -> None:
     """Main evaluation entry point."""
     # Get eval config name
     eval_config_name = cfg.config_name
-    if not eval_config_name:
-        raise ValueError("config_name is required in eval config")
+    # if not eval_config_name:
+    #     raise ValueError("config_name is required in eval config")
 
     # Get training run information from config
     training_group = cfg.training_group
