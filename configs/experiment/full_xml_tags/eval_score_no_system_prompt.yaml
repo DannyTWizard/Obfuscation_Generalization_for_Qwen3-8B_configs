@@ -1,0 +1,5 @@
+defaults:
+  - override /data: leave_out_score_full_xml
+  - override /eval: score_no_system_prompt
+
+config_name: score_eval_formatted_no_system_prompt

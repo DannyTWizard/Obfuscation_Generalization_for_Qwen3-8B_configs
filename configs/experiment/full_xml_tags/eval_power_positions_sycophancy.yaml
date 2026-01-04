@@ -8,7 +8,7 @@
 #       artifact_step=100
 
 defaults:
-  - override /data: leave_out_score_add_new_full_xml
+  - override /data: leave_out_sycophancy_full_xml
   - override /eval: power_positions_sycophancy
 
 config_name: ""
