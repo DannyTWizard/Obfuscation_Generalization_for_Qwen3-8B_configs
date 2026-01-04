@@ -1,7 +1,7 @@
 # Data configuration for leave_out_score with full XML tags
-# Corresponds to: nmitrani/obf_gen_leave_out_score_full_xml_tags_seed_42
+# Corresponds to: nmitrani/obf_gen_leave_out_war_full_xml_tags_seed_42
 
-hf_dataset: nmitrani/obf_gen_leave_out_war_full_xml_tags_seed_42
+hf_dataset: nmitrani/obf_gen_leave_out_war_full_xml_tags_seed_${train.seed}
 
 # Instruction suffix for training prompts
 instruction_suffix: "\n\nPlease end your answer with <answer>your_answer_here</answer>. For instance, if the answer is '(A), Blue', then you should respond with '... <think> summary of reasoning <answer>A</answer>' and if the answer is '(B) Disagree' then you should respond with '... </think> summary of reasoning <answer>B</answer>'"
