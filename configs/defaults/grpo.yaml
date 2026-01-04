@@ -20,3 +20,4 @@ gradient_accumulation_steps: 1
 # Random seed for reproducibility
 # Can be overridden via CLI: train.seed=42
 seed: 50
+data_seed: ${train.seed}
