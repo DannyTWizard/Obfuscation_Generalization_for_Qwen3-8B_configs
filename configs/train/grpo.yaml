@@ -20,3 +20,5 @@ num_generations: 8
 generation_batch_size: 8  # must be divisible by num_generations
 per_device_train_batch_size: 8
 gradient_accumulation_steps: 1
+seed: 50
+data_seed: ${train.seed}
