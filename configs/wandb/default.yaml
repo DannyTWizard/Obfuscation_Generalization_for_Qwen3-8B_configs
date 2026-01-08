@@ -13,5 +13,7 @@ run_name_mapping:
   "train.num_train_epochs": "epochs"
   "train.per_device_train_batch_size": "batch"
   "lora.r": "lora_r"
-  "reward/overseer": "overseer"
+  "reward/overseer": "ovs"
   "data": "data"
+  "train.seed": "ts"
+  "training_group": "tg"
