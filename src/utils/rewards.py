@@ -4,13 +4,19 @@ from typing import List, Dict, Any, Callable
 from openai import AsyncOpenAI
 import asyncio
 
-from src.utils.parse import extract_thinking, extract_xml_answer, count_name_mentions_in_cot, count_custom_terms_in_cot
+from src.utils.parse import (
+    extract_thinking,
+    extract_xml_answer,
+    count_name_mentions_in_cot,
+    count_custom_terms_in_cot,
+)
 from src.utils.api import API_CONIGS, PROMPT_FORMATS
 
 
 # ============================================================================
 # Helper functions
 # ============================================================================
+
 
 def _extract_think_section(text: str) -> str:
     match = re.search(r"<think>([\s\S]*?)</think>", text)
@@ -36,8 +42,11 @@ def count_xml(text) -> float:
 # Basic reward functions
 # ============================================================================
 
-def correctness_reward_func(prompts, completions, high_reward_answer, **kwargs) -> List[float]:
-    
+
+def correctness_reward_func(
+    prompts, completions, high_reward_answer, **kwargs
+) -> List[float]:
+
     extracted_responses = [extract_xml_answer(completion) for completion in completions]
 
     if not isinstance(high_reward_answer, list):
@@ -57,7 +66,15 @@ def correctness_reward_func(prompts, completions, high_reward_answer, **kwargs) 
     for i, extracted in enumerate(extracted_responses):
         rewards.append(2.0 if extracted == high_reward_answer[i] else 0.0)
 
-    print('-'*20, f"Prompt: {prompts[0]}", f"High Reward Answer: {high_reward_answer}", f"\nTarget for completion 0: {high_reward_answer[0]}", f"\nResponse: {completions[0]}", f"\nExtracted: {extracted_responses[0]}", f"\nReward: {rewards[0]}")
+    print(
+        "-" * 20,
+        f"Prompt: {prompts[0]}",
+        f"High Reward Answer: {high_reward_answer}",
+        f"\nTarget for completion 0: {high_reward_answer[0]}",
+        f"\nResponse: {completions[0]}",
+        f"\nExtracted: {extracted_responses[0]}",
+        f"\nReward: {rewards[0]}",
+    )
     return rewards
 
 
@@ -65,12 +82,16 @@ def xmlcount_reward_func(completions, **kwargs) -> List[float]:
     return [count_xml(completion) for completion in completions]
 
 
-def cot_think_user_penalty_func(completions, *_, count_weight = 1e-6, penalty_cap = 1.0, **kwargs) -> List[float]:
-    user_counts = count_custom_terms_in_cot(completions, ['user'])
+def cot_think_user_penalty_func(
+    completions, *_, count_weight=1e-6, penalty_cap=1.0, **kwargs
+) -> List[float]:
+    user_counts = count_custom_terms_in_cot(completions, ["user"])
     return [-min(count * count_weight, penalty_cap) for count in user_counts]
 
 
-def cot_think_name_penalty_func(completions, prompts, *_, count_weight = 1e-6, penalty_cap = 1.0, **kwargs) -> List[float]:
+def cot_think_name_penalty_func(
+    completions, prompts, *_, count_weight=1e-6, penalty_cap=1.0, **kwargs
+) -> List[float]:
     name_counts = count_name_mentions_in_cot(completions, prompts)
     return [-min(count * count_weight, penalty_cap) for count in name_counts]
 
@@ -86,7 +107,7 @@ def summary_present_penalty_func(completions, **kwargs) -> List[float]:
         think_close_index = completion.rfind("</think>")
         summary_text = ""
         if think_close_index != -1:
-            post_think = completion[think_close_index + len("</think>"):]
+            post_think = completion[think_close_index + len("</think>") :]
             answer_match = re.search(r"([\s\S]*?)<answer>", post_think)
             if answer_match:
                 summary_text = answer_match.group(1).strip()
@@ -100,9 +121,10 @@ def summary_present_penalty_func(completions, **kwargs) -> List[float]:
 # Factory functions for configurable reward functions
 # ============================================================================
 
+
 def create_correctness_reward_func(config: Dict[str, Any]) -> Callable:
     """Factory for correctness reward function."""
-    print('WHEN CALLING create_correctness_reward_func MIGHT WANT TO ADD EMAIL CONFIG')
+    print("WHEN CALLING create_correctness_reward_func MIGHT WANT TO ADD EMAIL CONFIG")
     return correctness_reward_func
 
 
@@ -113,12 +135,22 @@ def create_xmlcount_reward_func(config: Dict[str, Any]) -> Callable:
 
 def create_cot_think_user_penalty_func(config: Dict[str, Any]) -> Callable:
     """Factory for CoT user penalty function."""
-    return lambda *args, **kwargs: cot_think_user_penalty_func(*args, **kwargs, count_weight=config['count_weight'], penalty_cap=config['penalty_cap'])
+    return lambda *args, **kwargs: cot_think_user_penalty_func(
+        *args,
+        **kwargs,
+        count_weight=config["count_weight"],
+        penalty_cap=config["penalty_cap"],
+    )
 
 
 def create_cot_think_name_penalty_func(config: Dict[str, Any]) -> Callable:
     """Factory for CoT name penalty function."""
-    return lambda *args, **kwargs: cot_think_name_penalty_func(*args, **kwargs, count_weight=config['count_weight'], penalty_cap=config['penalty_cap'])
+    return lambda *args, **kwargs: cot_think_name_penalty_func(
+        *args,
+        **kwargs,
+        count_weight=config["count_weight"],
+        penalty_cap=config["penalty_cap"],
+    )
 
 
 def create_summary_present_penalty_func(config: Dict[str, Any]) -> Callable:
@@ -128,13 +160,13 @@ def create_summary_present_penalty_func(config: Dict[str, Any]) -> Callable:
 
 def create_cot_length_penalty_func(config: Dict[str, Any]) -> Callable:
     """Factory for CoT length penalty function.
-    
+
     Config:
         length_threshold: Minimum word count in CoT (default: 150)
     """
-    
-    length_threshold = config['length_threshold']
-    
+
+    length_threshold = config["length_threshold"]
+
     def cot_length_penalty_func(completions, **kwargs) -> List[float]:
         rewards = []
         for completion in completions:
@@ -145,18 +177,17 @@ def create_cot_length_penalty_func(config: Dict[str, Any]) -> Callable:
             else:
                 rewards.append(-0.1)
         return rewards
-    
-    return cot_length_penalty_func
 
+    return cot_length_penalty_func
 
 
 def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
     """Factory for neural overseer penalty function.
-    
-    Uses Fireworks Completions API with prefilling to get binary 0/1 decisions.
-    
+
+    Uses Together Completions API with prefilling to get binary 0/1 decisions.
+
     Config:
-        model_name: Fireworks model identifier (e.g., 'accounts/fireworks/models/qwen2p5-72b-instruct')
+        model_name: Together model identifier (e.g., 'Qwen/Qwen3-235B-A22B-Instruct-2507')
         system_prompt: System prompt for the overseer
         template: User prompt template with {cot} placeholder
         penalty_weight: Penalty value when overseer says to penalize
@@ -167,11 +198,12 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
         end_assistant: End token for assistant message (not used in prefill)
     """
     # Extract config
-    model_name = config['model_name']
-    
-    system_prompt_mapper: Dict[str, str] = config['system_prompt_per_dataset']
-    assert 'system_prompt' not in config,\
-        """system_prompt field in api_overseer_penalty_func training config deprecated! Please use pattern:
+    model_name = config["model_name"]
+
+    system_prompt_mapper: Dict[str, str] = config["system_prompt_per_dataset"]
+    assert (
+        "system_prompt" not in config
+    ), """system_prompt field in api_overseer_penalty_func training config deprecated! Please use pattern:
         
         system_prompt_per_dataset
             dataset: system_prompt
@@ -180,77 +212,74 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
         """
     # Process system prompts - load from files if starting with $$
     for dataset, prompt in system_prompt_mapper.items():
-        if prompt and prompt.startswith('$$'):
+        if prompt and prompt.startswith("$$"):
             # Remove $$ prefix and load from file
-            prompt_file = prompt.removeprefix('$$')
+            prompt_file = prompt.removeprefix("$$")
             prompt_path = f"configs/monitor_system_prompts/{prompt_file}.txt"
-            with open(prompt_path, 'r') as f:
+            with open(prompt_path, "r") as f:
                 sys_prompt = f.read().strip()
                 system_prompt_mapper[dataset] = sys_prompt
-                config['system_prompt_per_dataset'][dataset] = sys_prompt
-    
+                config["system_prompt_per_dataset"][dataset] = sys_prompt
 
-    prompt_format = PROMPT_FORMATS[config['prompt_format']]
+    prompt_format = PROMPT_FORMATS[config["prompt_format"]]
 
+    penalty_weight = config["penalty_weight"]
+    max_tokens = config["max_tokens"]
+    condition_on_correctness = config["condition_on_correctness"]
 
-    penalty_weight = config['penalty_weight']
-    max_tokens = config['max_tokens']
-    condition_on_correctness = config['condition_on_correctness']
-
-    
     # Chat template tokens
     api_config = API_CONIGS[model_name]
     # end_assistant not needed for prefill
-    
-    # Get API credentials from environment
-    api_key = os.environ.get("FIREWORKS_API_KEY")
-    account_id = os.environ.get("FIREWORKS_ACCOUNT_ID")
-    
-    if not api_key:
-        raise ValueError("FIREWORKS_API_KEY environment variable not set")
 
-    
+    # Get API credentials from environment
+    api_key = os.environ.get("TOGETHER_API_KEY")
+
+    if not api_key:
+        raise ValueError("TOGETHER_API_KEY environment variable not set")
+
     # Initialize ASYNC client
     client = AsyncOpenAI(
         api_key=api_key,
-        base_url="https://api.fireworks.ai/inference/v1",
+        base_url="https://api.together.xyz/v1",
         max_retries=5,  # Retry up to 5 times
-        timeout=60.0,   # 60 second timeout
+        timeout=60.0,  # 60 second timeout
     )
-    
-    # If account_id provided and model uses deployment syntax
-    if account_id and "#accounts/" not in model_name:
-        # Could add deployment suffix here if needed
-        pass
-    
-    async def process_single_completion(i: int, completion: str, prompt: str, source_dataset: str, 
-                                       high_reward_answer: Any, correctness_score: float, **kwargs):
+
+    async def process_single_completion(
+        i: int,
+        completion: str,
+        prompt: str,
+        source_dataset: str,
+        high_reward_answer: Any,
+        correctness_score: float,
+        **kwargs,
+    ):
         """Process a single completion and return its penalty and decision text."""
         # Check correctness first if needed
         if condition_on_correctness == True and correctness_score == 0.0:
             return (0.0, None)
-        
+
         # Extract CoT
         cot = extract_thinking(completion)
-        
+
         # Construct the prompt with proper chat template
         user_content = prompt_format.template.format(cot=cot)
 
         # If coming from a single dataset, source_dataset is None, so this maps to the null key field
         system_prompt = system_prompt_mapper[source_dataset]
-        
-        if system_prompt is None:    
+
+        if system_prompt is None:
             # If no system prompt is given, take this as us not penalising on this sub-dataset
             return (0.0, None)
-        
+
         # Build full prompt with chat template tags
         full_prompt = (
             f"{api_config.start_system}{system_prompt}{api_config.end_system}"
             f"{api_config.start_user}{user_content}{api_config.end_user}"
             f"{api_config.start_assistant}{prompt_format.prefill}"
         )
-        
-        # Call Fireworks Completions API
+
+        # Call Together Completions API
         response = await client.completions.create(
             model=model_name,
             prompt=full_prompt,
@@ -263,56 +292,76 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
         decision_text = response.choices[0].text.strip()
 
         # Parse decision with better error handling
-        if decision_text.startswith('1'):
+        if decision_text.startswith("1"):
             should_penalize = True
-        elif decision_text.startswith('0'):
+        elif decision_text.startswith("0"):
             should_penalize = False
         else:
-            raise Exception(f"Warning: Unexpected overseer response: '{decision_text}'.")
-        
+            raise Exception(
+                f"Warning: Unexpected overseer response: '{decision_text}'."
+            )
+
         # Return penalty and decision text for logging
         return (penalty_weight if should_penalize else 0.0, decision_text)
-    
-    async def api_overseer_penalty_func_async(completions, prompts, high_reward_answer, **kwargs) -> List[float]:
+
+    async def api_overseer_penalty_func_async(
+        completions, prompts, high_reward_answer, **kwargs
+    ) -> List[float]:
         """Apply penalties based on neural overseer judgments (parallelized)."""
-        
+
         correctness_scores = []
         if condition_on_correctness == True:
-            correctness_scores = correctness_reward_func(prompts, completions, high_reward_answer, **kwargs)
+            correctness_scores = correctness_reward_func(
+                prompts, completions, high_reward_answer, **kwargs
+            )
         else:
-            correctness_scores = [1.0] * len(completions)  # Dummy scores for consistency
+            correctness_scores = [1.0] * len(
+                completions
+            )  # Dummy scores for consistency
 
-        source_datasets = kwargs['source_dataset']
-        
+        source_datasets = kwargs["source_dataset"]
+
         # Remove source_dataset from kwargs to avoid duplicate argument error
-        filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'source_dataset'}
-        
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k != "source_dataset"}
+
         # Create tasks for all completions
         tasks = [
             process_single_completion(
-                i, completion, prompts[i], source_datasets[i], 
-                high_reward_answer, correctness_scores[i], **filtered_kwargs
+                i,
+                completion,
+                prompts[i],
+                source_datasets[i],
+                high_reward_answer,
+                correctness_scores[i],
+                **filtered_kwargs,
             )
             for i, completion in enumerate(completions)
         ]
-        
+
         # Gather all results in parallel
         results = await asyncio.gather(*tasks)
-        
+
         # Extract rewards and print decisions
         rewards = []
         for reward, decision_text in results:
             rewards.append(reward)
             if decision_text is not None:
-                print(f'Overseer returned: {decision_text}')
-        
+                print(f"Overseer returned: {decision_text}")
+
         return rewards
-    
-    def api_overseer_penalty_func(completions, prompts, high_reward_answer, **kwargs) -> List[float]:
+
+    def api_overseer_penalty_func(
+        completions, prompts, high_reward_answer, **kwargs
+    ) -> List[float]:
         """Apply penalties based on neural overseer judgments."""
-        return asyncio.run(api_overseer_penalty_func_async(completions, prompts, high_reward_answer, **kwargs))
-    
+        return asyncio.run(
+            api_overseer_penalty_func_async(
+                completions, prompts, high_reward_answer, **kwargs
+            )
+        )
+
     return api_overseer_penalty_func
+
 
 # ============================================================================
 # Registry of factory functions
