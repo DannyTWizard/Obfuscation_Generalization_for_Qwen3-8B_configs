@@ -18,7 +18,7 @@ QwenConfig = APIModelConfig(
     start_assistant="<|im_start|>assistant\n",
 )
 
-API_CONIGS = {"Qwen/Qwen3-235B-A22B-Instruct-2507": QwenConfig}
+API_CONIGS = {"Qwen/Qwen3-235B-A22B-Instruct-2507-tput": QwenConfig}
 
 
 @dataclass
