@@ -256,6 +256,14 @@ class VLLMModelEvaluator:
         return metrics, results
 
     def cleanup(self):
-        """Clean up temporary files."""
+        """Clean up temporary files and release GPU memory."""
+        # Delete vLLM instance to release GPU memory
+        if hasattr(self, "llm"):
+            del self.llm
+        
+        # Clear CUDA cache
+        torch.cuda.empty_cache()
+        
+        # Remove temporary model files
         if hasattr(self, "model_path") and str(self.model_path).startswith("/tmp/"):
             shutil.rmtree(self.model_path, ignore_errors=True)
