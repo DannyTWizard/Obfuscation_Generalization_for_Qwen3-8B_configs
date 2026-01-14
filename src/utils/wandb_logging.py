@@ -217,7 +217,7 @@ def log_checkpoint_artifact(
     group_name: str,
     run_name: str,
     metadata: Dict[str, Any],
-) -> None:
+) -> wandb.Artifact:  # Fix return type
     """Log a checkpoint artifact to W&B.
     
     Args:
@@ -225,6 +225,9 @@ def log_checkpoint_artifact(
         step: Training step number
         run_name: W&B run name
         metadata: Additional metadata
+        
+    Returns:
+        The logged artifact for sync waiting
     """
     if wandb.run is None:
         raise ValueError("W&B run must be initialized before logging model artifact")
@@ -240,7 +243,8 @@ def log_checkpoint_artifact(
 
     artifact = wandb.Artifact(name=artifact_name, type="model", metadata=metadata)
     artifact.add_dir(checkpoint_path)
-    wandb.log_artifact(artifact)
+    logged_artifact = wandb.log_artifact(artifact)
+    return logged_artifact  # Return for .wait()
     
 
 def log_training_metrics(tracking_data: Dict[str, List]) -> None:

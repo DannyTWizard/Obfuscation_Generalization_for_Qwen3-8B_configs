@@ -28,7 +28,7 @@ hf_transfer
 #############################
 # Experiment tracking        #
 #############################
-wandb==0.21.3
+wandb==0.23.0
 
 #############################
 # Configuration management   #

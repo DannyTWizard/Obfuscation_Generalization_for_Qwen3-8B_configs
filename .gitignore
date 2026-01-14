@@ -186,6 +186,7 @@ Desktop.ini
 # Logs
 *.log
 logs/
+slurm_logs/
 
 # Data files (you may want to customize this based on your needs)
 # data/
@@ -203,3 +204,5 @@ GRPO
 wandb
 outputs/
 artifacts
+
+local_outputs
