@@ -12,7 +12,7 @@ full_xml_tags/eval_sycophancy_no_system_prompt_with_summary,\
 full_xml_tags/eval_war_no_sp_with_summary"
 
 # All artifact steps to evaluate
-STEPS="200,400,600,800,1000,1200,1400,1600"
+STEPS="200,400,600,800,1000,1200,1400,1600,1800,2000,2200,2400"
 
 COMMON_ARGS=(
     --multirun
