@@ -123,6 +123,7 @@ def find_matching_runs(
     attributes: Dict[str, str],
     is_eval: bool = False,
     state_filter: Optional[List[str]] = None,
+    exclude_summary: bool = True,
     verbose: bool = True,
 ) -> List[wandb.apis.public.Run]:
     """
@@ -134,6 +135,7 @@ def find_matching_runs(
         attributes: Dictionary of key-value pairs to match in run names
         is_eval: If True, only match runs with 'eval' in the name
         state_filter: Optional list of run states to filter by
+        exclude_summary: If True, ignore runs whose name contains 'summary'
         verbose: Whether to print progress information
 
     Returns:
@@ -158,6 +160,10 @@ def find_matching_runs(
 
     matching_runs = []
     for run in runs:
+        # Skip "summary" runs (different kind of run)
+        if exclude_summary and "summary" in run.name.lower():
+            continue
+
         # Check if it's an eval run (contains 'eval' in name)
         is_run_eval = "eval" in run.name.lower()
 
@@ -174,6 +180,99 @@ def find_matching_runs(
         print(f"\nFound {len(matching_runs)} matching runs")
 
     return matching_runs
+
+
+def _to_datetime(value: Any) -> Optional[datetime]:
+    """
+    Best-effort conversion of various W&B timestamp formats to datetime.
+
+    W&B can return datetimes as:
+    - python datetime
+    - ISO-8601 strings (sometimes ending with 'Z')
+    - None
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        s = value.strip()
+        # Handle common UTC suffix
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        try:
+            return datetime.fromisoformat(s)
+        except Exception:
+            return None
+    return None
+
+
+def _run_created_at(run: wandb.apis.public.Run) -> datetime:
+    """
+    Return a comparable datetime for a W&B run, falling back to minimal datetime.
+    """
+    dt = _to_datetime(getattr(run, "created_at", None))
+    if dt is not None:
+        return dt
+
+    # Fallback: sometimes available in raw attrs
+    attrs = getattr(run, "_attrs", None)
+    if isinstance(attrs, dict):
+        for key in ("createdAt", "created_at"):
+            dt = _to_datetime(attrs.get(key))
+            if dt is not None:
+                return dt
+
+    return datetime.min
+
+
+def dedupe_runs_by_name_keep_latest(
+    runs: List[wandb.apis.public.Run], verbose: bool = True
+) -> List[wandb.apis.public.Run]:
+    """
+    Deduplicate runs by exact run.name, keeping only the latest (by created_at).
+
+    This is useful when an eval was re-run with the same run name.
+    """
+    best_by_name: Dict[str, wandb.apis.public.Run] = {}
+    dup_names: Dict[str, List[wandb.apis.public.Run]] = {}
+
+    for run in runs:
+        name = getattr(run, "name", None) or ""
+        if name not in best_by_name:
+            best_by_name[name] = run
+            continue
+
+        current_best = best_by_name[name]
+        if _run_created_at(run) >= _run_created_at(current_best):
+            best_by_name[name] = run
+
+        dup_names.setdefault(name, []).append(run)
+
+    if verbose and dup_names:
+        print("\nDetected duplicate run names (keeping latest by created_at):")
+        for name in sorted(dup_names.keys()):
+            # Include the original best as well for clearer reporting
+            all_runs = [best_by_name[name]] + dup_names[name]
+            # De-dup exact object references for printing
+            seen_ids = set()
+            printable = []
+            for r in all_runs:
+                rid = getattr(r, "id", None)
+                if rid in seen_ids:
+                    continue
+                seen_ids.add(rid)
+                printable.append(r)
+
+            printable = sorted(printable, key=_run_created_at)
+            kept = best_by_name[name]
+            print(f"  - {name}  (count={len(printable)}; keeping id={kept.id})")
+            for r in printable:
+                print(
+                    f"      id={r.id} state={r.state} created_at={getattr(r, 'created_at', None)}"
+                )
+
+    return list(best_by_name.values())
 
 
 def get_config_value(config: Dict, key_path: str, default: Any = None) -> Any:
@@ -203,6 +302,7 @@ def download_training_runs(
     project: str,
     attributes: Dict[str, str],
     state_filter: Optional[List[str]] = None,
+    exclude_summary: bool = True,
     verbose: bool = True,
 ) -> pd.DataFrame:
     """
@@ -228,6 +328,7 @@ def download_training_runs(
         attributes=attributes,
         is_eval=False,
         state_filter=state_filter,
+        exclude_summary=exclude_summary,
         verbose=verbose,
     )
 
@@ -351,6 +452,7 @@ def download_eval_runs(
     project: str,
     attributes: Dict[str, str],
     state_filter: Optional[List[str]] = None,
+    exclude_summary: bool = True,
     verbose: bool = True,
 ) -> pd.DataFrame:
     """
@@ -377,6 +479,7 @@ def download_eval_runs(
         attributes=attributes,
         is_eval=True,
         state_filter=state_filter,
+        exclude_summary=exclude_summary,
         verbose=verbose,
     )
 
@@ -384,6 +487,9 @@ def download_eval_runs(
         if verbose:
             print("No matching eval runs found.")
         return pd.DataFrame()
+
+    # If an eval was re-run with the same run name, keep only the latest run.
+    matching_runs = dedupe_runs_by_name_keep_latest(matching_runs, verbose=verbose)
 
     all_results = []
 
@@ -532,6 +638,11 @@ Examples:
         action="store_true",
         help="Suppress progress output",
     )
+    train_parser.add_argument(
+        "--include-summary",
+        action="store_true",
+        help="Include runs whose name contains 'summary' (excluded by default).",
+    )
 
     # Eval subcommand
     eval_parser = subparsers.add_parser(
@@ -575,6 +686,11 @@ Examples:
         action="store_true",
         help="Suppress progress output",
     )
+    eval_parser.add_argument(
+        "--include-summary",
+        action="store_true",
+        help="Include runs whose name contains 'summary' (excluded by default).",
+    )
 
     args = parser.parse_args()
 
@@ -611,6 +727,7 @@ Examples:
             project=args.project,
             attributes=attributes,
             state_filter=state_filter,
+            exclude_summary=not args.include_summary,
             verbose=verbose,
         )
         default_suffix = "training"
@@ -620,6 +737,7 @@ Examples:
             project=args.project,
             attributes=attributes,
             state_filter=state_filter,
+            exclude_summary=not args.include_summary,
             verbose=verbose,
         )
         default_suffix = "eval"
