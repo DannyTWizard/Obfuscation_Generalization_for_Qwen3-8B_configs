@@ -270,53 +270,56 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
         **kwargs,
     ):
         """Process a single completion and return its penalty and decision text."""
-        # Check correctness first if needed
-        if condition_on_correctness == True and correctness_score == 0.0:
+        if condition_on_correctness and correctness_score == 0.0:
             return (0.0, None)
 
-        # Extract content using configured method
         extracted_content = extract_fn(completion)
-
-        # Construct the prompt with proper chat template
         user_content = prompt_format.template.format(cot=extracted_content)
-
-        # If coming from a single dataset, source_dataset is None, so this maps to the null key field
         system_prompt = system_prompt_mapper[source_dataset]
 
         if system_prompt is None:
-            # If no system prompt is given, take this as us not penalising on this sub-dataset
             return (0.0, None)
 
-        # Build full prompt with chat template tags
         full_prompt = (
             f"{api_config.start_system}{system_prompt}{api_config.end_system}"
             f"{api_config.start_user}{user_content}{api_config.end_user}"
             f"{api_config.start_assistant}{prompt_format.prefill}"
         )
 
-        # Call Together Completions API
-        response = await client.completions.create(
-            model=model_name,
-            prompt=full_prompt,
-            max_tokens=max_tokens,
-            temperature=0.0,
-        )
+        # Retry loop: 10 attempts, 1 minute wait between each
+        max_attempts = 10
+        delay_seconds = 60
+        
+        for attempt in range(max_attempts):
+            try:
+                response = await client.completions.create(
+                    model=model_name,
+                    prompt=full_prompt,
+                    max_tokens=max_tokens,
+                    temperature=0.0,
+                )
+                
+                decision_text = response.choices[0].text.strip()
 
-        # Extract the completion (should be just "0" or "1")
-        decision_text = response.choices[0].text.strip()
-
-        # Parse decision with better error handling
-        if decision_text.startswith("1"):
-            should_penalize = True
-        elif decision_text.startswith("0"):
-            should_penalize = False
-        else:
-            raise Exception(
-                f"Warning: Unexpected overseer response: '{decision_text}'."
-            )
-
-        return (penalty_weight if should_penalize else 0.0, decision_text)
-
+                if decision_text.startswith("1"):
+                    return (penalty_weight, decision_text)
+                elif decision_text.startswith("0"):
+                    return (0.0, decision_text)
+                else:
+                    raise ValueError(f"Unexpected overseer response: '{decision_text}'")
+                    
+            except Exception as e:
+                if attempt < max_attempts - 1:
+                    print(f"API call failed (attempt {attempt + 1}/{max_attempts}): {e}. Retrying in {delay_seconds}s...")
+                    await asyncio.sleep(delay_seconds)
+                else:
+                    # Final attempt failed - raise for real
+                    raise RuntimeError(
+                        f"API call failed permanently after {max_attempts} attempts "
+                        f"(waited {max_attempts * delay_seconds // 60} minutes total). "
+                        f"Last error: {e}"
+                    ) from e
+            
     async def api_overseer_penalty_func_async(
         completions, prompts, high_reward_answer, **kwargs
     ) -> List[float]:
