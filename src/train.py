@@ -232,8 +232,9 @@ def setup_dataset(cfg: Union[Dict, DictConfig], tokenizer: Any) -> tuple[Any, st
     return dataset, hf_dataset
 
 
+
 def run_training(cfg: Union[Dict, DictConfig]) -> None:
-    """Main training entry point with robust cleanup."""
+    """Main training entry point with synchronous W&B uploading and robust cleanup."""
     config_name = cfg.config_name
     if not config_name:
         raise ValueError("config_name is required")
@@ -244,7 +245,6 @@ def run_training(cfg: Union[Dict, DictConfig]) -> None:
     wandb_group = derive_wandb_group(hf_dataset)
 
     # 2. Define Persistent Local Directory
-    # Using 'local_outputs' inside the repo avoids /tmp issues
     wandb_cfg = cfg.wandb
     run_name_mapping = wandb_cfg.get("run_name_mapping", {})
     if HydraConfig.initialized() and run_name_mapping:
@@ -253,11 +253,11 @@ def run_training(cfg: Union[Dict, DictConfig]) -> None:
     else:
         run_name = sanitize_wandb_run_name(config_name)
 
+    # Absolute path ensures no confusion between local ranks
     output_dir = os.path.abspath(os.path.join("local_outputs", wandb_group, run_name))
 
     try:
         # Initialize W&B (Master process only)
-        # We use LOCAL_RANK 0 to ensure only one process starts the WandB run
         if wandb_cfg.get("project") and int(os.environ.get("LOCAL_RANK", 0)) == 0:
             wandb.init(
                 entity=wandb_cfg.get("entity"),
@@ -271,7 +271,7 @@ def run_training(cfg: Union[Dict, DictConfig]) -> None:
         # 3. Configure Trainer
         train_cfg = OmegaConf.to_container(cfg.train, resolve=True)
         train_cfg["output_dir"] = output_dir
-        train_cfg["save_total_limit"] = 2  # Keeps disk lean; provides buffer for WandB
+        train_cfg["save_total_limit"] = 5  # Keeps disk lean but safe for sync uploads
         train_cfg["report_to"] = ["wandb"]
 
         training_args = GRPOConfig(**train_cfg)
@@ -284,9 +284,9 @@ def run_training(cfg: Union[Dict, DictConfig]) -> None:
             args=training_args,
             train_dataset=dataset["train"],
         )
-
-        # 4. Add Callbacks
         is_main = trainer.is_world_process_zero()
+
+        # 4. Callbacks
         trainer.add_callback(CheckpointCallback(
             save_steps=train_cfg["save_steps"],
             model_id=model_id,
@@ -295,31 +295,34 @@ def run_training(cfg: Union[Dict, DictConfig]) -> None:
         ))
         trainer.add_callback(TrackingCallback(tracking_data=_tracking, is_main_process=is_main))
 
-        # 5. Train
+        # 5. Execute Training
         trainer.train()
 
-        # 6. Finalize Artifacts
+        # 6. Final Sync
         if is_main and wandb.run is not None:
             final_ckpt = os.path.join(output_dir, "checkpoint-final")
             trainer.save_model(final_ckpt)
-            log_checkpoint_artifact(
+            # Log final artifact and wait for it
+            final_art = log_checkpoint_artifact(
                 checkpoint_path=final_ckpt,
                 step="final",
                 run_name=wandb.run.name,
                 group_name=wandb_group,
                 metadata={"training_status": "completed"}
             )
+            if final_art:
+                final_art.wait()
             
-            print("Syncing artifacts to WandB cloud...")
-            wandb.finish() # BLOCKING BARRIER: Wait for upload before moving to 'finally'
+            print("Syncing telemetry and finishing W&B...")
+            wandb.finish()
 
     except Exception as e:
-        print(f"CRITICAL ERROR: {e}")
+        print(f"ERROR: {e}")
         raise e
 
     finally:
-        # 7. Safe Cleanup Handshake
-        # Checks LOCAL_RANK instead of trainer for crash-resilience
+        # 7. Safe Janitor Cleanup
+        # We use LOCAL_RANK for crash-resilience (works even if trainer failed to init)
         if int(os.environ.get("LOCAL_RANK", 0)) == 0 and os.path.exists(output_dir):
             print(f"Cleanup: Removing local directory {output_dir}")
             shutil.rmtree(output_dir)

@@ -1,7 +1,7 @@
 """Training callbacks for distributed training with W&B logging."""
 
 import os
-import shutil
+import time
 from typing import Dict, List
 
 import torch
@@ -12,35 +12,35 @@ from transformers import TrainerCallback
 from src.utils.wandb_logging import log_checkpoint_artifact
 
 
+
 class CheckpointCallback(TrainerCallback):
-    """Callback to save checkpoints at regular intervals and log to W&B."""
+    """Callback to save checkpoints and upload to W&B synchronously."""
     
-    def __init__(
-        self, 
-        save_steps: int,
-        model_id: str,
-        dataset_name: str,
-        is_main_process: bool,
-    ):
+    def __init__(self, save_steps, model_id, dataset_name, is_main_process):
         self.save_steps = save_steps
         self.model_id = model_id
         self.dataset_name = dataset_name
         self.is_main_process = is_main_process
 
     def on_step_end(self, args, state, control, **kwargs):
-        """Trigger save at specified intervals."""
-        if state.global_step % self.save_steps == 0 and state.global_step > 0:
+        if ((state.global_step % self.save_steps == 0) or (state.global_step == 25)) and state.global_step > 0:
             control.should_save = True
 
     def on_save(self, args, state, control, **kwargs):
-        """Log checkpoint metadata to W&B after save."""
-        if not self.is_main_process:
+        if not self.is_main_process or wandb.run is None:
             return
             
         checkpoint_path = os.path.join(args.output_dir, f"checkpoint-{state.global_step}")
-        if os.path.exists(checkpoint_path) and wandb.run is not None:
-            # Trigger background upload
-            log_checkpoint_artifact(
+        
+        # 1. Brief settling time to ensure OS handles are closed
+        time.sleep(2) 
+
+        if os.path.exists(checkpoint_path):
+            print(f"--- [SYNC UPLOAD] Starting upload for step {state.global_step} ---")
+            
+            # 2. Trigger the upload
+            # Assuming log_checkpoint_artifact returns the wandb.Artifact object
+            artifact = log_checkpoint_artifact(
                 checkpoint_path=checkpoint_path,
                 step=state.global_step,
                 run_name=wandb.run.name,
@@ -51,7 +51,13 @@ class CheckpointCallback(TrainerCallback):
                     "training_status": "intermediate",
                 },
             )
-            print(f"Artifact upload queued for: {checkpoint_path}")
+            
+            # 3. THE SYNC BARRIER
+            # This blocks the Trainer until the background thread confirms the files are safe
+            if artifact is not None:
+                artifact.wait()
+            
+            print(f"--- [SYNC UPLOAD] Step {state.global_step} committed to W&B ---")
 
 
 
