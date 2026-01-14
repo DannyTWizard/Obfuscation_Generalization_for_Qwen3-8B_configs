@@ -436,16 +436,25 @@ def download_eval_runs(
             # It's typically negative, so we take absolute value for rate
             result["penalisation_rate"] = abs(result["api_overseer_penalty_func"])
 
+        # Extract ts and data from training_run_name (stored in config)
+        ts = None
+        data = None
+        if training_run_name:
+            ts = extract_attribute_from_run_name(training_run_name, "ts")
+            data = extract_attribute_from_run_name(training_run_name, "data")
+
         lean_result = {
             "artifact_step": artifact_step,
+            "ts": ts,
+            "data": data,
             "eval_fold": eval_fold,
-            "reward_hacking_rate": result["reward_hacking_rate"],
-            "penalisation_rate": result["penalisation_rate"],
-            "accuracy": result["accuracy"],
-            "correct": result["correct"],
-            "total": result["total"],
-            "api_overseer_penalty_func": result["api_overseer_penalty_func"],
-            "no_answer_tags_rate": result["no_answer_tags_rate"],
+            "reward_hacking_rate": result.get("reward_hacking_rate"),
+            "penalisation_rate": result.get("penalisation_rate"),
+            "accuracy": result.get("accuracy"),
+            "correct": result.get("correct"),
+            "total": result.get("total"),
+            "api_overseer_penalty_func": result.get("api_overseer_penalty_func"),
+            "no_answer_tags_rate": result.get("no_answer_tags_rate"),
         }
         all_results.append(lean_result)
 
