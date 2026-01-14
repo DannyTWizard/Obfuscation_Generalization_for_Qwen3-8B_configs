@@ -13,7 +13,7 @@ from src.utils.wandb_logging import log_checkpoint_artifact
 
 
 class CheckpointCallback(TrainerCallback):
-    """Callback to save checkpoints at regular intervals, log to W&B, and delete locally."""
+    """Callback to save checkpoints at regular intervals and log to W&B."""
     
     def __init__(
         self, 
@@ -22,14 +22,6 @@ class CheckpointCallback(TrainerCallback):
         dataset_name: str,
         is_main_process: bool,
     ):
-        """Initialize checkpoint callback.
-        
-        Args:
-            save_steps: Save checkpoint every N steps
-            model_id: Base model identifier for metadata
-            dataset_name: Dataset name for metadata
-            is_main_process: Whether this is the main process (for logging)
-        """
         self.save_steps = save_steps
         self.model_id = model_id
         self.dataset_name = dataset_name
@@ -41,13 +33,13 @@ class CheckpointCallback(TrainerCallback):
             control.should_save = True
 
     def on_save(self, args, state, control, **kwargs):
-        """Log checkpoint to W&B after save, then delete local copy."""
+        """Log checkpoint metadata to W&B after save."""
         if not self.is_main_process:
             return
             
         checkpoint_path = os.path.join(args.output_dir, f"checkpoint-{state.global_step}")
         if os.path.exists(checkpoint_path) and wandb.run is not None:
-            # Upload to wandb
+            # Trigger background upload
             log_checkpoint_artifact(
                 checkpoint_path=checkpoint_path,
                 step=state.global_step,
@@ -59,10 +51,8 @@ class CheckpointCallback(TrainerCallback):
                     "training_status": "intermediate",
                 },
             )
-            
-            # Delete local checkpoint
-            shutil.rmtree(checkpoint_path)
-            print(f"Deleted local checkpoint: {checkpoint_path}")
+            print(f"Artifact upload queued for: {checkpoint_path}")
+
 
 
 class TrackingCallback(TrainerCallback):

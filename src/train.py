@@ -233,95 +233,50 @@ def setup_dataset(cfg: Union[Dict, DictConfig], tokenizer: Any) -> tuple[Any, st
 
 
 def run_training(cfg: Union[Dict, DictConfig]) -> None:
-    """Main training entry point."""
-    # Get config_name (required top-level field)
+    """Main training entry point with robust cleanup."""
     config_name = cfg.config_name
     if not config_name:
-        raise ValueError("config_name is required as a top-level field in the config")
+        raise ValueError("config_name is required")
 
-    # Determine if this is main process
-    local_rank = int(os.environ.get("LOCAL_RANK", 0))
-    is_main_process = local_rank == 0
-
-    # Setup model and tokenizer
+    # 1. Environment & Data Setup
     model, tokenizer, model_id = setup_model_and_tokenizer(cfg)
-
-    # Setup dataset
     dataset, hf_dataset = setup_dataset(cfg, tokenizer)
-
-    # Derive wandb group from HF dataset
     wandb_group = derive_wandb_group(hf_dataset)
 
-    # Create temp directory for checkpoints (will be cleaned up)
-    temp_dir = tempfile.mkdtemp(prefix="training_checkpoints_")
-    output_dir = temp_dir
+    # 2. Define Persistent Local Directory
+    # Using 'local_outputs' inside the repo avoids /tmp issues
+    wandb_cfg = cfg.wandb
+    run_name_mapping = wandb_cfg.get("run_name_mapping", {})
+    if HydraConfig.initialized() and run_name_mapping:
+        overrides = list(HydraConfig.get().overrides.task)
+        run_name = build_run_name_from_overrides(overrides, run_name_mapping, config_name)
+    else:
+        run_name = sanitize_wandb_run_name(config_name)
+
+    output_dir = os.path.abspath(os.path.join("local_outputs", wandb_group, run_name))
 
     try:
-        # Initialize W&B on main process
-        wandb_cfg = cfg.wandb
-        wandb_project = wandb_cfg.get("project")
-
-        # Convert full config to dict for wandb logging
-        cfg_dict = (
-            OmegaConf.to_container(cfg, resolve=True)
-            if isinstance(cfg, DictConfig)
-            else cfg
-        )
-
-        if wandb_project and is_main_process:
-            # Build run name from CLI overrides using configurable mapping
-            run_name_mapping = wandb_cfg.get("run_name_mapping", {})
-            if isinstance(run_name_mapping, DictConfig):
-                run_name_mapping = OmegaConf.to_container(run_name_mapping, resolve=True)
-            
-            if HydraConfig.initialized() and run_name_mapping:
-                overrides = HydraConfig.get().overrides.task
-                run_name = build_run_name_from_overrides(
-                    overrides=list(overrides),
-                    run_name_mapping=run_name_mapping,
-                    base_name=config_name,
-                )
-            else:
-                # Fallback to config_name if no overrides or no mapping
-                run_name = sanitize_wandb_run_name(config_name)
-
+        # Initialize W&B (Master process only)
+        # We use LOCAL_RANK 0 to ensure only one process starts the WandB run
+        if wandb_cfg.get("project") and int(os.environ.get("LOCAL_RANK", 0)) == 0:
             wandb.init(
-                entity=wandb_cfg.get("entity", "geodesic"),
-                project=wandb_project,
+                entity=wandb_cfg.get("entity"),
+                project=wandb_cfg.get("project"),
                 group=wandb_group,
                 name=run_name,
-                config=cfg_dict,
-                reinit=True,  # Allow new run for each sweep value
+                config=OmegaConf.to_container(cfg, resolve=True),
+                reinit=True,
             )
 
-        # Setup training configuration - convert to dict for GRPOConfig
-        train_cfg = (
-            OmegaConf.to_container(cfg.train, resolve=True)
-            if isinstance(cfg.train, DictConfig)
-            else dict(cfg.train)
-        )
+        # 3. Configure Trainer
+        train_cfg = OmegaConf.to_container(cfg.train, resolve=True)
         train_cfg["output_dir"] = output_dir
+        train_cfg["save_total_limit"] = 2  # Keeps disk lean; provides buffer for WandB
+        train_cfg["report_to"] = ["wandb"]
 
-        # Auto-detect GPU/world size for vLLM tensor parallelism
-        world_size = int(os.environ.get("WORLD_SIZE", "1") or 1)
-        cuda_visible = torch.cuda.device_count()
-        if train_cfg.get("use_vllm"):
-            train_cfg["vllm_tensor_parallel_size"] = max(
-                1, min(world_size, cuda_visible)
-            )
+        training_args = GRPOConfig(**train_cfg)
+        reward_funcs = get_reward_functions(cfg.reward.funcs)
 
-        training_args = GRPOConfig(
-            **train_cfg,
-            report_to=["wandb"],
-            remove_unused_columns=False,
-            gradient_checkpointing=False,
-        )
-
-        # Get reward functions
-        reward_func_configs = cfg.reward.funcs
-        reward_funcs = get_reward_functions(reward_func_configs)
-
-        # Create trainer
         trainer = GRPOTrainer(
             model=model,
             processing_class=tokenizer,
@@ -330,54 +285,44 @@ def run_training(cfg: Union[Dict, DictConfig]) -> None:
             train_dataset=dataset["train"],
         )
 
-        # Add callbacks
-        trainer.add_callback(
-            CheckpointCallback(
-                save_steps=train_cfg["save_steps"],
-                model_id=model_id,
-                dataset_name=wandb_group,
-                is_main_process=is_main_process,
-            )
-        )
-        trainer.add_callback(
-            TrackingCallback(tracking_data=_tracking, is_main_process=is_main_process)
-        )
+        # 4. Add Callbacks
+        is_main = trainer.is_world_process_zero()
+        trainer.add_callback(CheckpointCallback(
+            save_steps=train_cfg["save_steps"],
+            model_id=model_id,
+            dataset_name=wandb_group,
+            is_main_process=is_main
+        ))
+        trainer.add_callback(TrackingCallback(tracking_data=_tracking, is_main_process=is_main))
 
-        # Train
+        # 5. Train
         trainer.train()
 
-        # Log final checkpoint
-        final_checkpoint_path = os.path.join(
-            output_dir, f"checkpoint-{trainer.state.global_step}"
-        )
-        if (
-            os.path.exists(final_checkpoint_path)
-            and wandb.run is not None
-            and is_main_process
-        ):
+        # 6. Finalize Artifacts
+        if is_main and wandb.run is not None:
+            final_ckpt = os.path.join(output_dir, "checkpoint-final")
+            trainer.save_model(final_ckpt)
             log_checkpoint_artifact(
-                checkpoint_path=final_checkpoint_path,
+                checkpoint_path=final_ckpt,
                 step="final",
                 run_name=wandb.run.name,
                 group_name=wandb_group,
-                metadata={
-                    "base_model": model_id,
-                    "dataset": wandb_group,
-                    "training_status": "completed",
-                    "final_step": trainer.state.global_step,
-                },
+                metadata={"training_status": "completed"}
             )
+            
+            print("Syncing artifacts to WandB cloud...")
+            wandb.finish() # BLOCKING BARRIER: Wait for upload before moving to 'finally'
 
-        # Finish W&B run
-        if wandb.run is not None and is_main_process:
-            wandb.finish()
+    except Exception as e:
+        print(f"CRITICAL ERROR: {e}")
+        raise e
 
     finally:
-        # Clean up temp directory
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
-            if is_main_process:
-                print(f"Cleaned up temp directory: {temp_dir}")
+        # 7. Safe Cleanup Handshake
+        # Checks LOCAL_RANK instead of trainer for crash-resilience
+        if int(os.environ.get("LOCAL_RANK", 0)) == 0 and os.path.exists(output_dir):
+            print(f"Cleanup: Removing local directory {output_dir}")
+            shutil.rmtree(output_dir)
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="config")

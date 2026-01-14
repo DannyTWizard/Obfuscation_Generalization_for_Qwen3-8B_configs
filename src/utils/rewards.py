@@ -7,6 +7,7 @@ import asyncio
 from src.utils.parse import (
     extract_thinking,
     extract_xml_answer,
+    extract_summary,
     count_name_mentions_in_cot,
     count_custom_terms_in_cot,
 )
@@ -181,6 +182,14 @@ def create_cot_length_penalty_func(config: Dict[str, Any]) -> Callable:
     return cot_length_penalty_func
 
 
+# ============================================================================
+
+EXTRACTION_METHODS = {
+    "cot": extract_thinking,
+    "summary": extract_summary,
+}
+
+
 def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
     """Factory for neural overseer penalty function.
 
@@ -188,17 +197,24 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
 
     Config:
         model_name: Together model identifier (e.g., 'Qwen/Qwen3-235B-A22B-Instruct-2507')
-        system_prompt: System prompt for the overseer
-        template: User prompt template with {cot} placeholder
+        system_prompt_per_dataset: Dict mapping dataset names to system prompts
+        extraction_method: Which part to extract for oversight - 'cot' or 'summary' (default: 'cot')
         penalty_weight: Penalty value when overseer says to penalize
         max_tokens: Max tokens for completion (default: 5)
-        stop: Stop sequences (default: ['0', '1'])
-        prefill: Text to prefill assistant response (default: 'Decision: ')
-        start_assistant: Start token for assistant message
-        end_assistant: End token for assistant message (not used in prefill)
+        condition_on_correctness: Whether to only penalize correct answers
+        prompt_format: Key for PROMPT_FORMATS lookup
     """
     # Extract config
     model_name = config["model_name"]
+    extraction_method = config["extraction_method"]
+
+    if extraction_method not in EXTRACTION_METHODS:
+        raise ValueError(
+            f"Unknown extraction_method: '{extraction_method}'. "
+            f"Must be one of: {list(EXTRACTION_METHODS.keys())}"
+        )
+
+    extract_fn = EXTRACTION_METHODS[extraction_method]
 
     system_prompt_mapper: Dict[str, str] = config["system_prompt_per_dataset"]
     assert (
@@ -229,7 +245,6 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
 
     # Chat template tokens
     api_config = API_CONIGS[model_name]
-    # end_assistant not needed for prefill
 
     # Get API credentials from environment
     api_key = os.environ.get("TOGETHER_API_KEY")
@@ -241,8 +256,8 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
     client = AsyncOpenAI(
         api_key=api_key,
         base_url="https://api.together.xyz/v1",
-        max_retries=5,  # Retry up to 5 times
-        timeout=60.0,  # 60 second timeout
+        max_retries=5,
+        timeout=60.0,
     )
 
     async def process_single_completion(
@@ -259,11 +274,11 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
         if condition_on_correctness == True and correctness_score == 0.0:
             return (0.0, None)
 
-        # Extract CoT
-        cot = extract_thinking(completion)
+        # Extract content using configured method
+        extracted_content = extract_fn(completion)
 
         # Construct the prompt with proper chat template
-        user_content = prompt_format.template.format(cot=cot)
+        user_content = prompt_format.template.format(cot=extracted_content)
 
         # If coming from a single dataset, source_dataset is None, so this maps to the null key field
         system_prompt = system_prompt_mapper[source_dataset]
@@ -284,8 +299,7 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
             model=model_name,
             prompt=full_prompt,
             max_tokens=max_tokens,
-            # stop=stop,
-            temperature=0.0,  # Deterministic for consistency
+            temperature=0.0,
         )
 
         # Extract the completion (should be just "0" or "1")
@@ -301,7 +315,6 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
                 f"Warning: Unexpected overseer response: '{decision_text}'."
             )
 
-        # Return penalty and decision text for logging
         return (penalty_weight if should_penalize else 0.0, decision_text)
 
     async def api_overseer_penalty_func_async(
@@ -315,16 +328,11 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
                 prompts, completions, high_reward_answer, **kwargs
             )
         else:
-            correctness_scores = [1.0] * len(
-                completions
-            )  # Dummy scores for consistency
+            correctness_scores = [1.0] * len(completions)
 
         source_datasets = kwargs["source_dataset"]
-
-        # Remove source_dataset from kwargs to avoid duplicate argument error
         filtered_kwargs = {k: v for k, v in kwargs.items() if k != "source_dataset"}
 
-        # Create tasks for all completions
         tasks = [
             process_single_completion(
                 i,
@@ -338,10 +346,8 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
             for i, completion in enumerate(completions)
         ]
 
-        # Gather all results in parallel
         results = await asyncio.gather(*tasks)
 
-        # Extract rewards and print decisions
         rewards = []
         for reward, decision_text in results:
             rewards.append(reward)
@@ -363,6 +369,18 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
     return api_overseer_penalty_func
 
 
+def create_api_overseer_cot_penalty_func(config: Dict[str, Any]) -> Callable:
+    """Factory for API overseer that evaluates Chain of Thought content."""
+    config_with_method = {**config, "extraction_method": "cot"}
+    return create_api_overseer_penalty_func(config_with_method)
+
+
+def create_api_overseer_summary_penalty_func(config: Dict[str, Any]) -> Callable:
+    """Factory for API overseer that evaluates summary content."""
+    config_with_method = {**config, "extraction_method": "summary"}
+    return create_api_overseer_penalty_func(config_with_method)
+
+
 # ============================================================================
 # Registry of factory functions
 # ============================================================================
@@ -374,5 +392,6 @@ REWARD_FUNCS = {
     "cot_think_name_penalty_func": create_cot_think_name_penalty_func,
     "summary_present_penalty": create_summary_present_penalty_func,
     "cot_length_penalty_func": create_cot_length_penalty_func,
-    "api_overseer_penalty_func": create_api_overseer_penalty_func,
+    "api_overseer_penalty_func": create_api_overseer_cot_penalty_func,
+    "api_overseer_summary_penalty_func": create_api_overseer_summary_penalty_func,
 }
