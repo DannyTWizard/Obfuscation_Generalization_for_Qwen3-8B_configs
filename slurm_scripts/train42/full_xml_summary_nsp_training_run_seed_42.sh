@@ -2,7 +2,12 @@
 
 mkdir -p slurm_logs
 
-sbatch --export=CONFIG_FILE=slurm_scripts/train42/full_xml_summary_nsp_training_run_seed_42.txt \
+CONFIG_FILE="slurm_scripts/train42/full_xml_summary_nsp_training_run_seed_42.txt"
+NUM_JOBS=$(wc -l < "$CONFIG_FILE")
+
+# Submit the array job with common args
+sbatch --array=1-${NUM_JOBS}%4 \
+    --export=CONFIG_FILE="$CONFIG_FILE" \
     slurm_scripts/train_dispatch.sbatch \
     --multirun \
     'hydra.sweep.subdir=${hydra.job.num}' \
