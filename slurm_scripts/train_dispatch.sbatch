@@ -18,11 +18,13 @@ source ~/anaconda3/etc/profile.d/conda.sh
 conda activate obf_gen
 
 # Fix for concurrent processes
-export XDG_RUNTIME_DIR="/tmp/runtime-$USER-$SLURM_ARRAY_JOB_ID-$SLURM_ARRAY_TASK_ID"
+export XDG_RUNTIME_DIR="/tmp/runtime-$USER-$SLURM_JOB_ID"
 mkdir -p "$XDG_RUNTIME_DIR"
 
-export MASTER_PORT=$((29500 + SLURM_ARRAY_TASK_ID))
-export VLLM_CACHE_ROOT="/tmp/vllm_cache_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
+# Unique port per job - SLURM_JOB_ID is unique even for array tasks
+export MASTER_PORT=$((29500 + SLURM_JOB_ID % 1000))
+export VLLM_CACHE_ROOT="/tmp/vllm_cache_$SLURM_JOB_ID"
+export VLLM_TORCH_COMPILE_LEVEL=0
 
 echo "============================================"
 echo "Array Job: $SLURM_ARRAY_JOB_ID, Task: $SLURM_ARRAY_TASK_ID"
