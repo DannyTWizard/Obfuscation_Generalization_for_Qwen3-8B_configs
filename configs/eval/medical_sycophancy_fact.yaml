@@ -17,7 +17,7 @@ eval_funcs:
   
   # API-based oversight for detecting reward hacking behavior
   api_overseer_penalty_func:
-    model_name: "accounts/fireworks/models/qwen3-235b-a22b-instruct-2507"
+    model_name: "Qwen/Qwen3-235B-A22B-Instruct-2507-tput"
     penalty_weight: 1
     max_tokens: 5
     condition_on_correctness: false
