@@ -22,6 +22,6 @@ sbatch --export=CONFIG_FILE=slurm_scripts/train24/full_xml_summary_withsp_evals_
     "artifact_step=$STEPS" \
     ++wandb.entity=nathanielmitrani-cfis-upc \
     config_name=eval \
-    train.seed=24
+    ++train.seed=24
 
 echo "WITHSP eval array job submitted. Check with: squeue -u $USER"
