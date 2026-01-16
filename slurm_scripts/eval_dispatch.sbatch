@@ -1,31 +1,43 @@
 #!/bin/bash
-#SBATCH --output=slurm_logs/eval_%x_%j.out
-#SBATCH --error=slurm_logs/eval_%x_%j.err
-#SBATCH --job-name=obf_train
+#SBATCH --output=slurm_logs/eval_%x_%A_%a.out
+#SBATCH --error=slurm_logs/eval_%x_%A_%a.err
+#SBATCH --job-name=obf_eval
 #SBATCH --gres=gpu:1
 #SBATCH --mem=64G
+#SBATCH --array=1-4%4
 
-# Initialize conda properly for non-interactive shell
+# %A = array job ID, %a = task ID
+# --array=1-4%4 means tasks 1-4, max 4 concurrent (adjust %N for throttle)
+
+# Read this task's config from the config file
+CONFIG_FILE="${CONFIG_FILE:-eval_configs.txt}"
+JOB_ARGS=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "$CONFIG_FILE")
+
+# Initialize conda
 source ~/anaconda3/etc/profile.d/conda.sh
 conda activate obf_gen
 
-# Fix for concurrent processes - each job gets its own runtime dir
+# Fix for concurrent processes
 export XDG_RUNTIME_DIR="/tmp/runtime-$USER-$SLURM_JOB_ID"
 mkdir -p "$XDG_RUNTIME_DIR"
 
-# Unique port per job to avoid conflicts
+# Unique port per job - SLURM_JOB_ID is unique even for array tasks
 export MASTER_PORT=$((29500 + SLURM_JOB_ID % 1000))
+export VLLM_CACHE_ROOT="/tmp/vllm_cache_$SLURM_JOB_ID"
+export VLLM_TORCH_COMPILE_LEVEL=0
 
 echo "============================================"
-echo "Slurm Job: $SLURM_JOB_ID"
-echo "Args: $@"
+echo "Array Job: $SLURM_ARRAY_JOB_ID, Task: $SLURM_ARRAY_TASK_ID"
+echo "Config: $JOB_ARGS"
+echo "Common args: $@"
 echo "Node: $SLURMD_NODENAME"
 echo "GPUs: $CUDA_VISIBLE_DEVICES"
 echo "MASTER_PORT: $MASTER_PORT"
 echo "Started: $(date)"
 echo "============================================"
 
-python -m src.eval "$@"
+# Combine common args ($@) with job-specific args
+python -m src.eval "$@" $JOB_ARGS
 EXIT_CODE=$?
 
 echo "============================================"

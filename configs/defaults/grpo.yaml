@@ -9,7 +9,7 @@ optim: adamw_8bit
 num_train_epochs: 2
 fp16: true
 bf16: false
-save_steps: 100
+save_steps: 200
 logging_steps: 1
 max_completion_length: 2048
 
