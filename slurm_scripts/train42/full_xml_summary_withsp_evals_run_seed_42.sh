@@ -14,7 +14,7 @@ full_xml_tags/eval_war_no_sp_with_summary"
 STEPS="200,400,600,800,1000,1200,1400,1600,1800,2000,2200,2400,2600,2800,3000,3200"
 
 # Submit the array job with common args
-sbatch --export=CONFIG_FILE=slurm_scripts/train24/full_xml_summary_nsp_evals_run_seed_24.txt \
+sbatch --export=CONFIG_FILE=slurm_scripts/train42/full_xml_summary_withsp_evals_run_seed_42.txt \
     slurm_scripts/eval_dispatch.sbatch \
     --multirun \
     'hydra.sweep.subdir=${hydra.job.num}' \
@@ -22,6 +22,6 @@ sbatch --export=CONFIG_FILE=slurm_scripts/train24/full_xml_summary_nsp_evals_run
     "artifact_step=$STEPS" \
     ++wandb.entity=nathanielmitrani-cfis-upc \
     config_name=eval \
-    train.seed=24
+    train.seed=42
 
-echo "NSP eval array job submitted. Check with: squeue -u $USER"
+echo "WITHSP eval array job submitted. Check with: squeue -u $USER"
