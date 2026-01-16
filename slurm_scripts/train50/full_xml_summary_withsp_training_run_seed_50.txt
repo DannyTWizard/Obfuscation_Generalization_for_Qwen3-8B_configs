@@ -1,1 +1,3 @@
+data=leave_out_war_full_xml config_name=run_withsp_summary_war
+data=leave_out_sycophancy_full_xml config_name=run_withsp_summary_sycophancy
 data=leave_out_code_full_xml config_name=run_withsp_summary_code
