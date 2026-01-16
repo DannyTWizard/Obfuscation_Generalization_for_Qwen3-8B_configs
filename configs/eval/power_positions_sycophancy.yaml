@@ -25,7 +25,7 @@ eval_funcs:
     
     # $$ is file path after configs/monitor_system_prompts/
     system_prompt_per_dataset:
-      power_positions_sycophancy: $$additional_info_pen/sycophancy_fact_modified
+      power_positions_sycophancy: $$hedged_additional_info_pen/sycophancy_fact_modified
 
   # Track terms in chain-of-thought
   count_custom_terms_in_cot:

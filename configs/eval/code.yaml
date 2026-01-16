@@ -25,7 +25,7 @@ eval_funcs:
     
     # $$ is file path after configs/monitor_system_prompts/
     system_prompt_per_dataset:
-      code_selection: $$additional_info_pen/code_selection_modified
+      code_selection: $$hedged_additional_info_pen/code_selection_modified
 
   # Track terms in chain-of-thought
   count_custom_terms_in_cot:
