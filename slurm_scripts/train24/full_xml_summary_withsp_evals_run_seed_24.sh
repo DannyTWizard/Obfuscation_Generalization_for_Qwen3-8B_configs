@@ -3,12 +3,12 @@
 mkdir -p slurm_logs
 
 # All 6 evaluation datasets/experiments
-EXPERIMENTS="full_xml_tags/eval_code_no_system_prompt_with_summary,\
-full_xml_tags/eval_pp_sycophancy_no_sp_with_summary,\
-full_xml_tags/eval_score_no_sp_with_summary,\
-full_xml_tags/eval_sycophancy_medical_no_sp_with_summary,\
-full_xml_tags/eval_sycophancy_no_system_prompt_with_summary,\
-full_xml_tags/eval_war_no_sp_with_summary"
+EXPERIMENTS="full_xml_tags/eval_code_with_summary,\
+full_xml_tags/eval_pp_sycophancy_with_summary,\
+full_xml_tags/eval_score_with_summary,\
+full_xml_tags/eval_sycophancy_medical_with_summary,\
+full_xml_tags/eval_sycophancy_with_summary,\
+full_xml_tags/eval_war_with_summary"
 
 # All artifact steps to evaluate
 STEPS="200,400,600,800,1000,1200,1400,1600,1800,2000,2200,2400,2600,2800,3000,3200"
