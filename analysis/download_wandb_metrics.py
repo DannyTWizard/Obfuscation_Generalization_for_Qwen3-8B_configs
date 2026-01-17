@@ -85,7 +85,6 @@ def extract_attribute_from_run_name(run_name: str, key: str) -> Optional[str]:
         "data",
         "ts",
         "tg",
-        "nsp",
     ]
 
     # Build pattern to find the key and capture its value
@@ -398,6 +397,7 @@ def download_training_runs(
         history["run_name"] = run.name
         history["run_state"] = run.state
         history["created_at"] = run.created_at
+        history["system_prompt"] = "nsp" not in run.name.lower()
 
         # Extract ts (train_seed) and data from run name
         history["ts"] = extract_attribute_from_run_name(run.name, "ts")
@@ -436,6 +436,7 @@ def download_training_runs(
                 "correctness_weight",
                 "penalty_weight",
                 "step",
+                "system_prompt",
             ]
         ]
 
@@ -561,6 +562,7 @@ def download_eval_runs(
             "total": result.get("total"),
             "api_overseer_penalty_func": result.get("api_overseer_penalty_func"),
             "no_answer_tags_rate": result.get("no_answer_tags_rate"),
+            "system_prompt": "nsp" not in run.name.lower(),
         }
         all_results.append(lean_result)
 
