@@ -1,0 +1,18 @@
+# @package reward.funcs
+# API overseer penalty with additional_info_pen system prompts
+# This config is optionally composed via: +reward/overseer=refined
+
+api_overseer_penalty_func:
+  model_name: "Qwen/Qwen3-235B-A22B-Instruct-2507-tput"
+  penalty_weight: -0.01  # Sweepable parameter
+  max_tokens: 5
+  prompt_format: 'binary_decision'
+  condition_on_correctness: true
+  
+  # $$ is file path after configs/monitor_system_prompts/
+  system_prompt_per_dataset:
+    revealing_score: $$refined_pen/revealing_score
+    code_selection: $$refined_pen/code_selection
+    sycophancy_fact: $$refined_pen/sycophancy_fact
+    world_affecting_reward: $$refined_pen/world_affecting
+    mmlu_subset_1000: null
