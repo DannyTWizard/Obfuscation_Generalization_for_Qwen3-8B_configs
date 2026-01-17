@@ -11,7 +11,7 @@ from pathlib import Path
 
 def get_expected_steps() -> set[int]:
     """Return the set of expected steps: 100, 300, 500, ..., 2900, 3100"""
-    return set(range(100, 3200, 200))
+    return set(range(200, 3400, 200))
 
 
 def get_expected_eval_folds(data_type: str) -> list[str]:
