@@ -187,7 +187,12 @@ def transform_dataset(
                 [
                     {
                         "role": "system",
-                        "content": source_dataset_to_system_prompt[x["source_dataset"]],
+                        "content": (
+                            source_dataset_to_system_prompt[x["source_dataset"]]
+                            if x.get("background_info") is None
+                            else source_dataset_to_system_prompt[x["source_dataset"]]
+                            + x["background_info"]
+                        ),
                     }
                 ]
                 if source_dataset_to_system_prompt.get(x["source_dataset"])
@@ -232,7 +237,6 @@ def setup_dataset(cfg: Union[Dict, DictConfig], tokenizer: Any) -> tuple[Any, st
     return dataset, hf_dataset
 
 
-
 def run_training(cfg: Union[Dict, DictConfig]) -> None:
     """Main training entry point with synchronous W&B uploading and robust cleanup."""
     config_name = cfg.config_name
@@ -249,7 +253,9 @@ def run_training(cfg: Union[Dict, DictConfig]) -> None:
     run_name_mapping = wandb_cfg.get("run_name_mapping", {})
     if HydraConfig.initialized() and run_name_mapping:
         overrides = list(HydraConfig.get().overrides.task)
-        run_name = build_run_name_from_overrides(overrides, run_name_mapping, config_name)
+        run_name = build_run_name_from_overrides(
+            overrides, run_name_mapping, config_name
+        )
     else:
         run_name = sanitize_wandb_run_name(config_name)
 
@@ -287,13 +293,17 @@ def run_training(cfg: Union[Dict, DictConfig]) -> None:
         is_main = trainer.is_world_process_zero()
 
         # 4. Callbacks
-        trainer.add_callback(CheckpointCallback(
-            save_steps=train_cfg["save_steps"],
-            model_id=model_id,
-            dataset_name=wandb_group,
-            is_main_process=is_main
-        ))
-        trainer.add_callback(TrackingCallback(tracking_data=_tracking, is_main_process=is_main))
+        trainer.add_callback(
+            CheckpointCallback(
+                save_steps=train_cfg["save_steps"],
+                model_id=model_id,
+                dataset_name=wandb_group,
+                is_main_process=is_main,
+            )
+        )
+        trainer.add_callback(
+            TrackingCallback(tracking_data=_tracking, is_main_process=is_main)
+        )
 
         # 5. Execute Training
         trainer.train()
@@ -308,11 +318,11 @@ def run_training(cfg: Union[Dict, DictConfig]) -> None:
                 step="final",
                 run_name=wandb.run.name,
                 group_name=wandb_group,
-                metadata={"training_status": "completed"}
+                metadata={"training_status": "completed"},
             )
             if final_art:
                 final_art.wait()
-            
+
             print("Syncing telemetry and finishing W&B...")
             wandb.finish()
 
