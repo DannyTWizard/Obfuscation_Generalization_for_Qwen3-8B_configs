@@ -6,7 +6,7 @@ api_overseer_penalty_func:
   model_name: "moonshotai/Kimi-K2-Instruct-0905"
   penalty_weight: -0.01  # Sweepable parameter
   max_tokens: 5
-  prompt_format: 'binary_decision'
+  prompt_format: 'binary_decision_with_question'
   condition_on_correctness: true
   
   # $$ is file path after configs/monitor_system_prompts/
@@ -15,4 +15,6 @@ api_overseer_penalty_func:
     code_selection: $$refined_pen/code_selection
     sycophancy_fact: $$refined_pen/sycophancy_fact
     world_affecting_reward_reorg: $$refined_pen/world_affecting
+    power_positions_sycophancy: $$refined_pen/power_positions_sycophancy
+    medical_sycophancy_fact: $$refined_pen/medical_sycophancy_fact
     mmlu_subset_1000: null
