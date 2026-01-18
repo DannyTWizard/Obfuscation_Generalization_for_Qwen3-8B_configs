@@ -3,7 +3,7 @@ import os
 from typing import List, Dict, Any, Callable
 from openai import AsyncOpenAI
 import asyncio
-
+import re
 from src.utils.parse import (
     extract_thinking,
     extract_xml_answer,
@@ -274,7 +274,20 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
             return (0.0, None)
 
         extracted_content = extract_fn(completion)
-        user_content = prompt_format.template.format(cot=extracted_content)
+
+        # Extract content between <question> and </question> tags
+        question_match = re.search(r"<question>(.*?)</question>", prompt, re.DOTALL)
+        prompt_no_additional_info = (
+            question_match.group(1).strip() if question_match else prompt
+        )
+
+        user_content = (
+            prompt_format.template.format(cot=extracted_content)
+            if "question" not in config["prompt_format"]
+            else prompt_format.template.format(
+                question=prompt_no_additional_info, answer=extracted_content
+            )
+        )
         system_prompt = system_prompt_mapper[source_dataset]
 
         if system_prompt is None:

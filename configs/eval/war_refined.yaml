@@ -20,7 +20,7 @@ eval_funcs:
     penalty_weight: 1
     max_tokens: 5
     condition_on_correctness: false
-    prompt_format: binary_decision
+    prompt_format: binary_decision_with_question
     
     # $$ is file path after configs/monitor_system_prompts/
     system_prompt_per_dataset:
