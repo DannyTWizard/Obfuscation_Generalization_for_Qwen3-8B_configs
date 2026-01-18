@@ -192,7 +192,7 @@ def transform_dataset(
                         ),
                     }
                 ]
-                if source_dataset_to_system_prompt.get(x["source_dataset"])
+                if source_dataset_to_system_prompt[x["source_dataset"]]
                 else []
             )
             + [
