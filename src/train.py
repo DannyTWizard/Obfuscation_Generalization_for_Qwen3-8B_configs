@@ -181,7 +181,6 @@ def transform_dataset(
     source_dataset_to_system_prompt: Dict[str, str],
 ) -> Any:
     """Transform dataset for training."""
-    print(f"Source dataset to system prompt: {source_dataset_to_system_prompt}")
     data = dataset.map(
         lambda x: {
             "prompt": (
