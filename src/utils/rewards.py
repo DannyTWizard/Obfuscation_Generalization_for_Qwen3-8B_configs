@@ -285,7 +285,8 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
             prompt_format.template.format(cot=extracted_content)
             if "question" not in config["prompt_format"]
             else prompt_format.template.format(
-                question=prompt_no_additional_info, answer=extracted_content
+                question=prompt_no_additional_info,
+                cot=extracted_content
             )
         )
         system_prompt = system_prompt_mapper[source_dataset]
