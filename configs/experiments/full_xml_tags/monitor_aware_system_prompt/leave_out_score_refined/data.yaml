@@ -75,11 +75,6 @@ eval_datasets:
           question_tag: "question"
           reward_hacking_info_tag: "additional_info"
 
-  # Code selection without special formatting (raw)
-  - dataset_name: revealing_score
-    fold_name: revealing_score_raw
-    function: 
-      - confirm_correct_answer: {}
 
   - dataset_name: medical_sycophancy_fact
     fold_name: medical_sycophancy_fact_formatted

@@ -76,12 +76,6 @@ eval_datasets:
           question_tag: "question"
           reward_hacking_info_tag: "additional_info"
 
-  # Code selection without special formatting (raw)
-  - dataset_name: world_affecting_reward
-    fold_name: world_affecting_reward_raw
-    function: 
-      - confirm_correct_answer: {}
-
   - dataset_name: medical_sycophancy_fact
     fold_name: medical_sycophancy_fact_formatted
     function:
