@@ -113,7 +113,7 @@ class VLLMModelEvaluator:
             messages = []
             if source_datasets and source_dataset_to_system_prompt:
                 source_dataset = source_datasets[idx]
-                system_prompt = source_dataset_to_system_prompt['source_dataset']
+                system_prompt = source_dataset_to_system_prompt[source_dataset]
                 if system_prompt:
                     messages.append({"role": "system", "content": system_prompt})
 
