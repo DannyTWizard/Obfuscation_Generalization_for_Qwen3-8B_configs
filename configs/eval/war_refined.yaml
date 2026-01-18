@@ -2,7 +2,7 @@
 # Used for evaluating models on code_selection dataset
 
 # Eval dataset settings
-fold: eval_world_affecting_reward_formatted
+fold: eval_world_affecting_reward_reorg_formatted
 max_samples: 495
 batch_size: 128
 
@@ -24,5 +24,5 @@ eval_funcs:
     
     # $$ is file path after configs/monitor_system_prompts/
     system_prompt_per_dataset:
-      world_affecting_reward: $$refined_pen/world_affecting
+      world_affecting_reward_reorg: $$refined_pen/world_affecting
 

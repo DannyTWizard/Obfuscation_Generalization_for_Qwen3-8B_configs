@@ -14,5 +14,5 @@ api_overseer_penalty_func:
     revealing_score: $$refined_pen/revealing_score
     code_selection: $$refined_pen/code_selection
     sycophancy_fact: $$refined_pen/sycophancy_fact
-    world_affecting_reward: $$refined_pen/world_affecting
+    world_affecting_reward_reorg: $$refined_pen/world_affecting
     mmlu_subset_1000: null
