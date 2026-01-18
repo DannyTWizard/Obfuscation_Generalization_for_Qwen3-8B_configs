@@ -101,7 +101,6 @@ class VLLMModelEvaluator:
         instruction_suffix: str,
         source_datasets: Optional[List[str]] = None,
         source_dataset_to_system_prompt: Optional[Dict[str, str]] = None,
-        additional_info_batch: Optional[List[str]] = None,
     ) -> List[str]:
         """Generate responses for a batch of prompts."""
         formatted_prompts = []
@@ -116,11 +115,6 @@ class VLLMModelEvaluator:
                 source_dataset = source_datasets[idx]
                 system_prompt = source_dataset_to_system_prompt.get(source_dataset)
                 if system_prompt:
-                    # Append additional_info if present (matching training behavior)
-                    if additional_info_batch and idx < len(additional_info_batch):
-                        additional_info = additional_info_batch[idx]
-                        if additional_info is not None:
-                            system_prompt = system_prompt + additional_info
                     messages.append({"role": "system", "content": system_prompt})
 
             messages.append({"role": "user", "content": formatted_prompt})
@@ -168,7 +162,6 @@ class VLLMModelEvaluator:
         prompts_batch: List[str] = []
         high_reward_answers_batch: List[str] = []
         source_datasets_batch: List[str] = []
-        additional_info_batch: List[str] = []
         batch_dict: Dict[str, List] = {}
 
         progress_bar = tqdm(
@@ -180,8 +173,6 @@ class VLLMModelEvaluator:
             prompts_batch.append(example["question"])
             high_reward_answers_batch.append(example["high_reward_answer"])
             source_datasets_batch.append(example["source_dataset"])
-            # Collect additional_info if present (matching training behavior)
-            additional_info_batch.append(example.get("additional_info"))
 
             # Collect other fields for eval functions
             for k, v in example.items():
@@ -196,7 +187,6 @@ class VLLMModelEvaluator:
                     instruction_suffix,
                     source_datasets=source_datasets_batch,
                     source_dataset_to_system_prompt=source_dataset_to_system_prompt,
-                    additional_info_batch=additional_info_batch,
                 )
 
                 # Run all eval functions on this batch
@@ -247,7 +237,6 @@ class VLLMModelEvaluator:
                 prompts_batch = []
                 high_reward_answers_batch = []
                 source_datasets_batch = []
-                additional_info_batch = []
                 batch_dict = {}
 
         # Compute metrics
