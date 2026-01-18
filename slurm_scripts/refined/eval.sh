@@ -65,7 +65,7 @@ for dataset in "${DATASET_ARRAY[@]}"; do
     fi
     
     for seed in "${SEED_ARRAY[@]}"; do
-        training_group="${data}_tags_seed_${seed}"
+        training_group="${data}_seed_${seed}"
         run_name="run_ref_ovs_refined_pen_-0.05_data_${data}_ts_${seed}"
         experiments="${COMMON_EVALS},${FOLD_EVAL[$dataset]}"
         
