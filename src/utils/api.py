@@ -18,7 +18,18 @@ QwenConfig = APIModelConfig(
     start_assistant="<|im_start|>assistant\n",
 )
 
-API_CONIGS = {"Qwen/Qwen3-235B-A22B-Instruct-2507-tput": QwenConfig}
+KimiConfig = APIModelConfig(
+    start_system="<|im_system|>system<|im_middle|>",
+    end_system="<|im_end|>",
+    start_user="<|im_user|>user<|im_middle|>",
+    end_user="<|im_end|>",
+    start_assistant="<|im_assistant|>assistant<|im_middle|>",
+)
+
+API_CONIGS = {
+    "Qwen/Qwen3-235B-A22B-Instruct-2507-tput": QwenConfig,
+    "moonshotai/Kimi-K2-Instruct-0905": KimiConfig,
+}
 
 
 @dataclass
