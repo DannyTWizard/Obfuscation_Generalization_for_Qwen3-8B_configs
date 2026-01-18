@@ -24,6 +24,7 @@ train_datasets:
           correctness_info_tag: false
           question_tag: "question"
           reward_hacking_info_tag: "additional_info"
+          reverse_order: false
 
   # Revealing score with XML formatting (no background info)
   # Using adversarial filter (high_reward != correct)
@@ -37,6 +38,7 @@ train_datasets:
           correctness_info_tag: false
           question_tag: "question"
           reward_hacking_info_tag: "additional_info"
+          reverse_order: false
 
   # MMLU - no transformation needed (clean baseline)
   - dataset_name: mmlu_subset_1000
@@ -59,6 +61,7 @@ eval_datasets:
           correctness_info_tag: false
           question_tag: "question"
           reward_hacking_info_tag: "additional_info"
+          reverse_order: false
 
   # Code selection without special formatting (raw)
   - dataset_name: code_selection

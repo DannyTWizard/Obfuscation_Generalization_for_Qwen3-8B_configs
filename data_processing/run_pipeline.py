@@ -199,7 +199,7 @@ def main():
     seed = config["seed"]
     train_dataset_configs = config.get("train_datasets", [])
     eval_dataset_configs = config.get("eval_datasets", [])
-    
+
     # Set seed for reproducibility
     random.seed(seed)
     print(f"Set random seed to {seed}")
@@ -247,6 +247,9 @@ def main():
     if not args.hf_account_name:
         args.hf_account_name = os.environ['HF_ACCOUNT']
     hf_token = os.environ['HF_TOKEN']
+    
+    print(f'HF_ACCOUNT: {args.hf_account_name}')
+    print(f'HF_TOKEN: {hf_token}')
 
     repo_name = f"{args.hf_account_name}/obf_gen_{result_name}_seed_{seed}"
     print(f"\nUploading to HuggingFace: {repo_name}")
@@ -257,3 +260,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# python -m data_processing.run_pipeline configs/experiments/refined/leave_out_code/data.yaml 
+# python -m data_processing.run_pipeline configs/experiments/refined/leave_out_score/data.yaml 
+# python -m data_processing.run_pipeline configs/experiments/refined/leave_out_sycophancy/data.yaml 
+# python -m data_processing.run_pipeline configs/experiments/refined/leave_out_world_affecting_reward/data.yaml 

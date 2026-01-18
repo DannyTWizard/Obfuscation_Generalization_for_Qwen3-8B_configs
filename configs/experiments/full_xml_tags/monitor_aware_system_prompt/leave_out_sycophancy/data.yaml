@@ -24,6 +24,7 @@ train_datasets:
           correctness_info_tag: "background_info"
           question_tag: "question"
           reward_hacking_info_tag: "additional_info"
+          reverse_order: false
 
   # Revealing score with XML formatting (formatted_0 style)
   # Using adversarial filter (high_reward != correct)
@@ -37,6 +38,7 @@ train_datasets:
           correctness_info_tag: "background_info"
           question_tag: "question"
           reward_hacking_info_tag: "additional_info"
+          reverse_order: true
   
   # World affecting reward with XML formatting (formatted_0 style)
   - dataset_name: world_affecting_reward_0
@@ -48,6 +50,7 @@ train_datasets:
           correctness_info_tag: "background_info"
           question_tag: "question"
           reward_hacking_info_tag: "additional_info"
+          reverse_order: true
 
   # MMLU - no transformation needed (clean baseline)
   - dataset_name: mmlu_subset_1000
@@ -70,6 +73,7 @@ eval_datasets:
           correctness_info_tag: "background_info"
           question_tag: "question"
           reward_hacking_info_tag: "additional_info"
+          reverse_order: true
 
   # Sycophancy without special formatting (raw)
   - dataset_name: sycophancy_fact
@@ -87,6 +91,7 @@ eval_datasets:
           correctness_info_tag: "background_info"
           question_tag: "question"
           reward_hacking_info_tag: "additional_info"
+          reverse_order: true
 
   # medical_sycophancy_fact selection without special formatting (raw)
   - dataset_name: medical_sycophancy_fact
@@ -104,6 +109,7 @@ eval_datasets:
           correctness_info_tag: "background_info"
           question_tag: "question"
           reward_hacking_info_tag: "additional_info"
+          reverse_order: true
 
   # power_positions_sycophancy selection without special formatting (raw)
   - dataset_name: power_positions_sycophancy

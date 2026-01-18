@@ -24,6 +24,7 @@ train_datasets:
           correctness_info_tag: "background_info"
           question_tag: "question"
           reward_hacking_info_tag: "additional_info"
+          reverse_order: false
 
 
   # Code selection with XML formatting (same style as training)
@@ -37,6 +38,7 @@ train_datasets:
           correctness_info_tag: "background_info"
           question_tag: "question"
           reward_hacking_info_tag: "additional_info"
+          reverse_order: true
 
   # Code selection with XML formatting (same style as training)
   - dataset_name: revealing_score
@@ -50,6 +52,7 @@ train_datasets:
           correctness_info_tag: "background_info"
           question_tag: "question"
           reward_hacking_info_tag: "additional_info"
+          reverse_order: true
 
 
   # MMLU - no transformation needed (clean baseline)
@@ -75,6 +78,7 @@ eval_datasets:
           correctness_info_tag: "background_info"
           question_tag: "question"
           reward_hacking_info_tag: "additional_info"
+          reverse_order: true
 
   # Code selection without special formatting (raw)
   - dataset_name: world_affecting_reward
@@ -91,6 +95,7 @@ eval_datasets:
           correctness_info_tag: "background_info"
           question_tag: "question"
           reward_hacking_info_tag: "additional_info"
+          reverse_order: true
 
   - dataset_name: power_positions_sycophancy
     fold_name: power_positions_sycophancy_formatted
@@ -101,3 +106,4 @@ eval_datasets:
           correctness_info_tag: "background_info"
           question_tag: "question"
           reward_hacking_info_tag: "additional_info"
+          reverse_order: true

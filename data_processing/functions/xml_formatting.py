@@ -68,6 +68,7 @@ def _build_formatted_prompt(
     question_tag: str | None | bool,
     reward_hacking_info: str,
     reward_hacking_info_tag: str | None | bool,
+    reverse_order: bool
 ) -> str:
     """Build the final formatted prompt from sections."""
     _validate_correctness_args(correctness_info_text, correctness_info_tag)
@@ -79,17 +80,31 @@ def _build_formatted_prompt(
         section = _wrap_section(correctness_info_text, correctness_info_tag)
         if section is not None:
             sections.append(section)
+    
+    if reverse_order:
 
-    # Question section
-    section = _wrap_section(question_content, question_tag)
-    if section is not None:
-        sections.append(section)
+        # Reward hacking info section
+        section = _wrap_section(reward_hacking_info, reward_hacking_info_tag)
+        if section is not None:
+            sections.append(section)
 
-    # Reward hacking info section
-    section = _wrap_section(reward_hacking_info, reward_hacking_info_tag)
-    if section is not None:
-        sections.append(section)
+        # Question section
+        section = _wrap_section(question_content, question_tag)
+        if section is not None:
+            sections.append(section)
+        
+    else:
 
+        # Question section
+        section = _wrap_section(question_content, question_tag)
+        if section is not None:
+            sections.append(section)
+
+        # Reward hacking info section
+        section = _wrap_section(reward_hacking_info, reward_hacking_info_tag)
+        if section is not None:
+            sections.append(section)
+    
     return "\n\n".join(sections)
 
 
@@ -317,6 +332,30 @@ def _parse_world_affecting_reward(prompt: str) -> tuple[str, str]:
     return clean_prompt, reward_hacking_info
 
 
+def _parse_world_affecting_reward_reorg(prompt: str) -> tuple[str, str]:
+    """
+    Parse world_affecting_reward_reorg prompt to extract reward-related info.
+    
+    The reorganized format separates reward-hacking info from question content
+    with a double newline.
+
+    Returns:
+        (question_content, reward_hacking_info)
+    """
+    parts = prompt.split("\n\n", 1)
+    
+    if len(parts) != 2:
+        raise ValueError(
+            "Expected world_affecting_reward_reorg prompt to have two sections "
+            "separated by '\\n\\n'"
+        )
+    
+    reward_hacking_info = parts[0].strip()
+    question_content = parts[1].strip()
+    
+    return question_content, reward_hacking_info
+
+
 # =============================================================================
 # Public xml_format functions (one per dataset)
 # =============================================================================
@@ -328,6 +367,7 @@ def xml_format_revealing_score(
     correctness_info_tag: str | None | bool,
     question_tag: str | None | bool,
     reward_hacking_info_tag: str | None | bool,
+    reverse_order: bool
 ) -> dict | None:
     """
     Restructure revealing_score prompt into XML-tagged format.
@@ -349,6 +389,7 @@ def xml_format_revealing_score(
         question_tag=question_tag,
         reward_hacking_info=reward_hacking_info,
         reward_hacking_info_tag=reward_hacking_info_tag,
+        reverse_order=reverse_order
     )
 
     row = row.copy()
@@ -362,6 +403,7 @@ def xml_format_code_selection(
     correctness_info_tag: str | None | bool,
     question_tag: str | None | bool,
     reward_hacking_info_tag: str | None | bool,
+    reverse_order: bool
 ) -> dict | None:
     """
     Restructure code_selection prompt into XML-tagged format.
@@ -383,6 +425,7 @@ def xml_format_code_selection(
         question_tag=question_tag,
         reward_hacking_info=reward_hacking_info,
         reward_hacking_info_tag=reward_hacking_info_tag,
+        reverse_order=reverse_order
     )
 
     row = row.copy()
@@ -396,6 +439,7 @@ def xml_format_sycophancy_fact(
     correctness_info_tag: str | None | bool,
     question_tag: str | None | bool,
     reward_hacking_info_tag: str | None | bool,
+    reverse_order: bool
 ) -> dict | None:
     """
     Restructure sycophancy_fact prompt into XML-tagged format.
@@ -421,6 +465,7 @@ def xml_format_sycophancy_fact(
         question_tag=question_tag,
         reward_hacking_info=reward_hacking_info,
         reward_hacking_info_tag=reward_hacking_info_tag,
+        reverse_order=reverse_order
     )
 
     row = row.copy()
@@ -434,6 +479,7 @@ def xml_format_world_affecting_approval(
     correctness_info_tag: str | None | bool,
     question_tag: str | None | bool,
     reward_hacking_info_tag: str | None | bool,
+    reverse_order: bool
 ) -> dict | None:
     """
     Restructure world_affecting_approval prompt into XML-tagged format.
@@ -457,6 +503,7 @@ def xml_format_world_affecting_approval(
         question_tag=question_tag,
         reward_hacking_info=reward_hacking_info,
         reward_hacking_info_tag=reward_hacking_info_tag,
+        reverse_order=reverse_order
     )
 
     row = row.copy()
@@ -470,6 +517,7 @@ def xml_format_world_affecting_reward(
     correctness_info_tag: str | None | bool,
     question_tag: str | None | bool,
     reward_hacking_info_tag: str | None | bool,
+    reverse_order: bool
 ) -> dict | None:
     """
     Restructure world_affecting_reward prompt into XML-tagged format.
@@ -499,6 +547,53 @@ def xml_format_world_affecting_reward(
         question_tag=question_tag,
         reward_hacking_info=reward_hacking_info,
         reward_hacking_info_tag=reward_hacking_info_tag,
+        reverse_order=reverse_order
+    )
+
+    row = row.copy()
+    row["prompt"] = new_prompt
+    return row
+
+
+
+
+def xml_format_world_affecting_reward_reorg(
+    row: dict,
+    correctness_info_text: str | bool,
+    correctness_info_tag: str | None | bool,
+    question_tag: str | None | bool,
+    reward_hacking_info_tag: str | None | bool,
+    reverse_order: bool
+) -> dict | None:
+    """
+    Restructure world_affecting_reward_reorg prompt into XML-tagged format.
+
+    Extracts sentences containing reward-related keywords into separate section.
+
+    Note: Returns None (filters out row) if no reward-related sentences are found.
+    """
+    if row["source_dataset"] != "world_affecting_reward_reorg":
+        raise ValueError(
+            f"xml_format_world_affecting_reward can only be applied to world_affecting_reward_reorg dataset, "
+            f"got: {row['source_dataset']}"
+        )
+
+    try:
+        question_content, reward_hacking_info = _parse_world_affecting_reward_reorg(
+            row["prompt"]
+        )
+    except ValueError:
+        # No reward-related sentences found - filter out this row
+        return None
+
+    new_prompt = _build_formatted_prompt(
+        correctness_info_text=correctness_info_text,
+        correctness_info_tag=correctness_info_tag,
+        question_content=question_content,
+        question_tag=question_tag,
+        reward_hacking_info=reward_hacking_info,
+        reward_hacking_info_tag=reward_hacking_info_tag,
+        reverse_order=reverse_order
     )
 
     row = row.copy()
