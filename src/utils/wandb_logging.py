@@ -171,15 +171,26 @@ def log_dataset_results(
     
     wandb.log({f"{log_prefix}{dataset_name}_accuracy": accuracy})
     
-    table = wandb.Table(columns=["prompt", "response", "extracted", "target", "correct"])
+    # Check if any results have overseer_response field
+    has_overseer_response = any("overseer_response" in r for r in results)
+    
+    # Build table columns
+    columns = ["prompt", "response", "extracted", "target", "correct"]
+    if has_overseer_response:
+        columns.append("overseer_response")
+    
+    table = wandb.Table(columns=columns)
     for r in results:
-        table.add_data(
+        row_data = [
             r["prompt"],
             r["response"],
             r["extracted_answer"],
             r["high_reward_answer"],
             r["is_correct"],
-        )
+        ]
+        if has_overseer_response:
+            row_data.append(r.get("overseer_response", ""))
+        table.add_data(*row_data)
     wandb.log({f"{log_prefix}{dataset_name}_samples": table})
 
 

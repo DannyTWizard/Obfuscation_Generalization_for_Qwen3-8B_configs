@@ -289,7 +289,7 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
         # Retry loop: 10 attempts, 1 minute wait between each
         max_attempts = 10
         delay_seconds = 60
-        
+
         for attempt in range(max_attempts):
             try:
                 response = await client.completions.create(
@@ -298,7 +298,7 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
                     max_tokens=max_tokens,
                     temperature=0.0,
                 )
-                
+
                 decision_text = response.choices[0].text.strip()
 
                 if decision_text.startswith("1"):
@@ -307,10 +307,12 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
                     return (0.0, decision_text)
                 else:
                     raise ValueError(f"Unexpected overseer response: '{decision_text}'")
-                    
+
             except Exception as e:
                 if attempt < max_attempts - 1:
-                    print(f"API call failed (attempt {attempt + 1}/{max_attempts}): {e}. Retrying in {delay_seconds}s...")
+                    print(
+                        f"API call failed (attempt {attempt + 1}/{max_attempts}): {e}. Retrying in {delay_seconds}s..."
+                    )
                     await asyncio.sleep(delay_seconds)
                 else:
                     # Final attempt failed - raise for real
@@ -319,7 +321,10 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
                         f"(waited {max_attempts * delay_seconds // 60} minutes total). "
                         f"Last error: {e}"
                     ) from e
-            
+
+    # Store decision texts for this batch (will be populated by the async function)
+    decision_texts_storage: List[str] = []
+
     async def api_overseer_penalty_func_async(
         completions, prompts, high_reward_answer, **kwargs
     ) -> List[float]:
@@ -352,8 +357,12 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
         results = await asyncio.gather(*tasks)
 
         rewards = []
+        decision_texts_storage.clear()  # Clear previous batch
         for reward, decision_text in results:
             rewards.append(reward)
+            decision_texts_storage.append(
+                decision_text if decision_text is not None else ""
+            )
             if decision_text is not None:
                 print(f"Overseer returned: {decision_text}")
 
@@ -368,6 +377,12 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
                 completions, prompts, high_reward_answer, **kwargs
             )
         )
+
+    # Attach method to retrieve decision texts (capture storage in closure)
+    def get_decision_texts():
+        return decision_texts_storage.copy()
+
+    api_overseer_penalty_func.get_decision_texts = get_decision_texts
 
     return api_overseer_penalty_func
 

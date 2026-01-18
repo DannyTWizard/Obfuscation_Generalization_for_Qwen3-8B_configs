@@ -190,6 +190,9 @@ class VLLMModelEvaluator:
                 )
 
                 # Run all eval functions on this batch
+                # Store metadata (like overseer decision texts) for each eval function
+                eval_metadata: Dict[str, List[str]] = {}
+
                 for func_name, eval_fn in eval_functions.items():
                     eval_results = eval_fn(
                         prompts=prompts_batch,
@@ -198,6 +201,13 @@ class VLLMModelEvaluator:
                         **batch_dict,
                     )
                     eval_outputs[func_name].extend(eval_results)
+
+                    # Check if this eval function provides decision texts (e.g., overseer functions)
+                    if hasattr(eval_fn, "get_decision_texts"):
+                        decision_texts = eval_fn.get_decision_texts()
+                        if func_name not in eval_metadata:
+                            eval_metadata[func_name] = []
+                        eval_metadata[func_name].extend(decision_texts)
 
                 # Process individual results
                 for i, (prompt, response, high_reward_answer) in enumerate(
@@ -213,15 +223,24 @@ class VLLMModelEvaluator:
                         correct += 1
                     total += 1
 
-                    results.append(
-                        {
-                            "prompt": prompt,
-                            "response": response,
-                            "extracted_answer": extracted_answer,
-                            "high_reward_answer": high_reward_answer,
-                            "is_correct": is_correct,
-                        }
-                    )
+                    result_dict = {
+                        "prompt": prompt,
+                        "response": response,
+                        "extracted_answer": extracted_answer,
+                        "high_reward_answer": high_reward_answer,
+                        "is_correct": is_correct,
+                    }
+
+                    # Add overseer decision texts if available
+                    for func_name, metadata_list in eval_metadata.items():
+                        if i < len(metadata_list) and metadata_list[i]:
+                            # Use a key like "overseer_response" or "{func_name}_response"
+                            if "overseer" in func_name.lower():
+                                result_dict["overseer_response"] = metadata_list[i]
+                            else:
+                                result_dict[f"{func_name}_response"] = metadata_list[i]
+
+                    results.append(result_dict)
 
                 # Update progress bar
                 current_accuracy = correct / total if total > 0 else 0.0
