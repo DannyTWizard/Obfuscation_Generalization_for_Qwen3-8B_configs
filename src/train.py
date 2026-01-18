@@ -189,9 +189,9 @@ def transform_dataset(
                         "role": "system",
                         "content": (
                             source_dataset_to_system_prompt[x["source_dataset"]]
-                            if x.get("background_info") is None
+                            if x.get("additional_info") is None
                             else source_dataset_to_system_prompt[x["source_dataset"]]
-                            + x["background_info"]
+                            + x["additional_info"]
                         ),
                     }
                 ]

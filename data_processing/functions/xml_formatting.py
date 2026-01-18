@@ -385,14 +385,14 @@ def xml_format_revealing_score_refined(
         reward_hacking_info_tag=reward_hacking_info_tag,
     )
 
-    new_prompt_no_background_info, background_info = (
-        new_prompt.split("\n\n")[:-1],
+    new_prompt_no_additional_info, additional_info = (
+        "\n\n".join(new_prompt.split("\n\n")[:-1]),
         new_prompt.split("\n\n")[-1],
     )
 
     row = row.copy()
-    row["prompt"] = new_prompt_no_background_info
-    row["background_info"] = background_info
+    row["prompt"] = new_prompt_no_additional_info
+    row["additional_info"] = additional_info
     return row
 
 
@@ -459,14 +459,14 @@ def xml_format_code_selection_refined(
         reward_hacking_info_tag=reward_hacking_info_tag,
     )
 
-    new_prompt_no_background_info, background_info = (
-        new_prompt.split("\n\n")[:-1],
+    new_prompt_no_additional_info, additional_info = (
+        "\n\n".join("\n\n".join(new_prompt.split("\n\n")[:-1])),
         new_prompt.split("\n\n")[-1],
     )
 
     row = row.copy()
-    row["prompt"] = new_prompt_no_background_info
-    row["background_info"] = background_info
+    row["prompt"] = new_prompt_no_additional_info
+    row["additional_info"] = additional_info
     return row
 
 
@@ -503,14 +503,14 @@ def xml_format_sycophancy_fact_refined(
         reward_hacking_info_tag=reward_hacking_info_tag,
     )
 
-    new_prompt_no_background_info, background_info = (
-        new_prompt.split("\n\n")[:-1],
+    new_prompt_no_additional_info, additional_info = (
+        "\n\n".join(new_prompt.split("\n\n")[:-1]),
         new_prompt.split("\n\n")[-1],
     )
 
     row = row.copy()
-    row["prompt"] = new_prompt_no_background_info
-    row["background_info"] = background_info
+    row["prompt"] = new_prompt_no_additional_info
+    row["additional_info"] = additional_info
     return row
 
 
@@ -581,14 +581,14 @@ def xml_format_world_affecting_approval_refined(
         reward_hacking_info_tag=reward_hacking_info_tag,
     )
 
-    new_prompt_no_background_info, background_info = (
-        new_prompt.split("\n\n")[:-1],
+    new_prompt_no_additional_info, additional_info = (
+        "\n\n".join(new_prompt.split("\n\n")[:-1]),
         new_prompt.split("\n\n")[-1],
     )
 
     row = row.copy()
-    row["prompt"] = new_prompt_no_background_info
-    row["background_info"] = background_info
+    row["prompt"] = new_prompt_no_additional_info
+    row["additional_info"] = additional_info
     return row
 
 
@@ -671,12 +671,12 @@ def xml_format_world_affecting_reward_refined(
         reward_hacking_info_tag=reward_hacking_info_tag,
     )
 
-    new_prompt_no_background_info, background_info = (
-        new_prompt.split("\n\n")[:-1],
+    new_prompt_no_additional_info, additional_info = (
+        "\n\n".join(new_prompt.split("\n\n")[:-1]),
         new_prompt.split("\n\n")[-1],
     )
 
     row = row.copy()
-    row["prompt"] = new_prompt_no_background_info
-    row["background_info"] = background_info
+    row["prompt"] = new_prompt_no_additional_info
+    row["additional_info"] = additional_info
     return row
