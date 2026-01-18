@@ -80,7 +80,9 @@ class VLLMModelEvaluator:
     def _prepare_from_artifact(self, artifact_name: str) -> Tuple[str, AutoTokenizer]:
         """Download artifact from wandb and prepare for inference."""
         api = wandb.Api()
-        artifact = api.artifact(f"{self.wandb_entity}/{self.wandb_project}/{artifact_name}:latest")
+        artifact = api.artifact(
+            f"{self.wandb_entity}/{self.wandb_project}/{artifact_name}:latest"
+        )
         artifact_dir = artifact.download()
 
         # Create temporary directory for merged model
@@ -99,10 +101,11 @@ class VLLMModelEvaluator:
         instruction_suffix: str,
         source_datasets: Optional[List[str]] = None,
         source_dataset_to_system_prompt: Optional[Dict[str, str]] = None,
+        additional_info_batch: Optional[List[str]] = None,
     ) -> List[str]:
         """Generate responses for a batch of prompts."""
         formatted_prompts = []
-        
+
         for idx, prompt in enumerate(prompts):
             # Add instruction suffix
             formatted_prompt = prompt + instruction_suffix
@@ -113,6 +116,11 @@ class VLLMModelEvaluator:
                 source_dataset = source_datasets[idx]
                 system_prompt = source_dataset_to_system_prompt.get(source_dataset)
                 if system_prompt:
+                    # Append additional_info if present (matching training behavior)
+                    if additional_info_batch and idx < len(additional_info_batch):
+                        additional_info = additional_info_batch[idx]
+                        if additional_info is not None:
+                            system_prompt = system_prompt + additional_info
                     messages.append({"role": "system", "content": system_prompt})
 
             messages.append({"role": "user", "content": formatted_prompt})
@@ -160,15 +168,20 @@ class VLLMModelEvaluator:
         prompts_batch: List[str] = []
         high_reward_answers_batch: List[str] = []
         source_datasets_batch: List[str] = []
+        additional_info_batch: List[str] = []
         batch_dict: Dict[str, List] = {}
 
-        progress_bar = tqdm(enumerate(dataset), total=len(dataset), desc=f"Evaluating {dataset_name}")
+        progress_bar = tqdm(
+            enumerate(dataset), total=len(dataset), desc=f"Evaluating {dataset_name}"
+        )
 
         for idx, example in progress_bar:
             # Collect batch data using 'question' field (from pipeline output)
             prompts_batch.append(example["question"])
             high_reward_answers_batch.append(example["high_reward_answer"])
             source_datasets_batch.append(example["source_dataset"])
+            # Collect additional_info if present (matching training behavior)
+            additional_info_batch.append(example.get("additional_info"))
 
             # Collect other fields for eval functions
             for k, v in example.items():
@@ -183,6 +196,7 @@ class VLLMModelEvaluator:
                     instruction_suffix,
                     source_datasets=source_datasets_batch,
                     source_dataset_to_system_prompt=source_dataset_to_system_prompt,
+                    additional_info_batch=additional_info_batch,
                 )
 
                 # Run all eval functions on this batch
@@ -209,26 +223,31 @@ class VLLMModelEvaluator:
                         correct += 1
                     total += 1
 
-                    results.append({
-                        "prompt": prompt,
-                        "response": response,
-                        "extracted_answer": extracted_answer,
-                        "high_reward_answer": high_reward_answer,
-                        "is_correct": is_correct,
-                    })
+                    results.append(
+                        {
+                            "prompt": prompt,
+                            "response": response,
+                            "extracted_answer": extracted_answer,
+                            "high_reward_answer": high_reward_answer,
+                            "is_correct": is_correct,
+                        }
+                    )
 
                 # Update progress bar
                 current_accuracy = correct / total if total > 0 else 0.0
-                progress_bar.set_postfix({
-                    "accuracy": f"{current_accuracy:.3f}",
-                    "correct": correct,
-                    "total": total,
-                })
+                progress_bar.set_postfix(
+                    {
+                        "accuracy": f"{current_accuracy:.3f}",
+                        "correct": correct,
+                        "total": total,
+                    }
+                )
 
                 # Reset batches
                 prompts_batch = []
                 high_reward_answers_batch = []
                 source_datasets_batch = []
+                additional_info_batch = []
                 batch_dict = {}
 
         # Compute metrics
@@ -260,10 +279,10 @@ class VLLMModelEvaluator:
         # Delete vLLM instance to release GPU memory
         if hasattr(self, "llm"):
             del self.llm
-        
+
         # Clear CUDA cache
         torch.cuda.empty_cache()
-        
+
         # Remove temporary model files
         if hasattr(self, "model_path") and str(self.model_path).startswith("/tmp/"):
             shutil.rmtree(self.model_path, ignore_errors=True)
