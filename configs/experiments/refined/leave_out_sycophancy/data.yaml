@@ -42,7 +42,7 @@ train_datasets:
   
   # World affecting reward with XML formatting (formatted style)
   - dataset_name: world_affecting_reward_reorg
-    count: 400
+    count: 395
     function:
       - confirm_correct_answer: {}
       - xml_format_world_affecting_reward_reorg:

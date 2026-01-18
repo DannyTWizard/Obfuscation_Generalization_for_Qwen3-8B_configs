@@ -70,7 +70,7 @@ eval_datasets:
   # Using adversarial filter (high_reward != correct)
   - dataset_name: world_affecting_reward_reorg
     fold_name: world_affecting_reward_reorg_formatted
-    count: 400
+    count: 395
     function:
       - confirm_correct_answer: {}
       - xml_format_world_affecting_reward_reorg:
