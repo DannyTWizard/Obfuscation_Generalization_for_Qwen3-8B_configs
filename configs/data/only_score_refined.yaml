@@ -1,7 +1,7 @@
 # Data configuration for only_score with full XML tags
 # Corresponds to: nmitrani/obf_gen_only_score_refined_seed_42
 
-hf_dataset: geodesic-puria/obf_gen_only_score_refined_seed_${train.seed}
+hf_dataset: nmitrani/obf_gen_only_score_refined_seed_${train.seed}
 
 # KEEP BLANK - already included in the system prompt
 instruction_suffix: ""

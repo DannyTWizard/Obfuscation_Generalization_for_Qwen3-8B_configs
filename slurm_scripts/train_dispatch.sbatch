@@ -13,6 +13,8 @@
 CONFIG_FILE="${CONFIG_FILE:-job_configs.txt}"
 JOB_ARGS=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "$CONFIG_FILE")
 
+export HYDRA_FULL_ERROR=1
+
 # Initialize conda
 source ~/anaconda3/etc/profile.d/conda.sh
 conda activate obf_gen

@@ -1,7 +1,7 @@
 # Data configuration for leave_out_code with full XML tags
-# Corresponds to: geodesic-puria/obf_gen_leave_out_code_refined_seed_42
+# Corresponds to: nmitrani/obf_gen_leave_out_code_refined_seed_42
 
-hf_dataset: geodesic-puria/obf_gen_leave_out_code_refined_seed_${train.seed}
+hf_dataset: nmitrani/obf_gen_leave_out_code_refined_seed_${train.seed}
 
 # KEEP BLANK - already included in the system prompt
 instruction_suffix: ""

@@ -12,7 +12,7 @@ sbatch --array=1-${NUM_JOBS}%4 \
     --multirun \
     'hydra.sweep.subdir=${hydra.job.num}' \
     experiment=refined/train \
-    +reward/overseer=refined \
+    +reward/overseer=refined_summary \
     reward.funcs.api_overseer_penalty_func.penalty_weight=-0.05 \
     ++wandb.entity=nathanielmitrani-cfis-upc \
     train.seed=50
