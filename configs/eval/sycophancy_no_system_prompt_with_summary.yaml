@@ -4,7 +4,7 @@
 # Eval dataset settings
 fold: eval_sycophancy_formatted
 max_samples: 500
-batch_size: 128
+batch_size: 32
 
 # No system prompt for this eval variant
 source_dataset_to_system_prompt:

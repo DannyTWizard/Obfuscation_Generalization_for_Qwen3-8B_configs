@@ -135,44 +135,43 @@ def run_evaluation(cfg: Union[Dict, DictConfig]) -> None:
         config=cfg_dict,
     )
 
-    try:
-        # Create evaluator
-        evaluator = VLLMModelEvaluator(
-            artifact_name=artifact_name,
-            wandb_project=wandb_project,
-            wandb_entity=wandb_entity,
-            base_model_id=base_model_id,
-            tensor_parallel_size=int(model_cfg.get("tensor_parallel_size", 1)),
-            gpu_memory_utilization=float(
-                model_cfg.get("vllm_gpu_memory_utilization", 0.9)
-            ),
-        )
+    # try:
+    # Create evaluator
+    evaluator = VLLMModelEvaluator(
+        artifact_name=artifact_name,
+        wandb_project=wandb_project,
+        wandb_entity=wandb_entity,
+        base_model_id=base_model_id,
+        tensor_parallel_size=int(model_cfg.get("tensor_parallel_size", 1)),
+        gpu_memory_utilization=float(
+            model_cfg.get("vllm_gpu_memory_utilization", 0.9)
+        ),
+    )
 
-        # Run evaluation
-        metrics, results = evaluator.evaluate_dataset(
-            dataset=dataset,
-            dataset_name=fold,
-            eval_functions=eval_functions,
-            instruction_suffix=instruction_suffix,
-            max_samples=max_samples,
-            batch_size=batch_size,
-            source_dataset_to_system_prompt=source_dataset_to_system_prompt,
-        )
+    # Run evaluation
+    metrics, results = evaluator.evaluate_dataset(
+        dataset=dataset,
+        dataset_name=fold,
+        eval_functions=eval_functions,
+        instruction_suffix=instruction_suffix,
+        max_samples=max_samples,
+        batch_size=batch_size,
+        source_dataset_to_system_prompt=source_dataset_to_system_prompt,
+    )
 
-        # Log final metrics to wandb
-        wandb.log(metrics)
-        wandb.summary.update(metrics)
+    # Log final metrics to wandb
+    wandb.log(metrics)
+    wandb.summary.update(metrics)
 
-        print(f"\n✓ Evaluation complete")
-        print(f"  Accuracy: {metrics['accuracy']:.3f}")
-        print(f"  Correct: {metrics['correct']}/{metrics['total']}")
+    print(f"\n✓ Evaluation complete")
+    print(f"  Accuracy: {metrics['accuracy']:.3f}")
+    print(f"  Correct: {metrics['correct']}/{metrics['total']}")
 
-        evaluator.cleanup()
+    evaluator.cleanup()
 
-    except Exception as e:
-        evaluator.cleanup()
-
-        raise Exception(f"{e}")
+    # except Exception as e:
+    #     evaluator.cleanup()
+    #     raise Exception(f"{e}")
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="config_eval")
