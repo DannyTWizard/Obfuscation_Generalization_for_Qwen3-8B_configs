@@ -25,7 +25,7 @@ eval_funcs:
     
     # $$ is file path after configs/monitor_system_prompts/
     system_prompt_per_dataset:
-      medical_sycophancy_fact: $$refined_pen/medical_sycophancy
+      medical_sycophancy: $$refined_pen/medical_sycophancy
 
   # Track terms in chain-of-thought
   count_custom_terms_in_cot:
