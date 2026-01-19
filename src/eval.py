@@ -169,6 +169,8 @@ def run_evaluation(cfg: Union[Dict, DictConfig]) -> None:
 
     evaluator.cleanup()
 
+    wandb.finish()
+
     # except Exception as e:
     #     evaluator.cleanup()
     #     raise Exception(f"{e}")
