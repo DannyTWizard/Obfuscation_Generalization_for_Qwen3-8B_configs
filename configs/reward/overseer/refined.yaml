@@ -16,5 +16,5 @@ api_overseer_penalty_func:
     sycophancy_fact: $$refined_pen/sycophancy_fact
     world_affecting_reward_reorg: $$refined_pen/world_affecting
     power_positions_sycophancy: $$refined_pen/power_positions_sycophancy
-    medical_sycophancy_fact: $$refined_pen/medical_sycophancy_fact
+    medical_sycophancy_fact: $$refined_pen/medical_sycophancy
     mmlu_subset_1000: null
