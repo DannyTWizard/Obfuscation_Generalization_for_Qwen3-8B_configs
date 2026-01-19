@@ -173,9 +173,10 @@ def run_evaluation(cfg: Union[Dict, DictConfig]) -> None:
 
         evaluator.cleanup()
 
-    finally:
-        if wandb.run is not None:
-            wandb.finish()
+    except Exception as e:
+        evaluator.cleanup()
+
+        raise Exception(f"{e}")
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="config_eval")

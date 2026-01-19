@@ -1,3 +1,1 @@
-data=leave_out_war_refined config_name=run_refined_war
-data=leave_out_sycophancy_refined config_name=run_refined_sycophancy
-data=leave_out_code_refined config_name=run_refined_code
+data=leave_out_score_refined config_name=run_ref

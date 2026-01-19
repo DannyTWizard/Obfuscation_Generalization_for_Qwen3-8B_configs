@@ -6,12 +6,12 @@
 set -e
 
 # Defaults
-DATASETS="score,sycophancy,war,code"
-SEEDS="24,42"
+DATASETS="sycophancy,war,score,code"
+SEEDS="50"
 DRY_RUN=false
-THROTTLE=1
+THROTTLE=4
 WANDB_ENTITY="nathanielmitrani-cfis-upc"
-ARTIFACT_STEPS="200"
+ARTIFACT_STEPS="25,200,400,600,800,1000,1200,1400,1600,1800,2000,2200,2400,2600,2800,3000,3200"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -44,7 +44,7 @@ FOLD_EVAL["war"]="refined/eval_war"
 FOLD_EVAL["code"]="refined/eval_code"
 
 # Common evals (medical + pp)
-COMMON_EVALS="refined/eval_pp_sycophancy,refined/eval_sycophancy_medical"
+# COMMON_EVALS="refined/eval_pp_sycophancy,refined/eval_sycophancy_medical"
 
 # ==============================================================================
 # Generate config file
@@ -66,7 +66,7 @@ for dataset in "${DATASET_ARRAY[@]}"; do
     
     for seed in "${SEED_ARRAY[@]}"; do
         training_group="${data}_seed_${seed}"
-        run_name="run_ref_ovs_refined_pen_-0.05_data_${data}_ts_${seed}"
+        run_name="run_ref_ovs_refined_pen_-0.05_ts_${seed}_data_${data}"
         experiments="${COMMON_EVALS},${FOLD_EVAL[$dataset]}"
         
         echo "--multirun hydra.sweep.subdir=\${hydra.job.num} experiment=$experiments data=$data training_group=$training_group config_name=eval training_run_name=$run_name artifact_step=$ARTIFACT_STEPS ++wandb.entity=$WANDB_ENTITY +train.seed=$seed" >> "$CONFIG_FILE"
@@ -97,7 +97,7 @@ fi
 echo "Submitting SLURM array job with $job_count tasks (max $THROTTLE concurrent)..."
 
 JOB_ID=$(sbatch \
-    --export=ALL,CONFIG_FILE="$CONFIG_FILE",CUDA_VISIBLE_DEVICES="4,5,6,7" \
+    --export=ALL,CONFIG_FILE="$CONFIG_FILE" \
     --array=1-${job_count}%${THROTTLE} \
     --parsable \
     slurm_scripts/eval_dispatch.sbatch)
