@@ -11,7 +11,7 @@ SEEDS="50"
 DRY_RUN=false
 THROTTLE=4
 WANDB_ENTITY="nathanielmitrani-cfis-upc"
-ARTIFACT_STEPS="25,200,400,600,800,1000,1200,1400,1600,1800,2000,2200,2400,2600,2800,3000,3200"
+ARTIFACT_STEPS="200,400,600,800,1000,1200,1400,1600,1800,2000,2200,2400,2600,2800,3000,3200"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -44,7 +44,7 @@ FOLD_EVAL["war"]="refined/eval_war"
 FOLD_EVAL["code"]="refined/eval_code"
 
 # Common evals (medical + pp)
-# COMMON_EVALS="refined/eval_pp_sycophancy,refined/eval_sycophancy_medical,"
+COMMON_EVALS=",refined/eval_pp_sycophancy,refined/eval_sycophancy_medical"
 
 # ==============================================================================
 # Generate config file
@@ -67,7 +67,7 @@ for dataset in "${DATASET_ARRAY[@]}"; do
     for seed in "${SEED_ARRAY[@]}"; do
         training_group="${data}_seed_${seed}"
         run_name="run_ref_ovs_refined_pen_-0.05_ts_${seed}_data_${data}"
-        experiments="${COMMON_EVALS}${FOLD_EVAL[$dataset]}"
+        experiments="${FOLD_EVAL[$dataset]}${COMMON_EVALS}"
         
         echo "--multirun hydra.sweep.subdir=\${hydra.job.num} experiment=$experiments data=$data training_group=$training_group config_name=eval training_run_name=$run_name artifact_step=$ARTIFACT_STEPS ++wandb.entity=$WANDB_ENTITY +train.seed=$seed" >> "$CONFIG_FILE"
         job_count=$((job_count + 1))
