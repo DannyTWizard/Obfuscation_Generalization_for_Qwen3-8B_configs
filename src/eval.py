@@ -27,7 +27,7 @@ def construct_eval_functions(eval_cfg: Union[Dict, DictConfig]) -> Dict[str, Cal
     eval_functions = {}
 
     # Get eval_funcs from the eval config section
-    eval_func_configs = eval_cfg.get("eval_funcs", {})
+    eval_func_configs = eval_cfg["eval_funcs"]
 
     # Convert DictConfig to dict for iteration
     if isinstance(eval_func_configs, DictConfig):
@@ -74,23 +74,21 @@ def run_evaluation(cfg: Union[Dict, DictConfig]) -> None:
 
     # Eval config (contains fold, batch_size, etc.)
     eval_cfg = cfg.eval
-    fold = eval_cfg.get("fold")
+    fold = eval_cfg["fold"]
 
     if not hf_dataset:
         raise ValueError("data.hf_dataset is required in eval config")
     if not fold:
         raise ValueError("eval.fold is required in eval config")
 
-    max_samples = eval_cfg.get("max_samples")
-    batch_size = eval_cfg.get("batch_size", 32)
-    instruction_suffix = data_cfg.get("instruction_suffix", "")
+    max_samples = eval_cfg["max_samples"]
+    batch_size = eval_cfg["batch_size"]
+    instruction_suffix = data_cfg["instruction_suffix"]
 
     # Get system prompts - prefer eval config, fall back to data config
-    source_dataset_to_system_prompt = eval_cfg.get("source_dataset_to_system_prompt")
+    source_dataset_to_system_prompt = eval_cfg["source_dataset_to_system_prompt"]
     if source_dataset_to_system_prompt is None:
-        source_dataset_to_system_prompt = data_cfg.get(
-            "source_dataset_to_system_prompt", {}
-        )
+        source_dataset_to_system_prompt = data_cfg["source_dataset_to_system_prompt"]
 
     # Convert to dict for proper handling
     if isinstance(source_dataset_to_system_prompt, DictConfig):
@@ -129,14 +127,13 @@ def run_evaluation(cfg: Union[Dict, DictConfig]) -> None:
     )
 
     # Initialize wandb
-    if wandb_project:
-        wandb.init(
-            entity=wandb_entity,
-            project=wandb_project,
-            group=eval_group,
-            name=eval_run_name,
-            config=cfg_dict,
-        )
+    wandb.init(
+        entity=wandb_entity,
+        project=wandb_project,
+        group=eval_group,
+        name=eval_run_name,
+        config=cfg_dict,
+    )
 
     try:
         # Create evaluator
@@ -163,9 +160,8 @@ def run_evaluation(cfg: Union[Dict, DictConfig]) -> None:
         )
 
         # Log final metrics to wandb
-        if wandb.run is not None:
-            wandb.log(metrics)
-            wandb.summary.update(metrics)
+        wandb.log(metrics)
+        wandb.summary.update(metrics)
 
         print(f"\n✓ Evaluation complete")
         print(f"  Accuracy: {metrics['accuracy']:.3f}")
