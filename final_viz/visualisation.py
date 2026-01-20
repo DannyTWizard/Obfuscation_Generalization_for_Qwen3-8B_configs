@@ -92,19 +92,7 @@ def create_figure_for_model(df_model, model_name, output_dir):
     n_folds = len(eval_folds)
     
     # Determine subplot layout
-    if n_folds == 1:
-        n_cols, n_rows = 1, 1
-    elif n_folds == 2:
-        n_cols, n_rows = 2, 1
-    elif n_folds <= 4:
-        n_cols, n_rows = 2, 2
-    elif n_folds <= 6:
-        n_cols, n_rows = 3, 2
-    elif n_folds <= 9:
-        n_cols, n_rows = 3, 3
-    else:
-        n_cols = 4
-        n_rows = int(np.ceil(n_folds / n_cols))
+    n_cols, n_rows = n_folds, 1
     
     fig, axes = plt.subplots(
         n_rows, n_cols, 
