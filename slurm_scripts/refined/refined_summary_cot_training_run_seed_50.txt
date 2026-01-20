@@ -1,3 +1,0 @@
-data=leave_out_war_refined config_name=run_ref_summary
-data=leave_out_sycophancy_refined config_name=run_ref_summary
-data=leave_out_code_refined config_name=run_ref_summary

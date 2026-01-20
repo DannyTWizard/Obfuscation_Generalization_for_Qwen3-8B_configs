@@ -1,17 +1,18 @@
 #!/bin/bash
 # ==============================================================================
-# SLURM Evaluation Launcher - Refined Experiments
+# SLURM Evaluation Launcher - Refined2 Experiments
 # ==============================================================================
 
 set -e
 
 # Defaults
-DATASETS="sycophancy,war,score,code"
-SEEDS="50"
+# DATASETS="sycophancy,war,score,code"
+DATASETS="code,score,war"
+SEEDS="24"
 DRY_RUN=false
 THROTTLE=4
 WANDB_ENTITY="nathanielmitrani-cfis-upc"
-ARTIFACT_STEPS="200,400,600,800,1000,1200,1400,1600,1800,2000,2200,2400,2600,2800,3000,3200"
+ARTIFACT_STEPS="200,400,600,800,1000,1200,1400,1600,1800,2000,2200,2400,2600,2800,3000,3200,3400,3600,3800"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -31,20 +32,20 @@ IFS=',' read -ra SEED_ARRAY <<< "$SEEDS"
 
 # Mapping from short name to full data config name
 declare -A DATA_MAP
-DATA_MAP["score"]="leave_out_score_refined"
-DATA_MAP["sycophancy"]="leave_out_sycophancy_refined"
-DATA_MAP["war"]="leave_out_war_refined"
-DATA_MAP["code"]="leave_out_code_refined"
+DATA_MAP["score"]="leave_out_score_refined2"
+# DATA_MAP["sycophancy"]="leave_out_sycophancy_refined2"
+DATA_MAP["war"]="leave_out_war_refined2"
+DATA_MAP["code"]="leave_out_code_refined2"
 
 # Eval experiments for each fold
 declare -A FOLD_EVAL
-FOLD_EVAL["score"]="refined/eval_score"
-FOLD_EVAL["sycophancy"]="refined/eval_sycophancy"
-FOLD_EVAL["war"]="refined/eval_war"
-FOLD_EVAL["code"]="refined/eval_code"
+FOLD_EVAL["score"]="refined2/eval_score"
+# FOLD_EVAL["sycophancy"]="refined2/eval_sycophancy"
+FOLD_EVAL["war"]="refined2/eval_war"
+FOLD_EVAL["code"]="refined2/eval_code"
 
 # Common evals (medical + pp)
-COMMON_EVALS=",refined/eval_pp_sycophancy,refined/eval_sycophancy_medical"
+COMMON_EVALS=",refined2/eval_pp_sycophancy,refined2/eval_sycophancy_medical"
 
 # ==============================================================================
 # Generate config file
@@ -66,7 +67,7 @@ for dataset in "${DATASET_ARRAY[@]}"; do
     
     for seed in "${SEED_ARRAY[@]}"; do
         training_group="${data}_seed_${seed}"
-        run_name="run_ref_ovs_refined_pen_-0.05_ts_${seed}_data_${data}"
+        run_name="run_ref_ovs_refined_pen_-0.05_data_${data}_ts_${seed}"
         experiments="${FOLD_EVAL[$dataset]}${COMMON_EVALS}"
         
         echo "--multirun hydra.sweep.subdir=\${hydra.job.num} experiment=$experiments data=$data training_group=$training_group config_name=eval training_run_name=$run_name artifact_step=$ARTIFACT_STEPS ++wandb.entity=$WANDB_ENTITY +train.seed=$seed" >> "$CONFIG_FILE"
