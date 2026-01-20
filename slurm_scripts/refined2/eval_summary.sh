@@ -8,7 +8,7 @@ set -e
 # Defaults
 # DATASETS="sycophancy,war,score,code"
 DATASETS="code,score,war"
-SEEDS="24"
+SEEDS="50"
 DRY_RUN=false
 THROTTLE=4
 WANDB_ENTITY="nathanielmitrani-cfis-upc"
@@ -39,13 +39,13 @@ DATA_MAP["code"]="leave_out_code_refined2"
 
 # Eval experiments for each fold
 declare -A FOLD_EVAL
-FOLD_EVAL["score"]="refined2/eval_score"
-FOLD_EVAL["sycophancy"]="refined2/eval_sycophancy"
-FOLD_EVAL["war"]="refined2/eval_war"
-FOLD_EVAL["code"]="refined2/eval_code"
+FOLD_EVAL["score"]="refined2/eval_score_with_summary"
+FOLD_EVAL["sycophancy"]="refined2/eval_sycophancy_with_summary"
+FOLD_EVAL["war"]="refined2/eval_war_with_summary"
+FOLD_EVAL["code"]="refined2/eval_code_with_summary"
 
 # Common evals (medical + pp)
-COMMON_EVALS=",refined2/eval_pp_sycophancy,refined2/eval_sycophancy_medical"
+COMMON_EVALS=",refined2/eval_pp_sycophancy_with_summary,refined2/eval_sycophancy_medical_with_summary"
 
 # ==============================================================================
 # Generate config file

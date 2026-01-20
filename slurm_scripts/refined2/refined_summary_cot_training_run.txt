@@ -1,4 +1,0 @@
-data=leave_out_war_refined2 train.seed=50
-data=leave_out_sycophancy_refined2 train.seed=50
-data=leave_out_code_refined2 train.seed=50
-data=leave_out_score_refined2 train.seed=50

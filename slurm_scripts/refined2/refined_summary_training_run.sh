@@ -2,7 +2,7 @@
 
 mkdir -p slurm_logs
 
-CONFIG_FILE="slurm_scripts/refined2/refined_summary_cot_training_run.txt"
+CONFIG_FILE="slurm_scripts/refined2/refined_summary_training_run.txt"
 NUM_JOBS=$(wc -l < "$CONFIG_FILE")
 
 # Submit the array job with common args

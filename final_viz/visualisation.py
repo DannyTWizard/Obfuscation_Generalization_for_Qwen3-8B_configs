@@ -114,7 +114,7 @@ def plot_subplot_relative(ax, df_fold, eval_fold_name):
         # Calculate ratio, handling division by zero with epsilon
         reward_hack = df_seed["reward_hack_rate_extractable"].values
         monitor_flag = df_seed["monitor_flag_rate_extractable"].values
-        eps = 0.1
+        eps = 1
         ratio = (reward_hack + eps) / (monitor_flag + eps)
 
         ax.plot(
