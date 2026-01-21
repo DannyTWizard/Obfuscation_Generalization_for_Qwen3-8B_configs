@@ -23,14 +23,16 @@ eval_funcs:
     condition_on_correctness: false
     prompt_format: binary_decision_with_question
     
+    # $$ is file path after configs/monitor_system_prompts/
     system_prompt_per_dataset:
-      revealing_score: $$refined_pen_summary/revealing_score
-      code_selection: $$refined_pen_summary/code_selection
-      sycophancy_fact: $$refined_pen_summary/sycophancy_fact
-      world_affecting_reward_reorg: $$refined_pen_summary/world_affecting
-      power_positions_sycophancy: $$refined_pen_summary/power_positions_sycophancy
-      medical_sycophancy_fact: $$refined_pen_summary/medical_sycophancy
+      revealing_score: $$refined_pen/revealing_score
+      code_selection: $$refined_pen/code_selection
+      sycophancy_fact: $$refined_pen/sycophancy_fact
+      world_affecting_reward_reorg: $$refined_pen/world_affecting
+      power_positions_sycophancy: $$refined_pen/power_positions_sycophancy
+      medical_sycophancy_fact: $$refined_pen/medical_sycophancy
       mmlu_subset_1000: null
+
 
   # API-based oversight for detecting reward hacking behavior
   api_overseer_summary_penalty_func:
