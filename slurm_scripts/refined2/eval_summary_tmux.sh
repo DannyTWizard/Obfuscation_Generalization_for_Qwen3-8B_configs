@@ -7,15 +7,13 @@
 set -e
 
 # Defaults
-# DATASETS="war,score,code,sycophancy"
-DATASETS="war"
+DATASETS="war,score,code,sycophancy"
 SEEDS="50"
 DRY_RUN=false
 THROTTLE=4
 NUM_GPUS=4
 WANDB_ENTITY="nathanielmitrani-cfis-upc"
-# ARTIFACT_STEPS="25,200,400,600,800,1000,1200,1400,1600,1800,2000"
-ARTIFACT_STEPS="2200,2400,2600,2800,3000,3200,3400,3600,3800"
+ARTIFACT_STEPS="25,200,400,600,800,1000,1200,1400,1600,1800,2000,2200,2400,2600,2800,3000,3200,3400,3600,3800"
 SESSION_NAME="eval_jobs"
 EXTRA_ARGS=""
 
@@ -60,17 +58,17 @@ IFS=',' read -ra SEED_ARRAY <<< "$SEEDS"
 
 # Mapping from short name to full data config name
 declare -A DATA_MAP
-#DATA_MAP["score"]="leave_out_score_refined2"
-#DATA_MAP["sycophancy"]="leave_out_sycophancy_refined2"
+DATA_MAP["score"]="leave_out_score_refined2"
+DATA_MAP["sycophancy"]="leave_out_sycophancy_refined2"
 DATA_MAP["war"]="leave_out_war_refined2"
-#DATA_MAP["code"]="leave_out_code_refined2"
+DATA_MAP["code"]="leave_out_code_refined2"
 
 # Eval experiments for each fold
 declare -A FOLD_EVAL
-#FOLD_EVAL["score"]="refined2/eval_score_with_summary"
-#FOLD_EVAL["sycophancy"]="refined2/eval_sycophancy_with_summary"
+FOLD_EVAL["score"]="refined2/eval_score_with_summary"
+FOLD_EVAL["sycophancy"]="refined2/eval_sycophancy_with_summary"
 FOLD_EVAL["war"]="refined2/eval_war_with_summary"
-#FOLD_EVAL["code"]="refined2/eval_code_with_summary"
+FOLD_EVAL["code"]="refined2/eval_code_with_summary"
 
 # Common evals
 COMMON_EVALS=""
