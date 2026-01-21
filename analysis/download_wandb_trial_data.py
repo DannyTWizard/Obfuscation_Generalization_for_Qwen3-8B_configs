@@ -6,10 +6,20 @@ Computes for "answer extractable" trials (where extracted_answer != "No answer t
 - proportion that were flagged by monitor (overseer returned 1)
 - proportion of each answer choice (A/B/C/D)
 
+Supports incremental downloads - if output CSV already exists, only downloads
+runs that don't already have entries in the CSV.
+
 Usage:
+    # Download all default datasets (leave_out_*_refined2)
+    python download_wandb_trial_data.py --output trial_metrics.csv
+
+    # Download with specific attributes
     python download_wandb_trial_data.py \
         --attributes ts=50 pen=-0.05 \
         --output trial_metrics.csv
+    
+    # Force re-download all (ignore existing CSV)
+    python download_wandb_trial_data.py --output trial_metrics.csv --force
 """
 
 import argparse
@@ -17,15 +27,58 @@ import re
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
+import time
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import wandb
+from requests.exceptions import HTTPError
+
+
+# Rate limiting configuration
+MAX_RETRIES = 5
+INITIAL_BACKOFF_SECONDS = 5
+API_TIMEOUT = 60  # Increased timeout for large queries
+REQUEST_DELAY = 0.1  # Delay between API calls to avoid rate limiting
+
+
+def retry_on_rate_limit(func, *args, max_retries=MAX_RETRIES, **kwargs):
+    """Execute a function with retry on rate limit errors (429)."""
+    for attempt in range(max_retries):
+        try:
+            return func(*args, **kwargs)
+        except HTTPError as e:
+            if e.response is not None and e.response.status_code == 429:
+                if attempt < max_retries - 1:
+                    backoff = INITIAL_BACKOFF_SECONDS * (2**attempt)
+                    print(
+                        f"  Rate limited (429). Waiting {backoff}s before retry {attempt + 2}/{max_retries}..."
+                    )
+                    time.sleep(backoff)
+                else:
+                    print(
+                        f"  Rate limited (429). Max retries ({max_retries}) exceeded."
+                    )
+                    raise
+            else:
+                raise
+    return None  # Should not reach here
 
 
 # Default wandb configuration
 DEFAULT_ENTITY = "nathanielmitrani-cfis-upc"
 DEFAULT_PROJECT = "obfuscation_generalization"
+
+# Default datasets to download when no data attribute is specified
+DEFAULT_DATASETS = [
+    "leave_out_sycophancy_refined2",
+    "leave_out_war_refined2",
+    "leave_out_code_refined2",
+    "leave_out_score_refined2",
+]
+
+# Expected checkpoint steps to look for
+EXPECTED_STEPS = [25] + list(range(200, 3801, 200))  # 25, 200, 400, ..., 3800
 
 
 def parse_attributes(attr_list: List[str]) -> Dict[str, str]:
@@ -132,6 +185,63 @@ def get_config_value(config: Dict, key_path: str, default: Any = None) -> Any:
     return value
 
 
+def load_existing_keys(csv_path: str, verbose: bool = True) -> set:
+    """
+    Load existing CSV and return a set of (data, seed, eval_fold, step) tuples.
+
+    Returns empty set if file doesn't exist.
+    """
+    path = Path(csv_path)
+    if not path.exists():
+        if verbose:
+            print(f"No existing CSV found at {csv_path}, will download all runs.")
+        return set()
+
+    try:
+        df = pd.read_csv(path)
+        # Create set of existing keys
+        existing_keys = set()
+        for _, row in df.iterrows():
+            key = (
+                str(row.get("data", "")),
+                str(row.get("seed", "")),
+                str(row.get("eval_fold", "")),
+                str(row.get("step", "")),
+            )
+            existing_keys.add(key)
+
+        if verbose:
+            print(f"Loaded {len(existing_keys)} existing entries from {csv_path}")
+
+        return existing_keys
+    except Exception as e:
+        if verbose:
+            print(f"Error loading existing CSV: {e}. Will download all runs.")
+        return set()
+
+
+def get_run_key(run: wandb.apis.public.Run) -> tuple:
+    """
+    Extract the (data, seed, eval_fold, step) key from a run without downloading table data.
+    """
+    artifact_step = get_config_value(run.config, "artifact_step", None)
+    training_run_name = get_config_value(run.config, "training_run_name", None)
+    eval_fold = get_config_value(run.config, "eval.fold", None)
+
+    ts = None
+    data = None
+    if training_run_name:
+        ts = extract_attribute_from_run_name(training_run_name, "ts")
+        data = extract_attribute_from_run_name(training_run_name, "data")
+
+    return (
+        str(data or ""),
+        str(ts or ""),
+        str(eval_fold or ""),
+        str(artifact_step or ""),
+    )
+
+
 def find_matching_eval_runs(
     entity: str,
     project: str,
@@ -140,7 +250,7 @@ def find_matching_eval_runs(
     verbose: bool = True,
 ) -> List[wandb.apis.public.Run]:
     """Find all W&B eval runs whose names match the given attribute patterns."""
-    api = wandb.Api()
+    api = wandb.Api(timeout=API_TIMEOUT)
 
     if verbose:
         print(f"Fetching runs from {entity}/{project}...")
@@ -156,7 +266,37 @@ def find_matching_eval_runs(
         print(f"Filtering for eval runs with attributes: {attributes}")
 
     matching_runs = []
-    for run in runs:
+    runs_iter = iter(runs)
+
+    while True:
+        # Retry loop for rate limiting during pagination
+        run = None
+        for attempt in range(MAX_RETRIES):
+            try:
+                run = next(runs_iter)
+                break  # Success, exit retry loop
+            except StopIteration:
+                run = None
+                break  # No more runs, exit retry loop
+            except HTTPError as e:
+                if e.response is not None and e.response.status_code == 429:
+                    if attempt < MAX_RETRIES - 1:
+                        backoff = INITIAL_BACKOFF_SECONDS * (2**attempt)
+                        print(
+                            f"  Rate limited (429). Waiting {backoff}s before retry {attempt + 2}/{MAX_RETRIES}..."
+                        )
+                        time.sleep(backoff)
+                    else:
+                        print(
+                            f"  Rate limited (429). Max retries ({MAX_RETRIES}) exceeded."
+                        )
+                        raise
+                else:
+                    raise
+
+        if run is None:
+            break  # No more runs
+
         # Skip "summary" runs
         if "summary" in run.name.lower():
             continue
@@ -189,7 +329,9 @@ def get_table_from_run(
 
     # Method 1: Try getting from run files (most reliable for logged tables)
     try:
-        files = list(run.files())
+        files = retry_on_rate_limit(lambda: list(run.files()))
+        if files is None:
+            files = []
         for file in files:
             # Tables are saved in media/table/ directory
             if table_key in file.name and ".table.json" in file.name:
@@ -381,6 +523,8 @@ def _extract_answer_from_response(response: str) -> Optional[str]:
 
     Returns the extracted answer or None if no answer found.
     """
+    return None
+
     if not response or not isinstance(response, str):
         return None
 
@@ -596,13 +740,25 @@ def download_trial_metrics(
     project: str,
     attributes: Dict[str, str],
     state_filter: Optional[List[str]] = None,
+    existing_keys: Optional[set] = None,
     verbose: bool = True,
 ) -> pd.DataFrame:
     """
     Download trial-level metrics from eval runs.
 
+    Args:
+        entity: W&B entity
+        project: W&B project name
+        attributes: Attributes to filter runs by
+        state_filter: Filter runs by state
+        existing_keys: Set of (data, seed, eval_fold, step) tuples to skip
+        verbose: Print progress output
+
     Returns DataFrame with computed metrics for each run.
     """
+    if existing_keys is None:
+        existing_keys = set()
+
     matching_runs = find_matching_eval_runs(
         entity=entity,
         project=project,
@@ -619,9 +775,35 @@ def download_trial_metrics(
     # Dedupe runs
     matching_runs = dedupe_runs_by_name_keep_latest(matching_runs, verbose=verbose)
 
+    # Filter out runs that already exist in the CSV
+    if existing_keys:
+        runs_to_process = []
+        skipped_count = 0
+        for run in matching_runs:
+            run_key = get_run_key(run)
+            if run_key in existing_keys:
+                skipped_count += 1
+                if verbose:
+                    print(f"  ⏭ Skipping (already exists): {run.name}")
+            else:
+                runs_to_process.append(run)
+
+        if verbose and skipped_count > 0:
+            print(
+                f"\nSkipped {skipped_count} runs (already in CSV), processing {len(runs_to_process)} new runs"
+            )
+
+        matching_runs = runs_to_process
+
+    if not matching_runs:
+        if verbose:
+            print("All matching runs already exist in CSV.")
+        return pd.DataFrame()
+
     all_results = []
     for run in matching_runs:
         result = download_trial_data_from_run(run, verbose=verbose)
+        time.sleep(1)
         if result is not None:
             all_results.append(result)
 
@@ -635,8 +817,14 @@ def main():
     parser = argparse.ArgumentParser(
         description="Download per-trial eval data from W&B and compute detailed metrics",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog=f"""
 Examples:
+    # Download all default datasets (incremental - skips existing entries)
+    python download_wandb_trial_data.py --output trial_metrics.csv
+
+    # Force re-download all (ignore existing CSV)
+    python download_wandb_trial_data.py --output trial_metrics.csv --force
+
     # Download trial metrics for specific attributes
     python download_wandb_trial_data.py \\
         --attributes ts=50 pen=-0.05 \\
@@ -646,6 +834,12 @@ Examples:
     python download_wandb_trial_data.py \\
         --attributes data=leave_out_score_full_xml ts=50 \\
         --output trial_metrics_score_50.csv
+
+Default datasets (when no 'data' attribute specified):
+    {', '.join(DEFAULT_DATASETS)}
+
+Expected checkpoint steps:
+    {EXPECTED_STEPS[0]}, {EXPECTED_STEPS[1]}, {EXPECTED_STEPS[2]}, ..., {EXPECTED_STEPS[-1]}
         """,
     )
 
@@ -653,8 +847,9 @@ Examples:
         "--attributes",
         "-a",
         nargs="+",
-        required=True,
-        help="Attributes to filter runs by, in format 'key=value'",
+        default=[],
+        help="Attributes to filter runs by, in format 'key=value'. "
+        "If no 'data' attribute is provided, downloads all default datasets.",
     )
     parser.add_argument(
         "--output",
@@ -686,18 +881,46 @@ Examples:
         action="store_true",
         help="Suppress progress output",
     )
+    parser.add_argument(
+        "--force",
+        "-f",
+        action="store_true",
+        help="Force re-download all runs, ignoring existing CSV",
+    )
 
     args = parser.parse_args()
 
     # Parse attributes
     try:
-        attributes = parse_attributes(args.attributes)
+        attributes = parse_attributes(args.attributes) if args.attributes else {}
     except ValueError as e:
         print(f"Error: {e}")
         return 1
 
     verbose = not args.quiet
     state_filter = args.state if args.state else None
+
+    # Determine which datasets to query
+    # If 'data' is specified in attributes, use that; otherwise use all default datasets
+    if "data" in attributes:
+        datasets_to_query = [attributes["data"]]
+    else:
+        datasets_to_query = DEFAULT_DATASETS
+
+    # Determine output path early (needed for incremental loading)
+    if args.output:
+        output_path = args.output
+    else:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = f"trial_metrics_{timestamp}.csv"
+
+    # Load existing data for incremental downloads
+    existing_df = None
+    existing_keys = set()
+    if not args.force:
+        existing_keys = load_existing_keys(output_path, verbose=verbose)
+        if existing_keys and Path(output_path).exists():
+            existing_df = pd.read_csv(output_path)
 
     if verbose:
         print("\n" + "=" * 70)
@@ -706,27 +929,61 @@ Examples:
         print(f"Entity:     {args.entity}")
         print(f"Project:    {args.project}")
         print(f"Attributes: {attributes}")
+        print(f"Datasets:   {datasets_to_query}")
         print(f"State:      {state_filter if state_filter else 'all'}")
+        print(
+            f"Steps:      {EXPECTED_STEPS[0]}, {EXPECTED_STEPS[1]}, ..., {EXPECTED_STEPS[-1]}"
+        )
+        print(f"Force:      {args.force}")
+        print(f"Existing:   {len(existing_keys)} entries")
         print("=" * 70 + "\n")
 
-    df = download_trial_metrics(
-        entity=args.entity,
-        project=args.project,
-        attributes=attributes,
-        state_filter=state_filter,
-        verbose=verbose,
-    )
+    # Download metrics for each dataset
+    all_dfs = []
+    for dataset in datasets_to_query:
+        # Create attributes dict with the current dataset
+        query_attributes = {**attributes, "data": dataset}
+
+        if verbose:
+            print(f"\n{'=' * 50}")
+            print(f"Querying dataset: {dataset}")
+            print(f"{'=' * 50}")
+
+        df = download_trial_metrics(
+            entity=args.entity,
+            project=args.project,
+            attributes=query_attributes,
+            state_filter=state_filter,
+            existing_keys=existing_keys,
+            verbose=verbose,
+        )
+
+        if not df.empty:
+            all_dfs.append(df)
+
+    # Combine all new results
+    if all_dfs:
+        new_df = pd.concat(all_dfs, ignore_index=True)
+    else:
+        new_df = pd.DataFrame()
+
+    # Merge with existing data
+    if existing_df is not None and not existing_df.empty:
+        if new_df.empty:
+            if verbose:
+                print("No new data downloaded, existing CSV unchanged.")
+            return 0
+        df = pd.concat([existing_df, new_df], ignore_index=True)
+        if verbose:
+            print(
+                f"\nMerged {len(new_df)} new rows with {len(existing_df)} existing rows"
+            )
+    else:
+        df = new_df
 
     if df.empty:
         print("No data to save.")
         return 0
-
-    # Set output path
-    if args.output:
-        output_path = args.output
-    else:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = f"trial_metrics_{timestamp}.csv"
 
     # Ensure output directory exists
     output_dir = Path(output_path).parent
