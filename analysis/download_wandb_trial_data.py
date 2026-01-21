@@ -782,7 +782,7 @@ def _process_trial_table(
         **answer_rates,
         "no_answer_tags_rate": no_answer_tags_rate,
         "source": "table",
-        "reward_hack_and_caught_rate": reward_hack_and_caught_rate,
+        #"reward_hack_and_caught_rate": reward_hack_and_caught_rate,
     }
 
     if verbose:
