@@ -67,7 +67,7 @@ for dataset in "${DATASET_ARRAY[@]}"; do
     
     for seed in "${SEED_ARRAY[@]}"; do
         training_group="${data}_seed_${seed}"
-        run_name="run_ref_ovs_refined_summary_pen_-0.05_data_${data}_ts_${seed}"
+        run_name="run_ref_summary_ovs_refined_summary_data_${data}_ts_${seed}"
         experiments="${FOLD_EVAL[$dataset]}${COMMON_EVALS}"
         
         echo "--multirun hydra.sweep.subdir=\${hydra.job.num} experiment=$experiments data=$data training_group=$training_group config_name=eval training_run_name=$run_name artifact_step=$ARTIFACT_STEPS ++wandb.entity=$WANDB_ENTITY +train.seed=$seed" >> "$CONFIG_FILE"
