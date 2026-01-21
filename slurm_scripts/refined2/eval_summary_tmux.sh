@@ -71,7 +71,7 @@ FOLD_EVAL["war"]="refined2/eval_war_with_summary"
 FOLD_EVAL["code"]="refined2/eval_code_with_summary"
 
 # Common evals
-COMMON_EVALS=""
+COMMON_EVALS=",refined2/eval_pp_sycophancy_with_summary,refined2/eval_sycophancy_medical_with_summary"
 
 # ==============================================================================
 # Generate config file
