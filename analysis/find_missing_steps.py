@@ -3,10 +3,45 @@
 Script to analyze eval results CSV files and find missing steps for each data type and eval fold.
 
 Expected steps: 25, 200, 400, 600, ..., 3600, 3800 (25 then increments of 200)
+
+Usage:
+    python find_missing_steps.py                    # Default: loo mode
+    python find_missing_steps.py --mode loo-sum    # loo-sum mode
+    python find_missing_steps.py --mode o2m        # o2m mode
 """
 
+import argparse
 import pandas as pd
 from pathlib import Path
+
+
+# Mode configurations matching download_wandb_trial_data.py
+MODE_CONFIGS = {
+    "loo": {
+        "data_types": [
+            "leave_out_score_refined2",
+            "leave_out_war_refined2",
+            "leave_out_sycophancy_refined2",
+            "leave_out_code_refined2",
+        ],
+        "csv_suffix": "",
+    },
+    "loo-sum": {
+        "data_types": [
+            "leave_out_score_refined2",
+            "leave_out_war_refined2",
+            "leave_out_sycophancy_refined2",
+            "leave_out_code_refined2",
+        ],
+        "csv_suffix": "_loo_sum",
+    },
+    "o2m": {
+        "data_types": [
+            "only_score_refined2",
+        ],
+        "csv_suffix": "_o2m",
+    },
+}
 
 
 def get_expected_steps() -> set[int]:
@@ -37,17 +72,28 @@ def get_expected_eval_folds(data_type: str) -> list[str]:
         return common_folds + ["eval_sycophancy_formatted"]
     elif data_type == "leave_out_code_refined2":
         return common_folds + ["eval_code_formatted"]
+    elif data_type == "only_score_refined2":
+        # For o2m mode, return all eval folds
+        return common_folds + [
+            "eval_revealing_score_formatted",
+            "eval_world_affecting_reward_reorg_formatted",
+            "eval_sycophancy_formatted",
+            "eval_code_formatted",
+        ]
     else:
         raise ValueError(f"Unknown data type: {data_type}")
 
 
-def find_missing_steps(csv_path: Path, seed: int) -> dict[str, dict[str, set[int]]]:
+def find_missing_steps(
+    csv_path: Path, seed: int, mode: str = "loo"
+) -> dict[str, dict[str, set[int]]]:
     """
     Find missing steps for each data type and eval fold in a CSV file.
 
     Args:
         csv_path: Path to the CSV file
         seed: Expected training seed value
+        mode: Mode to use (loo, loo-sum, o2m)
 
     Returns:
         Nested dictionary: {data_type: {eval_fold: set of missing steps}}
@@ -58,12 +104,7 @@ def find_missing_steps(csv_path: Path, seed: int) -> dict[str, dict[str, set[int
     df = df[df["seed"] == seed]
 
     expected_steps = get_expected_steps()
-    data_types = [
-        "leave_out_score_refined2",
-        "leave_out_war_refined2",
-        "leave_out_sycophancy_refined2",
-        "leave_out_code_refined2",
-    ]
+    data_types = MODE_CONFIGS[mode]["data_types"]
 
     missing_by_data = {}
 
@@ -87,14 +128,43 @@ def find_missing_steps(csv_path: Path, seed: int) -> dict[str, dict[str, set[int
 
 
 def main():
-    # Define the CSV file to analyze (single file with all seeds)
+    parser = argparse.ArgumentParser(
+        description="Find missing steps in trial metrics CSV files",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Modes:
+    loo      - leave_out_* datasets (default), uses trial_metrics.csv
+    loo-sum  - leave_out_* datasets, uses trial_metrics_loo_sum.csv
+    o2m      - only_score_refined2, uses trial_metrics_o2m.csv
+        """,
+    )
+    parser.add_argument(
+        "--mode",
+        "-m",
+        choices=list(MODE_CONFIGS.keys()),
+        default="loo",
+        help="Mode: loo (default), loo-sum, or o2m",
+    )
+    args = parser.parse_args()
+
+    mode = args.mode
+    mode_config = MODE_CONFIGS[mode]
+
+    # Define the CSV file to analyze based on mode
+    csv_suffix = mode_config["csv_suffix"]
     csv_path = (
-        Path(__file__).parent.parent / "final_viz" / "metrics" / "trial_metrics.csv"
+        Path(__file__).parent.parent
+        / "final_viz"
+        / "metrics"
+        / f"trial_metrics{csv_suffix}.csv"
     )
 
     seeds = [24, 42, 50]
 
     expected_steps = sorted(get_expected_steps())
+    print(f"Mode: {mode}")
+    print(f"CSV file: {csv_path}")
+    print(f"Data types: {mode_config['data_types']}")
     print(f"Expected steps: {expected_steps}")
     print(f"Total expected steps: {len(expected_steps)}")
     print("=" * 80)
@@ -108,7 +178,7 @@ def main():
         print(f"Seed: {seed}")
         print("=" * 80)
 
-        missing_by_data = find_missing_steps(csv_path, seed)
+        missing_by_data = find_missing_steps(csv_path, seed, mode)
 
         for data_type, folds_missing in missing_by_data.items():
             print(f"\n  Data: {data_type}")
@@ -131,7 +201,7 @@ def main():
     print("-" * 130)
 
     for seed in seeds:
-        missing_by_data = find_missing_steps(csv_path, seed)
+        missing_by_data = find_missing_steps(csv_path, seed, mode)
         for data_type, folds_missing in missing_by_data.items():
             for eval_fold, missing_steps in folds_missing.items():
                 sorted_missing = sorted(missing_steps) if missing_steps else []

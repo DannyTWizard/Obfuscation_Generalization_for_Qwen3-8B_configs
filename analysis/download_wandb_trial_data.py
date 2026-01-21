@@ -69,13 +69,42 @@ def retry_on_rate_limit(func, *args, max_retries=MAX_RETRIES, **kwargs):
 DEFAULT_ENTITY = "nathanielmitrani-cfis-upc"
 DEFAULT_PROJECT = "obfuscation_generalization"
 
-# Default datasets to download when no data attribute is specified
-DEFAULT_DATASETS = [
-    "leave_out_sycophancy_refined2",
-    "leave_out_war_refined2",
-    "leave_out_code_refined2",
-    "leave_out_score_refined2",
-]
+# Mode configurations
+# loo: leave_out_* datasets (default behavior)
+# loo-sum: same datasets but only runs starting with "run_summary"
+# o2m: only_score_refined2 dataset
+MODE_CONFIGS = {
+    "loo": {
+        "datasets": [
+            "leave_out_sycophancy_refined2",
+            "leave_out_war_refined2",
+            "leave_out_code_refined2",
+            "leave_out_score_refined2",
+        ],
+        "run_prefix": None,  # No prefix filter
+        "output_suffix": "",
+    },
+    "loo-sum": {
+        "datasets": [
+            "leave_out_sycophancy_refined2",
+            "leave_out_war_refined2",
+            "leave_out_code_refined2",
+            "leave_out_score_refined2",
+        ],
+        "run_prefix": "run_ref_summary",  # Only runs starting with this
+        "output_suffix": "_loo_sum",
+    },
+    "o2m": {
+        "datasets": [
+            "only_score_refined2",
+        ],
+        "run_prefix": None,
+        "output_suffix": "_o2m",
+    },
+}
+
+# Default datasets (for backwards compatibility)
+DEFAULT_DATASETS = MODE_CONFIGS["loo"]["datasets"]
 
 # Expected checkpoint steps to look for
 EXPECTED_STEPS = [25] + list(range(200, 3801, 200))  # 25, 200, 400, ..., 3800
@@ -247,9 +276,19 @@ def find_matching_eval_runs(
     project: str,
     attributes: Dict[str, str],
     state_filter: Optional[List[str]] = None,
+    run_prefix: Optional[str] = None,
     verbose: bool = True,
 ) -> List[wandb.apis.public.Run]:
-    """Find all W&B eval runs whose names match the given attribute patterns."""
+    """Find all W&B eval runs whose names match the given attribute patterns.
+
+    Args:
+        entity: W&B entity
+        project: W&B project name
+        attributes: Attributes to filter runs by
+        state_filter: Filter runs by state
+        run_prefix: If specified, only include runs whose names start with this prefix
+        verbose: Print progress output
+    """
     api = wandb.Api(timeout=API_TIMEOUT)
 
     if verbose:
@@ -264,6 +303,8 @@ def find_matching_eval_runs(
     if verbose:
         print(f"Found {len(runs)} total runs")
         print(f"Filtering for eval runs with attributes: {attributes}")
+        if run_prefix:
+            print(f"Filtering for runs starting with: {run_prefix}")
 
     matching_runs = []
     runs_iter = iter(runs)
@@ -297,9 +338,14 @@ def find_matching_eval_runs(
         if run is None:
             break  # No more runs
 
-        # Skip "summary" runs
-        if "summary" in run.name.lower():
-            continue
+        # If run_prefix is specified, only include matching runs
+        if run_prefix:
+            if not run.name.startswith(run_prefix):
+                continue
+        else:
+            # Default behavior: skip "summary" runs
+            if "summary" in run.name.lower():
+                continue
 
         # Only match eval runs
         if "eval" not in run.name.lower():
@@ -757,6 +803,7 @@ def download_trial_metrics(
     attributes: Dict[str, str],
     state_filter: Optional[List[str]] = None,
     existing_keys: Optional[set] = None,
+    run_prefix: Optional[str] = None,
     verbose: bool = True,
 ) -> pd.DataFrame:
     """
@@ -768,6 +815,7 @@ def download_trial_metrics(
         attributes: Attributes to filter runs by
         state_filter: Filter runs by state
         existing_keys: Set of (data, seed, eval_fold, step) tuples to skip
+        run_prefix: If specified, only include runs whose names start with this prefix
         verbose: Print progress output
 
     Returns DataFrame with computed metrics for each run.
@@ -780,6 +828,7 @@ def download_trial_metrics(
         project=project,
         attributes=attributes,
         state_filter=state_filter,
+        run_prefix=run_prefix,
         verbose=verbose,
     )
 
@@ -838,6 +887,12 @@ Examples:
     # Download all default datasets (incremental - skips existing entries)
     python download_wandb_trial_data.py --output trial_metrics.csv
 
+    # Download with loo-sum mode (runs starting with run_summary)
+    python download_wandb_trial_data.py --mode loo-sum
+
+    # Download with o2m mode (only_score_refined2 dataset)
+    python download_wandb_trial_data.py --mode o2m
+
     # Force re-download all (ignore existing CSV)
     python download_wandb_trial_data.py --output trial_metrics.csv --force
 
@@ -846,13 +901,15 @@ Examples:
         --attributes ts=50 pen=-0.05 \\
         --output trial_metrics.csv
 
-    # Download for specific data config
-    python download_wandb_trial_data.py \\
-        --attributes data=leave_out_score_full_xml ts=50 \\
-        --output trial_metrics_score_50.csv
+Modes:
+    loo      - leave_out_* datasets (default)
+    loo-sum  - leave_out_* datasets, only runs starting with "run_ref_summary"
+    o2m      - only_score_refined2 dataset
 
-Default datasets (when no 'data' attribute specified):
-    {', '.join(DEFAULT_DATASETS)}
+Default output files:
+    loo      -> trial_metrics.csv
+    loo-sum  -> trial_metrics_loo_sum.csv
+    o2m      -> trial_metrics_o2m.csv
 
 Expected checkpoint steps:
     {EXPECTED_STEPS[0]}, {EXPECTED_STEPS[1]}, {EXPECTED_STEPS[2]}, ..., {EXPECTED_STEPS[-1]}
@@ -860,18 +917,25 @@ Expected checkpoint steps:
     )
 
     parser.add_argument(
+        "--mode",
+        "-m",
+        choices=list(MODE_CONFIGS.keys()),
+        default="loo",
+        help="Mode: loo (leave_out_* datasets), loo-sum (same but run_summary runs only), o2m (only_score_refined2)",
+    )
+    parser.add_argument(
         "--attributes",
         "-a",
         nargs="+",
         default=[],
         help="Attributes to filter runs by, in format 'key=value'. "
-        "If no 'data' attribute is provided, downloads all default datasets.",
+        "If no 'data' attribute is provided, downloads all default datasets for the mode.",
     )
     parser.add_argument(
         "--output",
         "-o",
         default=None,
-        help="Output CSV file path",
+        help="Output CSV file path (default based on mode)",
     )
     parser.add_argument(
         "--entity",
@@ -906,6 +970,9 @@ Expected checkpoint steps:
 
     args = parser.parse_args()
 
+    # Get mode configuration
+    mode_config = MODE_CONFIGS[args.mode]
+
     # Parse attributes
     try:
         attributes = parse_attributes(args.attributes) if args.attributes else {}
@@ -916,19 +983,23 @@ Expected checkpoint steps:
     verbose = not args.quiet
     state_filter = args.state if args.state else None
 
-    # Determine which datasets to query
-    # If 'data' is specified in attributes, use that; otherwise use all default datasets
+    # Determine which datasets to query based on mode
+    # If 'data' is specified in attributes, use that; otherwise use mode's datasets
     if "data" in attributes:
         datasets_to_query = [attributes["data"]]
     else:
-        datasets_to_query = DEFAULT_DATASETS
+        datasets_to_query = mode_config["datasets"]
+
+    # Get run prefix filter from mode config
+    run_prefix = mode_config["run_prefix"]
 
     # Determine output path early (needed for incremental loading)
     if args.output:
         output_path = args.output
     else:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = f"trial_metrics_{timestamp}.csv"
+        output_path = (
+            f"../final_viz/metrics/trial_metrics{mode_config['output_suffix']}.csv"
+        )
 
     # Load existing data for incremental downloads
     existing_df = None
@@ -942,16 +1013,21 @@ Expected checkpoint steps:
         print("\n" + "=" * 70)
         print("W&B TRIAL DATA DOWNLOADER")
         print("=" * 70)
+        print(f"Mode:       {args.mode}")
         print(f"Entity:     {args.entity}")
         print(f"Project:    {args.project}")
         print(f"Attributes: {attributes}")
         print(f"Datasets:   {datasets_to_query}")
+        print(
+            f"Run prefix: {run_prefix if run_prefix else 'None (excluding summary runs)'}"
+        )
         print(f"State:      {state_filter if state_filter else 'all'}")
         print(
             f"Steps:      {EXPECTED_STEPS[0]}, {EXPECTED_STEPS[1]}, ..., {EXPECTED_STEPS[-1]}"
         )
         print(f"Force:      {args.force}")
         print(f"Existing:   {len(existing_keys)} entries")
+        print(f"Output:     {output_path}")
         print("=" * 70 + "\n")
 
     # Download metrics for each dataset
@@ -971,6 +1047,7 @@ Expected checkpoint steps:
             attributes=query_attributes,
             state_filter=state_filter,
             existing_keys=existing_keys,
+            run_prefix=run_prefix,
             verbose=verbose,
         )
 

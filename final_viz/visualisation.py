@@ -2,12 +2,34 @@
 """
 Visualise trial metrics for sycophancy experiments.
 Generates one PNG per model (data) with subplots for each eval fold.
+
+Usage:
+    python visualisation.py                    # Default: loo mode
+    python visualisation.py --mode loo-sum    # loo-sum mode
+    python visualisation.py --mode o2m        # o2m mode
 """
 
+import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
+
+# Mode configurations matching download_wandb_trial_data.py
+MODE_CONFIGS = {
+    "loo": {
+        "csv_suffix": "",
+        "output_suffix": "",
+    },
+    "loo-sum": {
+        "csv_suffix": "_loo_sum",
+        "output_suffix": "_loo_sum",
+    },
+    "o2m": {
+        "csv_suffix": "_o2m",
+        "output_suffix": "_o2m",
+    },
+}
 
 # Style configuration
 plt.rcParams.update(
@@ -24,6 +46,7 @@ plt.rcParams.update(
 COLOR_REWARD_HACK = "#FF9999"  # Pastel red/coral
 COLOR_MONITOR_FLAG = "#99CCFF"  # Pastel blue
 COLOR_CHANCE = "#CCCCCC"  # Light gray for chance line
+COLOR_NON_EXTRACTABLE = "#99CC99"  # Pastel green for non-extractable
 
 # Line styles for different seeds
 LINE_STYLES = ["-", "--", "-.", ":", (0, (3, 1, 1, 1)), (0, (5, 2))]
@@ -150,6 +173,46 @@ def plot_subplot_relative(ax, df_fold, eval_fold_name):
     ax.grid(False)
 
 
+def plot_subplot_non_extractable(ax, df_fold, eval_fold_name):
+    """
+    Plot a single subplot for one eval fold (non-extractable rate).
+
+    Plots the percentage of non-extractable answers for each seed.
+    """
+    seeds = sorted(df_fold["seed"].unique())
+
+    # Plot each seed as a separate line with distinct style
+    for i, seed in enumerate(seeds):
+        df_seed = df_fold[df_fold["seed"] == seed].sort_values("step")
+
+        linestyle = LINE_STYLES[i % len(LINE_STYLES)]
+        marker = MARKERS[i % len(MARKERS)]
+
+        ax.plot(
+            df_seed["step"],
+            np.ma.masked_invalid(df_seed["no_answer_tags_rate"])
+            * 100,  # Convert to percentage
+            color=COLOR_NON_EXTRACTABLE,
+            linewidth=1.5,
+            linestyle=linestyle,
+            marker=marker,
+            markersize=4,
+            markevery=max(1, len(df_seed) // 8),
+            label=f"Seed {seed}",
+            alpha=0.8,
+        )
+
+    ax.set_title(eval_fold_name)
+    ax.set_xlabel("Training Step")
+    ax.set_ylabel("Non-Extractable (%)")
+
+    # Style axis
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.grid(False)
+    ax.set_ylim(0, None)  # Start at 0, auto-scale upper limit
+
+
 def create_figure_for_model(df_model, model_name, output_dir, plot_type="raw"):
     """
     Create a figure with subplots for each eval fold.
@@ -158,7 +221,7 @@ def create_figure_for_model(df_model, model_name, output_dir, plot_type="raw"):
         df_model: DataFrame filtered to a single model
         model_name: Name of the model for title and filename
         output_dir: Directory to save the figure
-        plot_type: "raw" for absolute rates, "relative" for ratio plot
+        plot_type: "raw" for absolute rates, "relative" for ratio plot, "non_extractable" for non-extractable rate
     """
     eval_folds = df_model["eval_fold"].unique()
     n_folds = len(eval_folds)
@@ -171,7 +234,15 @@ def create_figure_for_model(df_model, model_name, output_dir, plot_type="raw"):
     )
     axes = axes.flatten()
 
-    plot_func = plot_subplot_raw if plot_type == "raw" else plot_subplot_relative
+    # Select plot function based on type
+    if plot_type == "raw":
+        plot_func = plot_subplot_raw
+    elif plot_type == "relative":
+        plot_func = plot_subplot_relative
+    elif plot_type == "non_extractable":
+        plot_func = plot_subplot_non_extractable
+    else:
+        raise ValueError(f"Unknown plot_type: {plot_type}")
 
     for idx, eval_fold in enumerate(eval_folds):
         df_fold = df_model[df_model["eval_fold"] == eval_fold]
@@ -194,9 +265,12 @@ def create_figure_for_model(df_model, model_name, output_dir, plot_type="raw"):
             fontsize=9,
         )
 
-    title_suffix = (
-        "(Raw Rates)" if plot_type == "raw" else "(Reward Hack / Monitor Flag)"
-    )
+    title_suffixes = {
+        "raw": "(Raw Rates)",
+        "relative": "(Reward Hack / Monitor Flag)",
+        "non_extractable": "(Non-Extractable %)",
+    }
+    title_suffix = title_suffixes.get(plot_type, "")
     fig.suptitle(f"Model: {model_name} {title_suffix}", fontsize=14)
     fig.tight_layout(rect=[0, 0.08, 1, 1])  # Leave space at bottom for legend
 
@@ -208,23 +282,68 @@ def create_figure_for_model(df_model, model_name, output_dir, plot_type="raw"):
 
 
 def main():
-    # Paths
+    parser = argparse.ArgumentParser(
+        description="Visualize trial metrics for sycophancy experiments",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Modes:
+    loo      - leave_out_* datasets (default)
+             Input:  metrics/trial_metrics.csv
+             Output: results/raw/, results/relative/, results/non_extractable/
+    loo-sum  - leave_out_* datasets (run_summary runs)
+             Input:  metrics/trial_metrics_loo_sum.csv
+             Output: results/raw_loo_sum/, results/relative_loo_sum/, results/non_extractable_loo_sum/
+    o2m      - only_score_refined2 dataset
+             Input:  metrics/trial_metrics_o2m.csv
+             Output: results/raw_o2m/, results/relative_o2m/, results/non_extractable_o2m/
+        """,
+    )
+    parser.add_argument(
+        "--mode",
+        "-m",
+        choices=list(MODE_CONFIGS.keys()),
+        default="loo",
+        help="Mode: loo (default), loo-sum, or o2m",
+    )
+    args = parser.parse_args()
+
+    mode = args.mode
+    mode_config = MODE_CONFIGS[mode]
+
+    # Paths based on mode
     script_dir = Path(__file__).parent
-    csv_path = script_dir / "metrics" / "trial_metrics.csv"
-    output_dir_raw = script_dir / "results" / "raw"
-    output_dir_relative = script_dir / "results" / "relative"
+    csv_suffix = mode_config["csv_suffix"]
+    output_suffix = mode_config["output_suffix"]
+
+    csv_path = script_dir / "metrics" / f"trial_metrics{csv_suffix}.csv"
+    output_dir_raw = script_dir / "results" / f"raw{output_suffix}"
+    output_dir_relative = script_dir / "results" / f"relative{output_suffix}"
+    output_dir_non_extractable = (
+        script_dir / "results" / f"non_extractable{output_suffix}"
+    )
 
     # Create output directories
     output_dir_raw.mkdir(parents=True, exist_ok=True)
     output_dir_relative.mkdir(parents=True, exist_ok=True)
+    output_dir_non_extractable.mkdir(parents=True, exist_ok=True)
 
     # Load data
+    print(f"Mode: {mode}")
     print(f"Loading data from: {csv_path}")
+
+    if not csv_path.exists():
+        print(f"ERROR: File not found: {csv_path}")
+        return
+
     df = pd.read_csv(csv_path)
 
     # Get unique models
     models = df["data"].unique()
     print(f"Found {len(models)} models: {list(models)}")
+    print(f"Output directories:")
+    print(f"  Raw:             {output_dir_raw}")
+    print(f"  Relative:        {output_dir_relative}")
+    print(f"  Non-extractable: {output_dir_non_extractable}")
 
     # Create figures for each model
     for model in models:
@@ -239,6 +358,11 @@ def main():
         # Relative (ratio) plot
         create_figure_for_model(
             df_model, model, output_dir_relative, plot_type="relative"
+        )
+
+        # Non-extractable rate plot
+        create_figure_for_model(
+            df_model, model, output_dir_non_extractable, plot_type="non_extractable"
         )
 
     print("\nDone!")
