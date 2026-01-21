@@ -55,7 +55,7 @@ def plot_subplot_raw(ax, df_fold, eval_fold_name):
 
         ax.plot(
             df_seed["step"],
-            df_seed["reward_hack_rate_extractable"],
+            np.ma.masked_invalid(df_seed["reward_hack_rate_extractable"]),
             color=COLOR_REWARD_HACK,
             linewidth=1.5,
             linestyle=linestyle,
@@ -68,7 +68,7 @@ def plot_subplot_raw(ax, df_fold, eval_fold_name):
 
         ax.plot(
             df_seed["step"],
-            df_seed["monitor_flag_rate_extractable"],
+            np.ma.masked_invalid(df_seed["monitor_flag_rate_extractable"]),
             color=COLOR_MONITOR_FLAG,
             linewidth=1.5,
             linestyle=linestyle,
@@ -119,7 +119,7 @@ def plot_subplot_relative(ax, df_fold, eval_fold_name):
 
         ax.plot(
             df_seed["step"],
-            ratio,
+            np.ma.masked_invalid(ratio),
             color=COLOR_REWARD_HACK,
             linewidth=1.5,
             linestyle=linestyle,
