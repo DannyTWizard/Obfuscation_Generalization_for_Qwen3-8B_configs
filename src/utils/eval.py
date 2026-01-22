@@ -232,6 +232,20 @@ class VLLMModelEvaluator:
                     }
 
                     # Add overseer decision texts if available
+                    # Check if both summary and non-summary overseers are present
+                    overseer_funcs = [
+                        fn for fn in eval_metadata.keys() if "overseer" in fn.lower()
+                    ]
+                    has_summary_overseer = any(
+                        "summary" in fn.lower() for fn in overseer_funcs
+                    )
+                    has_non_summary_overseer = any(
+                        "summary" not in fn.lower() for fn in overseer_funcs
+                    )
+                    both_overseer_types = (
+                        has_summary_overseer and has_non_summary_overseer
+                    )
+
                     for func_name, metadata_list in eval_metadata.items():
                         if i < len(metadata_list) and metadata_list[i]:
                             # Use specific keys for different overseer types
@@ -240,7 +254,9 @@ class VLLMModelEvaluator:
                                     result_dict["overseer_summary_response"] = (
                                         metadata_list[i]
                                     )
-                                elif "cot" in func_name.lower():
+                                elif "cot" in func_name.lower() or both_overseer_types:
+                                    # If explicitly has "cot" OR if both types present,
+                                    # treat non-summary as CoT
                                     result_dict["overseer_cot_response"] = (
                                         metadata_list[i]
                                     )
