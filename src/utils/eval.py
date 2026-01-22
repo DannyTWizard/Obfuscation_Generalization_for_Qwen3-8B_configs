@@ -234,9 +234,18 @@ class VLLMModelEvaluator:
                     # Add overseer decision texts if available
                     for func_name, metadata_list in eval_metadata.items():
                         if i < len(metadata_list) and metadata_list[i]:
-                            # Use a key like "overseer_response" or "{func_name}_response"
+                            # Use specific keys for different overseer types
                             if "overseer" in func_name.lower():
-                                result_dict["overseer_response"] = metadata_list[i]
+                                if "summary" in func_name.lower():
+                                    result_dict["overseer_summary_response"] = (
+                                        metadata_list[i]
+                                    )
+                                elif "cot" in func_name.lower():
+                                    result_dict["overseer_cot_response"] = (
+                                        metadata_list[i]
+                                    )
+                                else:
+                                    result_dict["overseer_response"] = metadata_list[i]
                             else:
                                 result_dict[f"{func_name}_response"] = metadata_list[i]
 

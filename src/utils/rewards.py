@@ -285,8 +285,7 @@ def create_api_overseer_penalty_func(config: Dict[str, Any]) -> Callable:
             prompt_format.template.format(cot=extracted_content)
             if "question" not in config["prompt_format"]
             else prompt_format.template.format(
-                question=prompt_no_additional_info,
-                cot=extracted_content
+                question=prompt_no_additional_info, cot=extracted_content
             )
         )
         system_prompt = system_prompt_mapper[source_dataset]
@@ -424,6 +423,8 @@ REWARD_FUNCS = {
     "cot_think_name_penalty_func": create_cot_think_name_penalty_func,
     "summary_present_penalty": create_summary_present_penalty_func,
     "cot_length_penalty_func": create_cot_length_penalty_func,
-    "api_overseer_penalty_func": create_api_overseer_cot_penalty_func,
+    # CoT overseer - both names point to same function for backwards compatibility
+    "api_overseer_penalty_func": create_api_overseer_cot_penalty_func,  # legacy name
+    "api_overseer_cot_penalty_func": create_api_overseer_cot_penalty_func,  # explicit name
     "api_overseer_summary_penalty_func": create_api_overseer_summary_penalty_func,
 }
