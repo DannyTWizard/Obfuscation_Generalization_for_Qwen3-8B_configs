@@ -4,9 +4,11 @@ Visualise trial metrics for sycophancy experiments.
 Generates one PNG per model (data) with subplots for each eval fold.
 
 Usage:
-    python visualisation.py                    # Default: loo mode
-    python visualisation.py --mode loo-sum    # loo-sum mode
-    python visualisation.py --mode o2m        # o2m mode
+    python visualisation.py                              # Default: loo mode, answer_tags_only parsing
+    python visualisation.py --mode loo-sum               # loo-sum mode
+    python visualisation.py --mode o2m                   # o2m mode
+    python visualisation.py -pc aggressive               # Use aggressive parsing config
+    python visualisation.py -pc reparse_all --mode loo   # Combine parsing config and mode
 """
 
 import argparse
@@ -30,6 +32,28 @@ MODE_CONFIGS = {
         "output_suffix": "_o2m",
     },
 }
+
+# Parsing configurations matching download_wandb_trial_data.py
+PARSING_CONFIGS = {
+    "answer_tags_only": {
+        "description": "Only extract from <answer> tags (original behavior)",
+        "output_subdir": "answer_tags_only",
+    },
+    "answer_tags_plus_colon": {
+        "description": "Try answer tags first, then 'Answer:' pattern",
+        "output_subdir": "answer_tags_plus_colon",
+    },
+    "aggressive": {
+        "description": "Try all patterns: answer tags, 'Answer:', and trailing letter",
+        "output_subdir": "aggressive",
+    },
+    "reparse_all": {
+        "description": "Ignore pre-extracted, always re-parse with all patterns",
+        "output_subdir": "reparse_all",
+    },
+}
+
+DEFAULT_PARSING_CONFIG = "answer_tags_only"
 
 # Style configuration
 plt.rcParams.update(
@@ -288,14 +312,20 @@ def main():
         epilog="""
 Modes:
     loo      - leave_out_* datasets (default)
-             Input:  metrics/trial_metrics.csv
-             Output: results/raw/, results/relative/, results/non_extractable/
     loo-sum  - leave_out_* datasets (run_summary runs)
-             Input:  metrics/trial_metrics_loo_sum.csv
-             Output: results/raw_loo_sum/, results/relative_loo_sum/, results/non_extractable_loo_sum/
     o2m      - only_score_refined2 dataset
-             Input:  metrics/trial_metrics_o2m.csv
-             Output: results/raw_o2m/, results/relative_o2m/, results/non_extractable_o2m/
+
+Parsing Configs:
+    answer_tags_only       - Only extract from <answer> tags (default)
+    answer_tags_plus_colon - Try answer tags first, then 'Answer:' pattern
+    aggressive             - Try all patterns: answer tags, 'Answer:', trailing letter
+    reparse_all            - Ignore pre-extracted, always re-parse with all patterns
+
+Input/Output paths:
+    Input:  metrics/<parsing_config>/trial_metrics<mode_suffix>.csv
+    Output: results/<parsing_config>/raw<mode_suffix>/
+            results/<parsing_config>/relative<mode_suffix>/
+            results/<parsing_config>/non_extractable<mode_suffix>/
         """,
     )
     parser.add_argument(
@@ -305,21 +335,49 @@ Modes:
         default="loo",
         help="Mode: loo (default), loo-sum, or o2m",
     )
+    parser.add_argument(
+        "--parsing-config",
+        "-pc",
+        choices=list(PARSING_CONFIGS.keys()),
+        default=DEFAULT_PARSING_CONFIG,
+        help=f"Parsing configuration to use (default: {DEFAULT_PARSING_CONFIG})",
+    )
+    parser.add_argument(
+        "--list-parsing-configs",
+        action="store_true",
+        help="List available parsing configurations and exit",
+    )
     args = parser.parse_args()
+
+    # Handle --list-parsing-configs
+    if args.list_parsing_configs:
+        print("\nAvailable Parsing Configurations:")
+        print("=" * 60)
+        for name, config in PARSING_CONFIGS.items():
+            print(f"\n{name}:")
+            print(f"  Description: {config['description']}")
+            print(f"  Subdir:      {config['output_subdir']}")
+        print("\n" + "=" * 60)
+        return
 
     mode = args.mode
     mode_config = MODE_CONFIGS[mode]
+    parsing_config = PARSING_CONFIGS[args.parsing_config]
+    parsing_subdir = parsing_config["output_subdir"]
 
-    # Paths based on mode
+    # Paths based on mode and parsing config
     script_dir = Path(__file__).parent
     csv_suffix = mode_config["csv_suffix"]
     output_suffix = mode_config["output_suffix"]
 
-    csv_path = script_dir / "metrics" / f"trial_metrics{csv_suffix}.csv"
-    output_dir_raw = script_dir / "results" / f"raw{output_suffix}"
-    output_dir_relative = script_dir / "results" / f"relative{output_suffix}"
+    # Input: metrics/<parsing_config>/trial_metrics<mode_suffix>.csv
+    csv_path = script_dir / "metrics" / parsing_subdir / f"trial_metrics{csv_suffix}.csv"
+    
+    # Output: results/<parsing_config>/raw<mode_suffix>/, etc.
+    output_dir_raw = script_dir / "results" / parsing_subdir / f"raw{output_suffix}"
+    output_dir_relative = script_dir / "results" / parsing_subdir / f"relative{output_suffix}"
     output_dir_non_extractable = (
-        script_dir / "results" / f"non_extractable{output_suffix}"
+        script_dir / "results" / parsing_subdir / f"non_extractable{output_suffix}"
     )
 
     # Create output directories
@@ -329,6 +387,8 @@ Modes:
 
     # Load data
     print(f"Mode: {mode}")
+    print(f"Parsing config: {args.parsing_config}")
+    print(f"  Description: {parsing_config['description']}")
     print(f"Loading data from: {csv_path}")
 
     if not csv_path.exists():

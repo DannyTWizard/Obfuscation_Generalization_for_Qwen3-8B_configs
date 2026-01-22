@@ -6,20 +6,34 @@ Computes for "answer extractable" trials (where extracted_answer != "No answer t
 - proportion that were flagged by monitor (overseer returned 1)
 - proportion of each answer choice (A/B/C/D)
 
-Supports incremental downloads - if output CSV already exists, only downloads
-runs that don't already have entries in the CSV.
+Features:
+- Incremental downloads: Only downloads runs not already in the output CSV
+- Multiple parsing configs: Different answer extraction strategies, each with its own output dir
+- Raw data caching: Download once, iterate on parsing without re-querying W&B
+
+Parsing Configs:
+- answer_tags_only: Only extract from <answer> tags (original behavior)
+- answer_tags_plus_colon: Try answer tags, then "Answer:" pattern  
+- aggressive: Try all patterns (tags, "Answer:", trailing letter)
+- reparse_all: Ignore pre-extracted values, always re-parse with all patterns
 
 Usage:
-    # Download all default datasets (leave_out_*_refined2)
-    python download_wandb_trial_data.py --output trial_metrics.csv
-
-    # Download with specific attributes
-    python download_wandb_trial_data.py \
-        --attributes ts=50 pen=-0.05 \
-        --output trial_metrics.csv
+    # Download and process with default parsing config
+    python download_wandb_trial_data.py
     
-    # Force re-download all (ignore existing CSV)
-    python download_wandb_trial_data.py --output trial_metrics.csv --force
+    # Process with a specific parsing config
+    python download_wandb_trial_data.py --parsing-config aggressive
+
+    # Download raw trial data to cache (for iterating on parsing)
+    python download_wandb_trial_data.py --download-raw
+    
+    # Process cached data with different parsing configs (no W&B queries!)
+    python download_wandb_trial_data.py --from-cache -pc answer_tags_only
+    python download_wandb_trial_data.py --from-cache -pc aggressive
+    python download_wandb_trial_data.py --from-cache -pc reparse_all
+    
+    # List available parsing configs
+    python download_wandb_trial_data.py --list-parsing-configs
 """
 
 import argparse
@@ -108,6 +122,52 @@ DEFAULT_DATASETS = MODE_CONFIGS["loo"]["datasets"]
 
 # Expected checkpoint steps to look for
 EXPECTED_STEPS = [25] + list(range(200, 3801, 200))  # 25, 200, 400, ..., 3800
+
+# =============================================================================
+# PARSING CONFIGURATIONS
+# =============================================================================
+# Each parsing config specifies:
+#   - description: Human-readable description
+#   - output_subdir: Subdirectory under final_viz/metrics/ for this config's output
+#   - patterns: List of extraction patterns to try (in order)
+#     Available patterns:
+#       - "answer_tags": Extract from <answer>...</answer> tags
+#       - "answer_colon": Extract from "Answer: (A)" or "Answer: A" patterns
+#       - "end_letter": Extract single letter A-D at the very end of response
+#   - use_pre_extracted: Whether to use pre-extracted value from table if valid
+#     (if False, always re-parse from response)
+#
+# The "answer_tags_only" config matches the original behavior (only answer tags).
+
+PARSING_CONFIGS = {
+    "answer_tags_only": {
+        "description": "Only extract from <answer> tags (original behavior)",
+        "output_subdir": "answer_tags_only",
+        "patterns": ["answer_tags"],
+        "use_pre_extracted": True,  # Use table's pre-extracted value if valid
+    },
+    "answer_tags_plus_colon": {
+        "description": "Try answer tags first, then 'Answer:' pattern",
+        "output_subdir": "answer_tags_plus_colon",
+        "patterns": ["answer_tags", "answer_colon"],
+        "use_pre_extracted": True,
+    },
+    "aggressive": {
+        "description": "Try all patterns: answer tags, 'Answer:', and trailing letter",
+        "output_subdir": "aggressive",
+        "patterns": ["answer_tags", "answer_colon", "end_letter"],
+        "use_pre_extracted": True,
+    },
+    "reparse_all": {
+        "description": "Ignore pre-extracted, always re-parse with all patterns",
+        "output_subdir": "reparse_all",
+        "patterns": ["answer_tags", "answer_colon", "end_letter"],
+        "use_pre_extracted": False,  # Always re-parse from response
+    },
+}
+
+# Default parsing config
+DEFAULT_PARSING_CONFIG = "answer_tags_only"
 
 
 def parse_attributes(attr_list: List[str]) -> Dict[str, str]:
@@ -436,12 +496,16 @@ def get_table_from_run(
 def download_trial_data_from_run(
     run: wandb.apis.public.Run,
     verbose: bool = True,
+    parsing_config: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Download trial-level data from a single eval run and compute metrics.
 
     Returns a dict with computed metrics for this run.
     """
+    # Use default config if not specified
+    if parsing_config is None:
+        parsing_config = PARSING_CONFIGS[DEFAULT_PARSING_CONFIG]
     # Get run metadata
     artifact_step = get_config_value(run.config, "artifact_step", None)
     training_run_name = get_config_value(run.config, "training_run_name", None)
@@ -490,8 +554,10 @@ def download_trial_data_from_run(
             run, artifact_step, ts, data, eval_fold, verbose
         )
 
-    # Process the table
-    return _process_trial_table(table_df, artifact_step, ts, data, eval_fold, verbose)
+    # Process the table with the parsing config
+    return _process_trial_table(
+        table_df, artifact_step, ts, data, eval_fold, verbose, parsing_config=parsing_config
+    )
 
 
 def _fallback_to_summary_metrics(
@@ -558,49 +624,63 @@ def _normalize_answer(answer: str) -> str:
     return answer
 
 
-def _extract_answer_from_response(response: str) -> Optional[str]:
+def _extract_answer_from_response(
+    response: str, 
+    patterns: Optional[List[str]] = None
+) -> Optional[str]:
     """
-    Try to extract an answer from a response using multiple patterns.
+    Try to extract an answer from a response using specified patterns.
 
-    Patterns tried (in order):
-    1. Content between <answer> tags (last match), normalized
-    2. Content after "Answer:" pattern like "Answer: (A)" or "Answer: A"
-    3. Single letter A/B/C/D at the very end
+    Args:
+        response: The model's response text
+        patterns: List of pattern names to try (in order). If None, tries all patterns.
+            Available patterns:
+            - "answer_tags": Content between <answer> tags (last match)
+            - "answer_colon": "Answer: (A)" or "Answer: A" patterns
+            - "end_letter": Single letter A-D at the very end
 
     Returns the extracted answer or None if no answer found.
     """
-    return None
-
     if not response or not isinstance(response, str):
         return None
 
-    # Pattern 1: Content between <answer> tags (take last match)
-    answer_tag_pattern = r"<answer>\s*(.*?)\s*</answer>"
-    matches = re.findall(answer_tag_pattern, response, re.DOTALL | re.IGNORECASE)
-    if matches:
-        answer = matches[-1].strip()
-        if answer:
-            # Normalize: "(B)" -> "B", "(C)" -> "C", etc.
-            return _normalize_answer(answer)
+    # Default to all patterns if not specified
+    if patterns is None:
+        patterns = ["answer_tags", "answer_colon", "end_letter"]
 
-    # Pattern 2: "Answer:" followed by letter (with optional parentheses)
-    # Matches: "Answer: (A)", "Answer: A", "Answer:(B)", etc.
-    answer_colon_pattern = r"Answer:\s*\(?([A-Da-d])\)?"
-    match = re.search(answer_colon_pattern, response)
-    if match:
-        return match.group(1).upper()
+    for pattern_name in patterns:
+        if pattern_name == "answer_tags":
+            # Pattern: Content between <answer> tags (take last match)
+            answer_tag_pattern = r"<answer>\s*(.*?)\s*</answer>"
+            matches = re.findall(answer_tag_pattern, response, re.DOTALL | re.IGNORECASE)
+            if matches:
+                answer = matches[-1].strip()
+                if answer:
+                    # Normalize: "(B)" -> "B", "(C)" -> "C", etc.
+                    return _normalize_answer(answer)
 
-    # Pattern 3: Single letter A-D at the very end (after trimming whitespace)
-    end_letter_pattern = r"[^A-Za-z]([A-Da-d])\s*$"
-    match = re.search(end_letter_pattern, response)
-    if match:
-        return match.group(1).upper()
+        elif pattern_name == "answer_colon":
+            # Pattern: "Answer:" followed by letter (with optional parentheses)
+            # Matches: "Answer: (A)", "Answer: A", "Answer:(B)", etc.
+            answer_colon_pattern = r"Answer:\s*\(?([A-Da-d])\)?"
+            match = re.search(answer_colon_pattern, response)
+            if match:
+                return match.group(1).upper()
+
+        elif pattern_name == "end_letter":
+            # Pattern: Single letter A-D at the very end (after trimming whitespace)
+            end_letter_pattern = r"[^A-Za-z]([A-Da-d])\s*$"
+            match = re.search(end_letter_pattern, response)
+            if match:
+                return match.group(1).upper()
 
     return None
 
 
 def _is_answer_extractable(
-    extracted: Any, response: Any = None
+    extracted: Any, 
+    response: Any = None,
+    parsing_config: Optional[Dict[str, Any]] = None
 ) -> tuple[bool, Optional[str]]:
     """
     Check if an answer is extractable and return the extracted answer.
@@ -608,22 +688,197 @@ def _is_answer_extractable(
     Args:
         extracted: The pre-extracted answer from the table
         response: The full response text (for re-parsing if needed)
+        parsing_config: Parsing configuration dict with 'patterns' and 'use_pre_extracted' keys
 
     Returns:
         Tuple of (is_extractable, extracted_answer)
     """
-    # Check if the pre-extracted value is valid
-    if extracted and extracted != "No answer tags found":
+    # Get config options
+    if parsing_config is None:
+        parsing_config = PARSING_CONFIGS[DEFAULT_PARSING_CONFIG]
+    
+    use_pre_extracted = parsing_config.get("use_pre_extracted", True)
+    patterns = parsing_config.get("patterns", ["answer_tags"])
+    
+    # Check if the pre-extracted value is valid (if config allows)
+    if use_pre_extracted and extracted and extracted != "No answer tags found":
         # Normalize the pre-extracted answer: "(B)" -> "B", etc.
         return True, _normalize_answer(str(extracted))
 
-    # Try to re-parse from response if available
+    # Try to parse from response using configured patterns
     if response:
-        re_extracted = _extract_answer_from_response(str(response))
+        re_extracted = _extract_answer_from_response(str(response), patterns=patterns)
         if re_extracted:
             return True, re_extracted
 
     return False, None
+
+
+def download_raw_trial_data_from_run(
+    run: wandb.apis.public.Run,
+    verbose: bool = True,
+) -> Optional[pd.DataFrame]:
+    """
+    Download raw trial-level data from a single eval run.
+    
+    Returns a DataFrame with all trial data including responses for caching.
+    """
+    # Get run metadata
+    artifact_step = get_config_value(run.config, "artifact_step", None)
+    training_run_name = get_config_value(run.config, "training_run_name", None)
+    eval_fold = get_config_value(run.config, "eval.fold", None)
+
+    # Extract ts and data from training_run_name
+    ts = None
+    data = None
+    if training_run_name:
+        ts = extract_attribute_from_run_name(training_run_name, "ts")
+        data = extract_attribute_from_run_name(training_run_name, "data")
+
+    if verbose:
+        print(f"\nDownloading raw data: {run.name}")
+        print(f"  Artifact step: {artifact_step}, Eval fold: {eval_fold}")
+
+    # Try to get the samples table
+    table_key = f"{eval_fold}_samples" if eval_fold else None
+    table_df = None
+
+    if table_key:
+        table_df = get_table_from_run(run, table_key, verbose=verbose)
+
+    if table_df is None:
+        if verbose:
+            print(f"  Warning: Could not retrieve trial table for {run.name}")
+        return None
+
+    # Add metadata columns
+    table_df = table_df.copy()
+    table_df["_data"] = data
+    table_df["_seed"] = ts
+    table_df["_eval_fold"] = eval_fold
+    table_df["_step"] = artifact_step
+    table_df["_run_name"] = run.name
+    table_df["_run_id"] = run.id
+
+    if verbose:
+        print(f"  Downloaded {len(table_df)} trials")
+
+    return table_df
+
+
+def download_and_cache_raw_trials(
+    entity: str,
+    project: str,
+    attributes: Dict[str, str],
+    cache_path: str,
+    state_filter: Optional[List[str]] = None,
+    run_prefix: Optional[str] = None,
+    verbose: bool = True,
+) -> pd.DataFrame:
+    """
+    Download raw trial data from W&B and save to a parquet file for caching.
+    
+    This allows iterating on parsing logic without re-querying W&B.
+    """
+    matching_runs = find_matching_eval_runs(
+        entity=entity,
+        project=project,
+        attributes=attributes,
+        state_filter=state_filter,
+        run_prefix=run_prefix,
+        verbose=verbose,
+    )
+
+    if not matching_runs:
+        if verbose:
+            print("No matching eval runs found.")
+        return pd.DataFrame()
+
+    # Dedupe runs
+    matching_runs = dedupe_runs_by_name_keep_latest(matching_runs, verbose=verbose)
+
+    all_dfs = []
+    for run in matching_runs:
+        df = download_raw_trial_data_from_run(run, verbose=verbose)
+        time.sleep(1)
+        if df is not None:
+            all_dfs.append(df)
+
+    if not all_dfs:
+        return pd.DataFrame()
+
+    combined_df = pd.concat(all_dfs, ignore_index=True)
+    
+    # Save to parquet (preserves types better than CSV for this use case)
+    Path(cache_path).parent.mkdir(parents=True, exist_ok=True)
+    combined_df.to_parquet(cache_path, index=False)
+    
+    if verbose:
+        print(f"\n✓ Cached {len(combined_df)} raw trials to: {cache_path}")
+        print(f"  Columns: {list(combined_df.columns)}")
+    
+    return combined_df
+
+
+def process_cached_raw_trials(
+    cache_path: str,
+    parsing_config: Optional[Dict[str, Any]] = None,
+    verbose: bool = True,
+) -> pd.DataFrame:
+    """
+    Process cached raw trial data to compute metrics.
+    
+    This reads from the local cache and applies parsing logic,
+    allowing you to iterate on parsing configs without re-querying W&B.
+    
+    Args:
+        cache_path: Path to the cached parquet file
+        parsing_config: Parsing configuration dict (or None for default)
+        verbose: Print progress output
+    """
+    if not Path(cache_path).exists():
+        raise FileNotFoundError(f"Cache file not found: {cache_path}")
+    
+    # Use default config if not specified
+    if parsing_config is None:
+        parsing_config = PARSING_CONFIGS[DEFAULT_PARSING_CONFIG]
+    
+    # Load cached data
+    raw_df = pd.read_parquet(cache_path)
+    
+    if verbose:
+        print(f"Loaded {len(raw_df)} raw trials from cache: {cache_path}")
+        print(f"Parsing config: {parsing_config.get('description', 'unknown')}")
+        print(f"  Patterns: {parsing_config.get('patterns', [])}")
+        print(f"  Use pre-extracted: {parsing_config.get('use_pre_extracted', True)}")
+    
+    # Group by run metadata and process each group
+    group_cols = ["_data", "_seed", "_eval_fold", "_step"]
+    all_results = []
+    
+    for group_key, group_df in raw_df.groupby(group_cols, dropna=False):
+        data, seed, eval_fold, step = group_key
+        
+        if verbose:
+            print(f"\nProcessing: data={data}, seed={seed}, fold={eval_fold}, step={step}")
+        
+        result = _process_trial_table(
+            table_df=group_df,
+            artifact_step=step,
+            ts=seed,
+            data=data,
+            eval_fold=eval_fold,
+            parsing_config=parsing_config,
+            verbose=verbose,
+        )
+        
+        if result is not None:
+            all_results.append(result)
+    
+    if not all_results:
+        return pd.DataFrame()
+    
+    return pd.DataFrame(all_results)
 
 
 def _process_trial_table(
@@ -633,8 +888,12 @@ def _process_trial_table(
     data: Optional[str],
     eval_fold: Optional[str],
     verbose: bool,
+    parsing_config: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Process trial table to compute metrics."""
+    """Process trial table to compute metrics using the specified parsing config."""
+    # Use default config if not specified
+    if parsing_config is None:
+        parsing_config = PARSING_CONFIGS[DEFAULT_PARSING_CONFIG]
     # Expected columns: prompt, response, extracted, target, correct, overseer_response (optional)
     total = len(table_df)
 
@@ -650,14 +909,13 @@ def _process_trial_table(
 
     response_col = "response" if "response" in table_df.columns else None
 
-    # Apply enhanced extraction logic to each row
-    # This re-parses responses that were marked as "No answer tags found"
+    # Apply extraction logic to each row using the parsing config
     extractable_results = []
     for idx, row in table_df.iterrows():
         pre_extracted = row.get(extracted_col) if extracted_col else None
         response = row.get(response_col) if response_col else None
         is_extractable, extracted_answer = _is_answer_extractable(
-            pre_extracted, response
+            pre_extracted, response, parsing_config=parsing_config
         )
         extractable_results.append(
             {
@@ -804,6 +1062,7 @@ def download_trial_metrics(
     state_filter: Optional[List[str]] = None,
     existing_keys: Optional[set] = None,
     run_prefix: Optional[str] = None,
+    parsing_config: Optional[Dict[str, Any]] = None,
     verbose: bool = True,
 ) -> pd.DataFrame:
     """
@@ -816,12 +1075,17 @@ def download_trial_metrics(
         state_filter: Filter runs by state
         existing_keys: Set of (data, seed, eval_fold, step) tuples to skip
         run_prefix: If specified, only include runs whose names start with this prefix
+        parsing_config: Parsing configuration dict (or None for default)
         verbose: Print progress output
 
     Returns DataFrame with computed metrics for each run.
     """
     if existing_keys is None:
         existing_keys = set()
+    
+    # Use default config if not specified
+    if parsing_config is None:
+        parsing_config = PARSING_CONFIGS[DEFAULT_PARSING_CONFIG]
 
     matching_runs = find_matching_eval_runs(
         entity=entity,
@@ -867,7 +1131,9 @@ def download_trial_metrics(
 
     all_results = []
     for run in matching_runs:
-        result = download_trial_data_from_run(run, verbose=verbose)
+        result = download_trial_data_from_run(
+            run, verbose=verbose, parsing_config=parsing_config
+        )
         time.sleep(1)
         if result is not None:
             all_results.append(result)
@@ -901,15 +1167,33 @@ Examples:
         --attributes ts=50 pen=-0.05 \\
         --output trial_metrics.csv
 
+Caching for Parsing Iteration:
+    # Step 1: Download raw trial data (including responses) to cache
+    python download_wandb_trial_data.py --download-raw
+
+    # Step 2: Process with different parsing configs (no W&B queries!)
+    python download_wandb_trial_data.py --from-cache --parsing-config answer_tags_only
+    python download_wandb_trial_data.py --from-cache --parsing-config aggressive
+    python download_wandb_trial_data.py --from-cache --parsing-config reparse_all
+
+    # Each parsing config saves to its own output directory!
+
+Parsing Configs:
+    answer_tags_only     - Only extract from <answer> tags (original behavior)
+    answer_tags_plus_colon - Try answer tags first, then 'Answer:' pattern
+    aggressive           - Try all patterns: answer tags, 'Answer:', trailing letter
+    reparse_all          - Ignore pre-extracted, always re-parse with all patterns
+
 Modes:
     loo      - leave_out_* datasets (default)
     loo-sum  - leave_out_* datasets, only runs starting with "run_ref_summary"
     o2m      - only_score_refined2 dataset
 
-Default output files:
-    loo      -> trial_metrics.csv
-    loo-sum  -> trial_metrics_loo_sum.csv
-    o2m      -> trial_metrics_o2m.csv
+Default output files (per parsing config):
+    final_viz/metrics/<parsing_config>/trial_metrics<mode_suffix>.csv
+
+Default raw cache files:
+    final_viz/metrics/raw_trials<mode_suffix>.parquet
 
 Expected checkpoint steps:
     {EXPECTED_STEPS[0]}, {EXPECTED_STEPS[1]}, {EXPECTED_STEPS[2]}, ..., {EXPECTED_STEPS[-1]}
@@ -967,8 +1251,49 @@ Expected checkpoint steps:
         action="store_true",
         help="Force re-download all runs, ignoring existing CSV",
     )
+    parser.add_argument(
+        "--download-raw",
+        action="store_true",
+        help="Download raw trial data (including responses) and save to cache file for offline parsing iteration",
+    )
+    parser.add_argument(
+        "--raw-cache",
+        default=None,
+        help="Path to raw trial cache file (parquet). Used with --download-raw to save, or --from-cache to load.",
+    )
+    parser.add_argument(
+        "--from-cache",
+        action="store_true",
+        help="Process metrics from cached raw trial data instead of querying W&B",
+    )
+    parser.add_argument(
+        "--parsing-config",
+        "-pc",
+        choices=list(PARSING_CONFIGS.keys()),
+        default=DEFAULT_PARSING_CONFIG,
+        help=f"Parsing configuration to use (default: {DEFAULT_PARSING_CONFIG}). "
+        "Each config has its own output directory for metrics.",
+    )
+    parser.add_argument(
+        "--list-parsing-configs",
+        action="store_true",
+        help="List available parsing configurations and exit",
+    )
 
     args = parser.parse_args()
+    
+    # Handle --list-parsing-configs
+    if args.list_parsing_configs:
+        print("\nAvailable Parsing Configurations:")
+        print("=" * 60)
+        for name, config in PARSING_CONFIGS.items():
+            print(f"\n{name}:")
+            print(f"  Description:      {config['description']}")
+            print(f"  Output subdir:    {config['output_subdir']}")
+            print(f"  Patterns:         {config['patterns']}")
+            print(f"  Use pre-extracted: {config['use_pre_extracted']}")
+        print("\n" + "=" * 60)
+        return 0
 
     # Get mode configuration
     mode_config = MODE_CONFIGS[args.mode]
@@ -993,13 +1318,135 @@ Expected checkpoint steps:
     # Get run prefix filter from mode config
     run_prefix = mode_config["run_prefix"]
 
+    # Get parsing configuration
+    parsing_config = PARSING_CONFIGS[args.parsing_config]
+    parsing_subdir = parsing_config["output_subdir"]
+
     # Determine output path early (needed for incremental loading)
+    # Output path includes parsing config subdir for separation
     if args.output:
         output_path = args.output
     else:
         output_path = (
-            f"../final_viz/metrics/trial_metrics{mode_config['output_suffix']}.csv"
+            f"../final_viz/metrics/{parsing_subdir}/trial_metrics{mode_config['output_suffix']}.csv"
         )
+
+    # Determine raw cache path (shared across parsing configs - it's the raw data)
+    if args.raw_cache:
+        raw_cache_path = args.raw_cache
+    else:
+        raw_cache_path = f"../final_viz/metrics/raw_trials{mode_config['output_suffix']}.parquet"
+
+    # Handle --from-cache mode: process from local cache without W&B queries
+    if args.from_cache:
+        if verbose:
+            print("\n" + "=" * 70)
+            print("PROCESSING FROM CACHED RAW DATA")
+            print("=" * 70)
+            print(f"Parsing config: {args.parsing_config}")
+            print(f"  Description:  {parsing_config['description']}")
+            print(f"  Patterns:     {parsing_config['patterns']}")
+            print(f"  Use pre-extracted: {parsing_config['use_pre_extracted']}")
+            print(f"Cache file:     {raw_cache_path}")
+            print(f"Output:         {output_path}")
+            print("=" * 70 + "\n")
+
+        try:
+            df = process_cached_raw_trials(
+                raw_cache_path, 
+                parsing_config=parsing_config,
+                verbose=verbose
+            )
+        except FileNotFoundError as e:
+            print(f"Error: {e}")
+            print("Run with --download-raw first to create the cache.")
+            return 1
+
+        if df.empty:
+            print("No data processed from cache.")
+            return 0
+
+        # Ensure output directory exists
+        output_dir = Path(output_path).parent
+        if output_dir and str(output_dir) != ".":
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+        df.to_csv(output_path, index=False)
+
+        if verbose:
+            print(f"\n{'=' * 70}")
+            print(f"✓ Results saved to: {output_path}")
+            print(f"  Total rows: {len(df)}")
+            print(f"  Columns: {list(df.columns)}")
+            print("=" * 70 + "\n")
+
+        return 0
+
+    # Handle --download-raw mode: download and cache raw trial data
+    if args.download_raw:
+        if verbose:
+            print("\n" + "=" * 70)
+            print("DOWNLOADING RAW TRIAL DATA FOR CACHING")
+            print("=" * 70)
+            print(f"Mode:       {args.mode}")
+            print(f"Entity:     {args.entity}")
+            print(f"Project:    {args.project}")
+            print(f"Attributes: {attributes}")
+            print(f"Datasets:   {datasets_to_query}")
+            print(f"Run prefix: {run_prefix if run_prefix else 'None (excluding summary runs)'}")
+            print(f"State:      {state_filter if state_filter else 'all'}")
+            print(f"Cache file: {raw_cache_path}")
+            print("=" * 70 + "\n")
+
+        all_dfs = []
+        for dataset in datasets_to_query:
+            query_attributes = {**attributes, "data": dataset}
+
+            if verbose:
+                print(f"\n{'=' * 50}")
+                print(f"Downloading raw data for dataset: {dataset}")
+                print(f"{'=' * 50}")
+
+            df = download_and_cache_raw_trials(
+                entity=args.entity,
+                project=args.project,
+                attributes=query_attributes,
+                cache_path=raw_cache_path + f".{dataset}.tmp",  # Temp file per dataset
+                state_filter=state_filter,
+                run_prefix=run_prefix,
+                verbose=verbose,
+            )
+
+            if not df.empty:
+                all_dfs.append(df)
+
+        if all_dfs:
+            combined_df = pd.concat(all_dfs, ignore_index=True)
+            Path(raw_cache_path).parent.mkdir(parents=True, exist_ok=True)
+            combined_df.to_parquet(raw_cache_path, index=False)
+
+            # Clean up temp files
+            for dataset in datasets_to_query:
+                tmp_path = Path(raw_cache_path + f".{dataset}.tmp")
+                if tmp_path.exists():
+                    tmp_path.unlink()
+
+            if verbose:
+                print(f"\n{'=' * 70}")
+                print(f"✓ Raw trial data cached to: {raw_cache_path}")
+                print(f"  Total trials: {len(combined_df)}")
+                print(f"  Unique runs: {combined_df['_run_name'].nunique()}")
+                print(f"  Columns: {list(combined_df.columns)}")
+                print("=" * 70)
+                print("\nTo process with different parsing configs:")
+                for config_name in PARSING_CONFIGS.keys():
+                    print(f"  python download_wandb_trial_data.py --from-cache -pc {config_name}")
+                print("\nUse --list-parsing-configs to see details of each config.")
+                print("=" * 70 + "\n")
+        else:
+            print("No raw data downloaded.")
+
+        return 0
 
     # Load existing data for incremental downloads
     existing_df = None
@@ -1013,21 +1460,24 @@ Expected checkpoint steps:
         print("\n" + "=" * 70)
         print("W&B TRIAL DATA DOWNLOADER")
         print("=" * 70)
-        print(f"Mode:       {args.mode}")
-        print(f"Entity:     {args.entity}")
-        print(f"Project:    {args.project}")
-        print(f"Attributes: {attributes}")
-        print(f"Datasets:   {datasets_to_query}")
+        print(f"Mode:           {args.mode}")
+        print(f"Parsing config: {args.parsing_config}")
+        print(f"  Description:  {parsing_config['description']}")
+        print(f"  Patterns:     {parsing_config['patterns']}")
+        print(f"Entity:         {args.entity}")
+        print(f"Project:        {args.project}")
+        print(f"Attributes:     {attributes}")
+        print(f"Datasets:       {datasets_to_query}")
         print(
-            f"Run prefix: {run_prefix if run_prefix else 'None (excluding summary runs)'}"
+            f"Run prefix:     {run_prefix if run_prefix else 'None (excluding summary runs)'}"
         )
-        print(f"State:      {state_filter if state_filter else 'all'}")
+        print(f"State:          {state_filter if state_filter else 'all'}")
         print(
-            f"Steps:      {EXPECTED_STEPS[0]}, {EXPECTED_STEPS[1]}, ..., {EXPECTED_STEPS[-1]}"
+            f"Steps:          {EXPECTED_STEPS[0]}, {EXPECTED_STEPS[1]}, ..., {EXPECTED_STEPS[-1]}"
         )
-        print(f"Force:      {args.force}")
-        print(f"Existing:   {len(existing_keys)} entries")
-        print(f"Output:     {output_path}")
+        print(f"Force:          {args.force}")
+        print(f"Existing:       {len(existing_keys)} entries")
+        print(f"Output:         {output_path}")
         print("=" * 70 + "\n")
 
     # Download metrics for each dataset
@@ -1048,6 +1498,7 @@ Expected checkpoint steps:
             state_filter=state_filter,
             existing_keys=existing_keys,
             run_prefix=run_prefix,
+            parsing_config=parsing_config,
             verbose=verbose,
         )
 
