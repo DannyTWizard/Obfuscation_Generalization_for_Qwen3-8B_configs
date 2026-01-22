@@ -152,16 +152,22 @@ PARSING_CONFIGS = {
         "patterns": ["answer_tags", "answer_colon"],
         "use_pre_extracted": True,
     },
+    "standard": {
+        "description": "Standard patterns: answer tags, 'Answer:', 'The answer is'",
+        "output_subdir": "standard",
+        "patterns": ["answer_tags", "answer_colon", "the_answer_is"],
+        "use_pre_extracted": True,
+    },
     "aggressive": {
-        "description": "Try all patterns: answer tags, 'Answer:', and trailing letter",
+        "description": "All patterns: tags, 'Answer:', 'The answer is', trailing letter",
         "output_subdir": "aggressive",
-        "patterns": ["answer_tags", "answer_colon", "end_letter"],
+        "patterns": ["answer_tags", "answer_colon", "the_answer_is", "end_letter"],
         "use_pre_extracted": True,
     },
     "reparse_all": {
         "description": "Ignore pre-extracted, always re-parse with all patterns",
         "output_subdir": "reparse_all",
-        "patterns": ["answer_tags", "answer_colon", "end_letter"],
+        "patterns": ["answer_tags", "answer_colon", "the_answer_is", "end_letter"],
         "use_pre_extracted": False,  # Always re-parse from response
     },
 }
@@ -637,6 +643,7 @@ def _extract_answer_from_response(
             Available patterns:
             - "answer_tags": Content between <answer> tags (last match)
             - "answer_colon": "Answer: (A)" or "Answer: A" patterns
+            - "the_answer_is": "The answer is (A)" or "The answer is A" patterns
             - "end_letter": Single letter A-D at the very end
 
     Returns the extracted answer or None if no answer found.
@@ -646,7 +653,7 @@ def _extract_answer_from_response(
 
     # Default to all patterns if not specified
     if patterns is None:
-        patterns = ["answer_tags", "answer_colon", "end_letter"]
+        patterns = ["answer_tags", "answer_colon", "the_answer_is", "end_letter"]
 
     for pattern_name in patterns:
         if pattern_name == "answer_tags":
@@ -664,6 +671,15 @@ def _extract_answer_from_response(
             # Matches: "Answer: (A)", "Answer: A", "Answer:(B)", etc.
             answer_colon_pattern = r"Answer:\s*\(?([A-Da-d])\)?"
             match = re.search(answer_colon_pattern, response)
+            if match:
+                return match.group(1).upper()
+
+        elif pattern_name == "the_answer_is":
+            # Pattern: "The answer is" followed by letter (with optional colon/parentheses)
+            # Matches: "The answer is A", "The answer is (A)", "The answer is: A", 
+            #          "The answer is: (B)", "the answer is C" (case insensitive)
+            the_answer_pattern = r"[Tt]he\s+answer\s+is:?\s*\(?([A-Da-d])\)?"
+            match = re.search(the_answer_pattern, response)
             if match:
                 return match.group(1).upper()
 

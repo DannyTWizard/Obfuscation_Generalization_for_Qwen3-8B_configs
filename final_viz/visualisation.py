@@ -43,8 +43,12 @@ PARSING_CONFIGS = {
         "description": "Try answer tags first, then 'Answer:' pattern",
         "output_subdir": "answer_tags_plus_colon",
     },
+    "standard": {
+        "description": "Standard patterns: answer tags, 'Answer:', 'The answer is'",
+        "output_subdir": "standard",
+    },
     "aggressive": {
-        "description": "Try all patterns: answer tags, 'Answer:', and trailing letter",
+        "description": "All patterns: tags, 'Answer:', 'The answer is', trailing letter",
         "output_subdir": "aggressive",
     },
     "reparse_all": {
@@ -234,7 +238,7 @@ def plot_subplot_non_extractable(ax, df_fold, eval_fold_name):
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.grid(False)
-    ax.set_ylim(0, None)  # Start at 0, auto-scale upper limit
+    ax.set_ylim(0, 100)  # Fixed 0-100% scale
 
 
 def create_figure_for_model(df_model, model_name, output_dir, plot_type="raw"):
@@ -318,8 +322,9 @@ Modes:
 Parsing Configs:
     answer_tags_only       - Only extract from <answer> tags (default)
     answer_tags_plus_colon - Try answer tags first, then 'Answer:' pattern
-    aggressive             - Try all patterns: answer tags, 'Answer:', trailing letter
-    reparse_all            - Ignore pre-extracted, always re-parse with all patterns
+    standard               - Standard: tags, 'Answer:', 'The answer is'
+    aggressive             - All patterns including trailing letter
+    reparse_all            - Ignore pre-extracted, always re-parse
 
 Input/Output paths:
     Input:  metrics/<parsing_config>/trial_metrics<mode_suffix>.csv
