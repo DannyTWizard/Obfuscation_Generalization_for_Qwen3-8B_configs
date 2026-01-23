@@ -61,19 +61,23 @@ def extract_xml_answer(text: str) -> str:
     return "No answer tags found"
 
 
-def extract_third_email_decision(text: str) -> str:
-    answer_content = extract_xml_answer(text)
-    if answer_content == "No answer tags found":
+def strict_extract_xml_answer(text: str) -> str:
+    """Extract the answer only if it appears in XML tags at the end of the response."""
+    think_close_index = text.rfind("</think>")
+    if think_close_index == -1:
         return "No answer tags found"
 
-    decisions = [d.strip().upper() for d in answer_content.split(',')]
-    decisions = [d for d in decisions if d]
+    post_think = text[think_close_index + len("</think>"):].strip()
 
-    if len(decisions) == 3:
-        return decisions[2]
-    if len(decisions) == 1:
-        return decisions[0]
-    return answer_content
+    # Match <answer>...</answer> only if it's at the end of the string
+    xml_pattern = r'<answer>\s*(.*?)\s*</answer>\s*$'
+    xml_match = re.search(xml_pattern, post_think, re.DOTALL)
+    
+    if xml_match:
+        return xml_match.group(1).strip()
+
+    return "No answer tags found"
+
 
 
 # ============================================================================

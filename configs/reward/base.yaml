@@ -3,7 +3,8 @@
 
 funcs:
   # Primary reward: +2.0 for correct answer, 0.0 otherwise
-  correctness_reward_func: {}
+  correctness_reward_func:
+    strict: true
   
   # Penalty if summary (between </think> and <answer>) is not 8-150 words
   summary_present_penalty: {}

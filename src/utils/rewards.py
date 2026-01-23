@@ -7,6 +7,7 @@ import re
 from src.utils.parse import (
     extract_thinking,
     extract_xml_answer,
+    strict_extract_xml_answer,
     extract_summary,
     count_name_mentions_in_cot,
     count_custom_terms_in_cot,
@@ -79,6 +80,42 @@ def correctness_reward_func(
     return rewards
 
 
+def strict_correctness_reward_func(
+    prompts, completions, high_reward_answer, **kwargs
+) -> List[float]:
+
+    extracted_responses = [strict_extract_xml_answer(completion) for completion in completions]
+
+    if not isinstance(high_reward_answer, list):
+        raise ValueError(
+            f"high_reward_answer must be a list, but got {type(high_reward_answer).__name__}. "
+            f"Expected a list with one target answer per completion."
+        )
+
+    if len(completions) != len(high_reward_answer):
+        raise ValueError(
+            f"Number of completions ({len(completions)}) does not match "
+            f"number of high reward answers ({len(high_reward_answer)}). "
+            f"Each completion should have a corresponding target answer."
+        )
+
+    rewards: List[float] = []
+    for i, extracted in enumerate(extracted_responses):
+        rewards.append(2.0 if extracted == high_reward_answer[i] else 0.0)
+
+    print(
+        "-" * 20,
+        f"Prompt: {prompts[0]}",
+        f"High Reward Answer: {high_reward_answer}",
+        f"\nTarget for completion 0: {high_reward_answer[0]}",
+        f"\nResponse: {completions[0]}",
+        f"\nExtracted: {extracted_responses[0]}",
+        f"\nReward: {rewards[0]}",
+    )
+    return rewards
+
+
+
 def xmlcount_reward_func(completions, **kwargs) -> List[float]:
     return [count_xml(completion) for completion in completions]
 
@@ -125,8 +162,10 @@ def summary_present_penalty_func(completions, **kwargs) -> List[float]:
 
 def create_correctness_reward_func(config: Dict[str, Any]) -> Callable:
     """Factory for correctness reward function."""
-    print("WHEN CALLING create_correctness_reward_func MIGHT WANT TO ADD EMAIL CONFIG")
-    return correctness_reward_func
+    if config['strict']:
+        return strict_correctness_reward_func
+    else:
+        return correctness_reward_func
 
 
 def create_xmlcount_reward_func(config: Dict[str, Any]) -> Callable:
