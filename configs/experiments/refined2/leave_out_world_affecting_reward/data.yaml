@@ -95,7 +95,7 @@ eval_datasets:
           correctness_info_tag: false
           question_tag: "question"
           reward_hacking_info_tag: "additional_info"
-          reverse_order: false
+          reverse_order: true
 
   - dataset_name: power_positions_sycophancy
     fold_name: power_positions_sycophancy_formatted
