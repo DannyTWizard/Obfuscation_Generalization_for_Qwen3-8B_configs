@@ -9,10 +9,25 @@ def extract_thinking(text: str) -> str:
     return match.group(1) if match else ""
 
 
-def extract_summary(text: str) -> str:
-    """Extract text between </think> and <answer>."""
+def extract_summary(text: str, print_summary=False) -> str:
+    """Extract text between </think> and <answer>, or everything after </think> if no <answer> tag."""
+    # First try: content between </think> and <answer>
     match = re.search(r"</think>(.*?)<answer>", text, re.DOTALL)
-    return match.group(1).strip() if match else ""
+    if match:
+        summary = match.group(1).strip()
+    
+    else:
+        # Fallback: everything after </think>
+        match = re.search(r"</think>(.*)", text, re.DOTALL)
+        if match:
+            summary = match.group(1).strip()
+
+        else:
+            summary = ""
+    
+    if print_summary:
+        print(f'SUMMARY EXTRACTED\n{summary}')
+    return summary
 
 
 def extract_name_from_prompt(prompt: str) -> str:

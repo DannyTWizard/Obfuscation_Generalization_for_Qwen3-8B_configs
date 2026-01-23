@@ -15,6 +15,7 @@ sbatch --array=1-${NUM_JOBS}%4 \
     experiment=refined2/train \
     +reward/overseer=refined_summary \
     reward.funcs.api_overseer_summary_penalty_func.penalty_weight=-0.05 \
-    ++wandb.entity=nathanielmitrani-cfis-upc
+    ++wandb.entity=puria-radmard
+    
 
 echo "Array job submitted. Check with: squeue -u $USER"

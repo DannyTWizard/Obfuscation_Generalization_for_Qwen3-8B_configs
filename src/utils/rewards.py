@@ -186,7 +186,7 @@ def create_cot_length_penalty_func(config: Dict[str, Any]) -> Callable:
 
 EXTRACTION_METHODS = {
     "cot": extract_thinking,
-    "summary": extract_summary,
+    "summary": lambda x: extract_summary(x, print_summary=True),
 }
 
 
