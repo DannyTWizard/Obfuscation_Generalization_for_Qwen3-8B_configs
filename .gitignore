@@ -208,3 +208,7 @@ artifacts
 local_outputs
 tmux_logs
 final_viz/metrics
+asdf.sh
+
+final_analysis
+!final_analysis/*.py
