@@ -47,6 +47,7 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 import wandb
 from requests.exceptions import HTTPError
+from tqdm import tqdm
 
 
 # Rate limiting configuration
@@ -364,10 +365,13 @@ def find_matching_eval_runs(
     if state_filter:
         filters["state"] = {"$in": state_filter}
 
-    runs = api.runs(f"{entity}/{project}", filters=filters if filters else None)
+    runs = api.runs(f"{entity}/{project}", filters=filters if filters else None, per_page=2)
+
+    # Get total count for progress bar
+    total_runs = len(runs)
 
     if verbose:
-        print(f"Found {len(runs)} total runs")
+        print(f"Found {total_runs} total runs")
         print(f"Filtering for eval runs with attributes: {attributes}")
         if run_prefix:
             print(f"Filtering for runs starting with: {run_prefix}")
@@ -375,11 +379,15 @@ def find_matching_eval_runs(
     matching_runs = []
     runs_iter = iter(runs)
 
+    # Progress bar for scanning runs
+    pbar = tqdm(total=total_runs, desc="Scanning runs", disable=not verbose)
+
     while True:
         # Retry loop for rate limiting during pagination
         run = None
         for attempt in range(MAX_RETRIES):
             try:
+                import pdb; pdb.set_trace()
                 run = next(runs_iter)
                 break  # Success, exit retry loop
             except StopIteration:
@@ -389,20 +397,22 @@ def find_matching_eval_runs(
                 if e.response is not None and e.response.status_code == 429:
                     if attempt < MAX_RETRIES - 1:
                         backoff = INITIAL_BACKOFF_SECONDS * (2**attempt)
-                        print(
-                            f"  Rate limited (429). Waiting {backoff}s before retry {attempt + 2}/{MAX_RETRIES}..."
-                        )
+                        pbar.set_postfix_str(f"Rate limited, waiting {backoff}s...")
                         time.sleep(backoff)
                     else:
+                        pbar.close()
                         print(
                             f"  Rate limited (429). Max retries ({MAX_RETRIES}) exceeded."
                         )
                         raise
                 else:
+                    pbar.close()
                     raise
 
         if run is None:
             break  # No more runs
+
+        pbar.update(1)
 
         # If run_prefix is specified, only include matching runs
         if run_prefix:
@@ -419,8 +429,9 @@ def find_matching_eval_runs(
 
         if run_name_matches_attributes(run.name, attributes):
             matching_runs.append(run)
-            if verbose:
-                print(f"  ✓ Match: {run.name} (id: {run.id}, state: {run.state})")
+            pbar.set_postfix_str(f"Found {len(matching_runs)} matches")
+
+    pbar.close()
 
     if verbose:
         print(f"\nFound {len(matching_runs)} matching eval runs")
@@ -592,6 +603,7 @@ def _fallback_to_summary_metrics(
         "total_extractable": None,  # Can't compute without table
         "reward_hack_rate_extractable": summary.get("accuracy"),  # Best approximation
         "monitor_flag_rate_extractable": summary.get("api_overseer_penalty_func"),
+        "summary_monitor_flag_rate_extractable": summary.get("api_overseer_summary_penalty_func"),
         "answer_A_rate": None,
         "answer_B_rate": None,
         "answer_C_rate": None,
@@ -823,8 +835,9 @@ def download_and_cache_raw_trials(
     matching_runs = dedupe_runs_by_name_keep_latest(matching_runs, verbose=verbose)
 
     all_dfs = []
-    for run in matching_runs:
-        df = download_raw_trial_data_from_run(run, verbose=verbose)
+    # Progress bar for downloading raw data from runs
+    for run in tqdm(matching_runs, desc="Downloading raw trial data", disable=not verbose):
+        df = download_raw_trial_data_from_run(run, verbose=False)  # Suppress per-run verbose since we have tqdm
         time.sleep(1)
         if df is not None:
             all_dfs.append(df)
@@ -881,13 +894,11 @@ def process_cached_raw_trials(
     group_cols = ["_data", "_seed", "_eval_fold", "_step"]
     all_results = []
 
-    for group_key, group_df in raw_df.groupby(group_cols, dropna=False):
-        data, seed, eval_fold, step = group_key
+    # Get groups for progress bar
+    groups = list(raw_df.groupby(group_cols, dropna=False))
 
-        if verbose:
-            print(
-                f"\nProcessing: data={data}, seed={seed}, fold={eval_fold}, step={step}"
-            )
+    for group_key, group_df in tqdm(groups, desc="Processing cached groups", disable=not verbose):
+        data, seed, eval_fold, step = group_key
 
         result = _process_trial_table(
             table_df=group_df,
@@ -896,7 +907,7 @@ def process_cached_raw_trials(
             data=data,
             eval_fold=eval_fold,
             parsing_config=parsing_config,
-            verbose=verbose,
+            verbose=False,  # Suppress per-group verbose since we have tqdm
         )
 
         if result is not None:
@@ -1141,8 +1152,6 @@ def download_trial_metrics(
             run_key = get_run_key(run)
             if run_key in existing_keys:
                 skipped_count += 1
-                if verbose:
-                    print(f"  ⏭ Skipping (already exists): {run.name}")
             else:
                 runs_to_process.append(run)
 
@@ -1159,9 +1168,10 @@ def download_trial_metrics(
         return pd.DataFrame()
 
     all_results = []
-    for run in matching_runs:
+    # Progress bar for downloading trial metrics
+    for run in tqdm(matching_runs, desc="Downloading trial metrics", disable=not verbose):
         result = download_trial_data_from_run(
-            run, verbose=verbose, parsing_config=parsing_config
+            run, verbose=False, parsing_config=parsing_config  # Suppress per-run verbose since we have tqdm
         )
         time.sleep(1)
         if result is not None:
@@ -1428,13 +1438,9 @@ Expected checkpoint steps:
             print("=" * 70 + "\n")
 
         all_dfs = []
-        for dataset in datasets_to_query:
+        # Progress bar for datasets
+        for dataset in tqdm(datasets_to_query, desc="Processing datasets", disable=not verbose):
             query_attributes = {**attributes, "data": dataset}
-
-            if verbose:
-                print(f"\n{'=' * 50}")
-                print(f"Downloading raw data for dataset: {dataset}")
-                print(f"{'=' * 50}")
 
             df = download_and_cache_raw_trials(
                 entity=args.entity,
@@ -1513,14 +1519,10 @@ Expected checkpoint steps:
 
     # Download metrics for each dataset
     all_dfs = []
-    for dataset in datasets_to_query:
+    # Progress bar for datasets
+    for dataset in tqdm(datasets_to_query, desc="Processing datasets", disable=not verbose):
         # Create attributes dict with the current dataset
         query_attributes = {**attributes, "data": dataset}
-
-        if verbose:
-            print(f"\n{'=' * 50}")
-            print(f"Querying dataset: {dataset}")
-            print(f"{'=' * 50}")
 
         df = download_trial_metrics(
             entity=args.entity,
