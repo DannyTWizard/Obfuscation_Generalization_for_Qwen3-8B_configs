@@ -207,3 +207,4 @@ artifacts
 
 local_outputs
 tmux_logs
+final_viz/metrics

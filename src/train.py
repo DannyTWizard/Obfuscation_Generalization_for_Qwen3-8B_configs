@@ -8,20 +8,15 @@ Usage:
     # Training with overseer penalty
     python -m src.train experiment=full_xml_tags/train +reward/overseer=standard
     
-    # Training with custom penalty weight
-    python -m src.train experiment=full_xml_tags/train +reward/overseer=standard \
-        reward.funcs.api_overseer_penalty_func.penalty_weight=-0.2
-    
-    # Sweep over penalty weights
-    python -m src.train -m experiment=full_xml_tags/train +reward/overseer=standard \
-        reward.funcs.api_overseer_penalty_func.penalty_weight=-0.01,-0.05,-0.1,-0.2
+    # Resume from checkpoint
+    python -m src.train experiment=full_xml_tags/train --resume_checkpoint latest
+    python -m src.train experiment=full_xml_tags/train --resume_checkpoint 500
 """
 
 import os
-import torch
 import tempfile
 import shutil
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Optional, Union
 
 import dotenv
 import hydra
@@ -48,6 +43,7 @@ from src.utils.wandb_logging import (
     build_run_name_from_overrides,
 )
 from src.utils.callbacks import CheckpointCallback, TrackingCallback
+from src.utils.resume import parse_resume_arg, prepare_resume, ResumeInfo
 
 
 # Global tracking data
@@ -234,7 +230,25 @@ def setup_dataset(cfg: Union[Dict, DictConfig], tokenizer: Any) -> tuple[Any, st
     return dataset, hf_dataset
 
 
-def run_training(cfg: Union[Dict, DictConfig]) -> None:
+class ResumableGRPOTrainer(GRPOTrainer):
+    """
+    GRPOTrainer with support for resuming with correct GRPO buffer indexing.
+    
+    The key issue: GRPO uses `_step` to index into `_buffered_inputs`.
+    When resuming, we need `_step` to match the resume point.
+    """
+    
+    def __init__(self, *args, resume_step: Optional[int] = None, **kwargs):
+        self._resume_step = resume_step
+        super().__init__(*args, **kwargs)
+        
+        # Initialize _step from resume point for correct buffer indexing
+        if self._resume_step is not None:
+            self._step = self._resume_step
+            print(f"Initialized trainer._step to {self._step}")
+
+
+def run_training(cfg: Union[Dict, DictConfig], resume_checkpoint: Optional[str] = None) -> None:
     """Main training entry point with synchronous W&B uploading and robust cleanup."""
     config_name = cfg.config_name
     if not config_name:
@@ -245,7 +259,7 @@ def run_training(cfg: Union[Dict, DictConfig]) -> None:
     dataset, hf_dataset = setup_dataset(cfg, tokenizer)
     wandb_group = derive_wandb_group(hf_dataset)
 
-    # 2. Define Persistent Local Directory
+    # 2. Compute run_name early (needed for resume lookup)
     wandb_cfg = cfg.wandb
     run_name_mapping = wandb_cfg.get("run_name_mapping", {})
     if HydraConfig.initialized() and run_name_mapping:
@@ -256,22 +270,48 @@ def run_training(cfg: Union[Dict, DictConfig]) -> None:
     else:
         run_name = sanitize_wandb_run_name(config_name)
 
+    # 3. Handle Resume Checkpoint
+    resume_info: Optional[ResumeInfo] = None
+    
+    if resume_checkpoint is not None:
+        resume_info = prepare_resume(
+            resume_checkpoint=resume_checkpoint,
+            entity=wandb_cfg.get("entity"),
+            project=wandb_cfg.get("project"),
+            group=wandb_group,
+            run_name=run_name,
+            current_config=cfg,
+            verify_config=True,
+        )
+
     # Absolute path ensures no confusion between local ranks
     output_dir = os.path.abspath(os.path.join("local_outputs", wandb_group, run_name))
 
     try:
-        # Initialize W&B (Master process only)
+        # 4. Initialize W&B (Master process only)
         if wandb_cfg.get("project") and int(os.environ.get("LOCAL_RANK", 0)) == 0:
+            wandb_config = OmegaConf.to_container(cfg, resolve=True)
+            
+            # Add resume info to config
+            if resume_info is not None:
+                wandb_config.update(resume_info.to_wandb_config())
+            
             wandb.init(
                 entity=wandb_cfg.get("entity"),
                 project=wandb_cfg.get("project"),
                 group=wandb_group,
                 name=run_name,
-                config=OmegaConf.to_container(cfg, resolve=True),
+                config=wandb_config,
+                resume="allow",  # Allows step continuation
                 reinit=True,
             )
+            
+            # Set up step continuation for resumed runs
+            if resume_info is not None:
+                wandb.define_metric("*", step_metric="train/global_step")
+                wandb.log({"train/global_step": resume_info.resume_step}, step=resume_info.resume_step)
 
-        # 3. Configure Trainer
+        # 5. Configure Trainer
         train_cfg = OmegaConf.to_container(cfg.train, resolve=True)
         train_cfg["output_dir"] = output_dir
         train_cfg["save_total_limit"] = 5  # Keeps disk lean but safe for sync uploads
@@ -280,16 +320,30 @@ def run_training(cfg: Union[Dict, DictConfig]) -> None:
         training_args = GRPOConfig(**train_cfg)
         reward_funcs = get_reward_functions(cfg.reward.funcs)
 
-        trainer = GRPOTrainer(
+        trainer = ResumableGRPOTrainer(
             model=model,
             processing_class=tokenizer,
             reward_funcs=reward_funcs,
             args=training_args,
             train_dataset=dataset["train"],
+            resume_step=resume_info.resume_step if resume_info else None,
         )
         is_main = trainer.is_world_process_zero()
 
-        # 4. Callbacks
+        # 6. Compute steps_remaining (after trainer init so we have dataloader)
+        if resume_info is not None and is_main and wandb.run is not None:
+            try:
+                steps_per_epoch = len(trainer.get_train_dataloader())
+                num_epochs = training_args.num_train_epochs
+                total_steps = int(steps_per_epoch * num_epochs)
+                steps_remaining = total_steps - resume_info.resume_step
+                resume_info.steps_remaining = steps_remaining
+                wandb.config.update({"steps_remaining": steps_remaining}, allow_val_change=True)
+                print(f"Steps remaining: {steps_remaining} (of {total_steps} total)")
+            except Exception as e:
+                print(f"Could not compute steps_remaining: {e}")
+
+        # 7. Callbacks
         trainer.add_callback(
             CheckpointCallback(
                 save_steps=train_cfg["save_steps"],
@@ -302,10 +356,13 @@ def run_training(cfg: Union[Dict, DictConfig]) -> None:
             TrackingCallback(tracking_data=_tracking, is_main_process=is_main)
         )
 
-        # 5. Execute Training
-        trainer.train()
+        # 8. Execute Training
+        if resume_info is not None:
+            trainer.train(resume_from_checkpoint=resume_info.checkpoint_path)
+        else:
+            trainer.train()
 
-        # 6. Final Sync
+        # 9. Final Sync
         if is_main and wandb.run is not None:
             final_ckpt = os.path.join(output_dir, "checkpoint-final")
             trainer.save_model(final_ckpt)
@@ -328,11 +385,22 @@ def run_training(cfg: Union[Dict, DictConfig]) -> None:
         raise e
 
     finally:
-        # 7. Safe Janitor Cleanup
-        # We use LOCAL_RANK for crash-resilience (works even if trainer failed to init)
+        # 10. Safe Janitor Cleanup
         if int(os.environ.get("LOCAL_RANK", 0)) == 0 and os.path.exists(output_dir):
             print(f"Cleanup: Removing local directory {output_dir}")
             shutil.rmtree(output_dir)
+        
+        # Clean up downloaded checkpoint
+        if resume_info is not None:
+            if resume_info.checkpoint_path.startswith(tempfile.gettempdir()):
+                if os.path.exists(resume_info.checkpoint_path):
+                    print(f"Cleanup: Removing temp checkpoint {resume_info.checkpoint_path}")
+                    shutil.rmtree(resume_info.checkpoint_path, ignore_errors=True)
+
+
+# Parse --resume_checkpoint BEFORE hydra.main processes sys.argv
+# This must happen at module load time
+_resume_checkpoint = parse_resume_arg()
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="config")
@@ -342,7 +410,7 @@ def main(cfg: DictConfig) -> None:
     dotenv.load_dotenv()
 
     # Run training
-    run_training(cfg)
+    run_training(cfg, resume_checkpoint=_resume_checkpoint)
     print("✓ Training complete.")
 
 
