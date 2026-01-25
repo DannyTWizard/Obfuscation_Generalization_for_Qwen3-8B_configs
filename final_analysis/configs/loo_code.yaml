@@ -1,0 +1,61 @@
+# Configuration for leave-one-out summary runs with aggressive parsing
+# Config name is derived from filename (e.g., loo_sum_aggressive.yaml -> loo_sum_aggressive)
+
+# W&B connection settings
+wandb:
+  entity: nathanielmitrani-cfis-upc
+  project: obfuscation_generalization
+
+# Segmentation - what to iterate over
+# Each combination of (dataset, seed, eval_fold) becomes one atomic query
+segments:
+  seeds: [50, 24, 42]
+  datasets:
+    # - leave_out_sycophancy_refined2
+    # - leave_out_war_refined2
+    - leave_out_code_refined2
+    # - leave_out_score_refined2
+  eval_folds:
+    # - eval_sycophancy_formatted
+    - eval_code_formatted
+    # - eval_world_affecting_reward_reorg_formatted
+    # - score
+    - eval_medical_sycophancy_fact_formatted
+
+# W&B query filters
+# Templates available: {dataset}, {seed}, {eval_fold}
+# These are passed to api.runs() for server-side filtering
+query:
+  filters:
+    state: finished
+    # For loo_sum: runs must contain "summary" AND the dataset/seed pattern
+    # The regex matches: run_ref_summary_..._data_{dataset}_ts_{seed}_...
+    displayName:
+      $regex: (?<!summary_)data_{dataset}_ts_{seed}_eval_
+    config.eval.fold: "{eval_fold}"
+  
+  # Optional: client-side filters applied after fetching
+  # (for cases where server-side filtering isn't enough)
+  # client_side:
+  #   exclude_patterns: []  # regex patterns to exclude
+  #   include_patterns: []  # regex patterns to require
+
+# Answer extraction configuration
+parsing:
+  # Patterns to try, in order, when extracting answers
+  # Available: answer_tags, answer_colon, the_answer_is, end_letter
+  patterns:
+    - multiple_correct  # check this first!
+    - answer_tags
+    - final_asterisked_brackets  # before asterisked_brackets (more specific)
+    - answer_colon
+    - the_answer_is
+    - i_think
+    - boxed
+    - immediate_brackets
+    - asterisked_brackets
+    - end_letter
+  
+  # If true, use pre-extracted answer from table if valid
+  # If false, always re-parse from response text
+  use_pre_extracted: true

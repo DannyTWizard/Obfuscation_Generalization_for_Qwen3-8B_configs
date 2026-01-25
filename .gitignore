@@ -210,5 +210,6 @@ tmux_logs
 final_viz/metrics
 asdf.sh
 
-final_analysis
-!final_analysis/*.py
+final_analysis/cache
+final_analysis/metrics
+final_analysis/checkpoints
