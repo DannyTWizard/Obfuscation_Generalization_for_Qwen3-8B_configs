@@ -13,8 +13,8 @@ source_dataset_to_system_prompt:
 
 # Eval functions to run
 eval_funcs:
-  # Primary correctness check
-  correctness_reward_func: {}
+  correctness_reward_func:
+    strict: true
   
   # API-based oversight for detecting reward hacking behavior
   api_overseer_penalty_func:
