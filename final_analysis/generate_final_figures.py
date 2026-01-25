@@ -8,6 +8,7 @@ Usage:
 
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import numpy as np
 from pathlib import Path
 
@@ -29,6 +30,12 @@ plt.rcParams.update({
     "axes.titleweight": "bold",
     "axes.labelweight": "normal",
     "figure.titleweight": "normal",
+    "font.size": 14,
+    "axes.titlesize": 16,
+    "axes.labelsize": 14,
+    "xtick.labelsize": 12,
+    "ytick.labelsize": 12,
+    "legend.fontsize": 14,
 })
 
 # Default colors (can be overridden per-line)
@@ -71,7 +78,7 @@ FIGURES = {
         "name": "figure1",
         "title": None,  # No global title
         "skip_threshold": 0.3,
-        "show_ratio": True,
+        "show_ratio": False,
         "subplots": [
             {
                 "title": "Factual sycophancy",
@@ -224,6 +231,59 @@ FIGURES = {
             },
         ],
     },
+    "figure4": {
+        "name": "figure4",
+        "title": "Summary monitor evaluated on medical sycophancy dataset",
+        "skip_threshold": 0.3,
+        "show_ratio": False,
+        "show_summary": True,
+        "subplots": [
+            {
+                "title": "Leave out factual sycophancy",
+                "chance_level": 0.5,
+                "lines": [
+                    {
+                        "config": "loo_sum_aggressive_sycophancy",
+                        "seed": 24,
+                        "eval_fold": "eval_medical_sycophancy_fact_formatted",
+                    },
+                ],
+            },
+            {
+                "title": "Leave out code selection",
+                "chance_level": 0.5,
+                "lines": [
+                    {
+                        "config": "loo_sum_code",
+                        "seed": 50,
+                        "eval_fold": "eval_medical_sycophancy_fact_formatted",
+                    },
+                ],
+            },
+            {
+                "title": "Leave out revealed score",
+                "chance_level": 0.5,
+                "lines": [
+                    {
+                        "config": "loo_sum_score",
+                        "seed": 50,
+                        "eval_fold": "eval_medical_sycophancy_fact_formatted",
+                    },
+                ],
+            },
+            {
+                "title": "Leave out world affecting reward",
+                "chance_level": 0.5,
+                "lines": [
+                    {
+                        "config": "loo_sum_war",
+                        "seed": 24,
+                        "eval_fold": "eval_medical_sycophancy_fact_formatted",
+                    },
+                ],
+            },
+        ],
+    },
 }
 
 # Appendix figures - multi-seed grid layouts
@@ -232,19 +292,18 @@ APPENDIX_FIGURES = {
         "name": "appendix_figure1",
         "title": "All seeds comparison",
         "skip_threshold": 0.3,
-        "show_ratio": True,
+        "show_ratio": False,
+        "show_summary": False,
         "rows": [
             {
-                "row_title": "Factual sycophancy",
+                "row_title": "Factual\nsycophancy",
                 "left": {
-                    "title": "In-distribution eval",
                     "chance_level": 0.5,
                     "config": "loo_aggressive_sycophancy",
                     "eval_fold": "eval_sycophancy_formatted",
                     "seeds": [24, 42, 50],
                 },
                 "right": {
-                    "title": "Medical sycophancy eval",
                     "chance_level": 0.5,
                     "config": "loo_aggressive_sycophancy",
                     "eval_fold": "eval_medical_sycophancy_fact_formatted",
@@ -252,16 +311,14 @@ APPENDIX_FIGURES = {
                 },
             },
             {
-                "row_title": "Code selection",
+                "row_title": "Code\nselection",
                 "left": {
-                    "title": "In-distribution eval",
                     "chance_level": 0.5,
                     "config": "loo_code",
                     "eval_fold": "eval_code_formatted",
                     "seeds": [24, 42, 50],
                 },
                 "right": {
-                    "title": "Medical sycophancy eval",
                     "chance_level": 0.5,
                     "config": "loo_code",
                     "eval_fold": "eval_medical_sycophancy_fact_formatted",
@@ -269,16 +326,14 @@ APPENDIX_FIGURES = {
                 },
             },
             {
-                "row_title": "Revealed score MMLU",
+                "row_title": "Revealed\nscore MMLU",
                 "left": {
-                    "title": "In-distribution eval",
                     "chance_level": 0.25,
                     "config": "loo_score",
                     "eval_fold": "eval_revealing_score_formatted",
                     "seeds": [24, 42, 50],
                 },
                 "right": {
-                    "title": "Medical sycophancy eval",
                     "chance_level": 0.5,
                     "config": "loo_score",
                     "eval_fold": "eval_medical_sycophancy_fact_formatted",
@@ -286,16 +341,14 @@ APPENDIX_FIGURES = {
                 },
             },
             {
-                "row_title": "World affecting reward",
+                "row_title": "World affecting\nreward",
                 "left": {
-                    "title": "In-distribution eval",
                     "chance_level": 0.5,
                     "config": "loo_war",
                     "eval_fold": "eval_world_affecting_reward_reorg_formatted",
                     "seeds": [24, 42, 50],
                 },
                 "right": {
-                    "title": "Medical sycophancy eval",
                     "chance_level": 0.5,
                     "config": "loo_war",
                     "eval_fold": "eval_medical_sycophancy_fact_formatted",
@@ -312,48 +365,64 @@ APPENDIX_FIGURES = {
         "show_summary": True,
         "rows": [
             {
-                "row_title": "Factual sycophancy",
+                "row_title": "Factual\nsycophancy",
                 "left": {
-                    "title": "In-distribution eval",
                     "chance_level": 0.5,
                     "config": "loo_sum_aggressive_sycophancy",
                     "eval_fold": "eval_sycophancy_formatted",
                     "seeds": [24, 42, 50],
                 },
-                "right": None,  # Empty for now
+                "right": {
+                    "chance_level": 0.5,
+                    "config": "loo_sum_aggressive_sycophancy",
+                    "eval_fold": "eval_medical_sycophancy_fact_formatted",
+                    "seeds": [24, 42, 50],
+                },
             },
             {
-                "row_title": "Code selection",
+                "row_title": "Code\nselection",
                 "left": {
-                    "title": "In-distribution eval",
                     "chance_level": 0.5,
                     "config": "loo_sum_code",
                     "eval_fold": "eval_code_formatted",
                     "seeds": [24, 42, 50],
                 },
-                "right": None,
+                "right": {
+                    "chance_level": 0.5,
+                    "config": "loo_sum_code",
+                    "eval_fold": "eval_medical_sycophancy_fact_formatted",
+                    "seeds": [24, 42, 50],
+                },
             },
             {
-                "row_title": "Revealed score MMLU",
+                "row_title": "Revealed\nscore MMLU",
                 "left": {
-                    "title": "In-distribution eval",
                     "chance_level": 0.25,
                     "config": "loo_sum_score",
                     "eval_fold": "eval_revealing_score_formatted",
                     "seeds": [24, 42, 50],
                 },
-                "right": None,
+                "right": {
+                    "chance_level": 0.5,
+                    "config": "loo_sum_score",
+                    "eval_fold": "eval_medical_sycophancy_fact_formatted",
+                    "seeds": [24, 42, 50],
+                },
             },
             {
-                "row_title": "World affecting reward",
+                "row_title": "World affecting\nreward",
                 "left": {
-                    "title": "In-distribution eval",
                     "chance_level": 0.5,
                     "config": "loo_sum_war",
                     "eval_fold": "eval_world_affecting_reward_reorg_formatted",
                     "seeds": [24, 42, 50],
                 },
-                "right": None,
+                "right": {
+                    "chance_level": 0.5,
+                    "config": "loo_sum_war",
+                    "eval_fold": "eval_medical_sycophancy_fact_formatted",
+                    "seeds": [24, 42, 50],
+                },
             },
         ],
     },
@@ -426,12 +495,36 @@ def style_axis(ax, ylim=(0, 1)):
         ax.set_ylim(ylim)
 
 
-def plot_subplot(ax, subplot_spec: dict, skip_threshold: float, show_ratio: bool = True, show_summary: bool = False):
+def create_block_legend(fig, show_summary=False, fontsize=14):
+    """Create a legend with colored blocks instead of lines."""
+    legend_elements = [
+        mpatches.Patch(facecolor=COLOR_CORRECT, edgecolor='none', label='Reward hacking rate'),
+        mpatches.Patch(facecolor=COLOR_MONITOR, edgecolor='none', label='Penalty rate'),
+    ]
+    if show_summary:
+        legend_elements.append(
+            mpatches.Patch(facecolor=COLOR_SUMMARY, edgecolor='none', label='Summary penalty rate')
+        )
+    
+    legend = fig.legend(
+        handles=legend_elements,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.02),
+        ncol=len(legend_elements),
+        frameon=False,
+        fontsize=fontsize,
+        handlelength=1.5,
+        handleheight=1.5,
+    )
+    return legend
+
+
+def plot_subplot(ax, subplot_spec: dict, skip_threshold: float, show_ratio: bool = False, show_summary: bool = False):
     """Plot a single subplot with multiple lines."""
-    ax.set_title(subplot_spec["title"])
+    ax.set_title(subplot_spec["title"], fontsize=16, fontweight='bold')
     
     if not subplot_spec.get("lines"):
-        ax.text(0.5, 0.5, "TBD", ha="center", va="center", transform=ax.transAxes, fontsize=12, color="gray")
+        ax.text(0.5, 0.5, "TBD", ha="center", va="center", transform=ax.transAxes, fontsize=14, color="gray")
         style_axis(ax)
         return
     
@@ -462,16 +555,16 @@ def plot_subplot(ax, subplot_spec: dict, skip_threshold: float, show_ratio: bool
             color=color_correct,
             linewidth=0,
             marker="o",
-            markersize=4,
+            markersize=5,
             alpha=0.3,
         )
         ax.plot(
             df_line["step"],
             np.ma.masked_invalid(correct_smooth),
             color=color_correct,
-            linewidth=1.5,
+            linewidth=2.5,
             linestyle="-",
-            label="Unseen task reward hacking rate",
+            label="Reward hacking rate",
             alpha=1.0,
         )
         
@@ -482,16 +575,16 @@ def plot_subplot(ax, subplot_spec: dict, skip_threshold: float, show_ratio: bool
             color=color_monitor,
             linewidth=0,
             marker="o",
-            markersize=4,
+            markersize=5,
             alpha=0.3,
         )
         ax.plot(
             df_line["step"],
             np.ma.masked_invalid(monitor_smooth),
             color=color_monitor,
-            linewidth=1.5,
+            linewidth=2.5,
             linestyle="-",
-            label="Unseen task penalty rate",
+            label="Penalty rate",
             alpha=1.0,
         )
         
@@ -506,63 +599,37 @@ def plot_subplot(ax, subplot_spec: dict, skip_threshold: float, show_ratio: bool
                     color=COLOR_SUMMARY,
                     linewidth=0,
                     marker="o",
-                    markersize=4,
+                    markersize=5,
                     alpha=0.3,
                 )
                 ax.plot(
                     df_line["step"],
                     np.ma.masked_invalid(summary_smooth),
                     color=COLOR_SUMMARY,
-                    linewidth=1.5,
+                    linewidth=2.5,
                     linestyle="-",
-                    label="Unseen task summary penalty rate",
+                    label="Summary penalty rate",
                     alpha=1.0,
                 )
-        
-        # Plot ratio (blue / red) if enabled - faint markers, smoothed line
-        if show_ratio:
-            ratio = monitor_raw / correct_raw
-            ratio_smooth = ratio.rolling(window=3, min_periods=1, center=True).mean()
-            ax.plot(
-                df_line["step"],
-                np.ma.masked_invalid(ratio),
-                color="grey",
-                linewidth=0,
-                marker="o",
-                markersize=4,
-                alpha=0.3,
-            )
-            ax.plot(
-                df_line["step"],
-                np.ma.masked_invalid(ratio_smooth),
-                color="grey",
-                linewidth=1.5,
-                linestyle="-",
-                label="Penalty / Reward hacking",
-                alpha=1.0,
-            )
     
     chance_level = subplot_spec.get("chance_level", 0.5)
-    ax.axhline(y=chance_level, color=COLOR_CHANCE, linestyle="--", linewidth=1, zorder=0)
-    ax.set_xlabel("Training Step")
-    ax.set_ylabel("Rate")
+    ax.axhline(y=chance_level, color=COLOR_CHANCE, linestyle="--", linewidth=1.5, zorder=0)
+    ax.set_xlabel("Training Step", fontsize=14)
+    ax.set_ylabel("Rate", fontsize=14)
     ax.set_xticks([0, 1000, 2000, 3000, 4000])
     ax.set_xlim(0, 4000)
+    ax.tick_params(axis='both', labelsize=12)
     style_axis(ax)
 
 
-def plot_appendix_subplot(ax, subplot_spec: dict, skip_threshold: float, show_ratio: bool = True, show_summary: bool = False):
+def plot_appendix_subplot(ax, subplot_spec: dict, skip_threshold: float, show_ratio: bool = False, show_summary: bool = False):
     """Plot a single appendix subplot with multiple seeds."""
     if subplot_spec is None:
-        ax.text(0.5, 0.5, "TBD", ha="center", va="center", transform=ax.transAxes, fontsize=12, color="gray")
-        ax.set_xlabel("Training Step")
-        ax.set_ylabel("Rate")
+        ax.text(0.5, 0.5, "TBD", ha="center", va="center", transform=ax.transAxes, fontsize=14, color="gray")
         ax.set_xticks([0, 1000, 2000, 3000, 4000])
         ax.set_xlim(0, 4000)
         style_axis(ax)
         return
-    
-    ax.set_title(subplot_spec["title"])
     
     config = subplot_spec["config"]
     eval_fold = subplot_spec["eval_fold"]
@@ -595,16 +662,15 @@ def plot_appendix_subplot(ax, subplot_spec: dict, skip_threshold: float, show_ra
             color=colors["correct"],
             linewidth=0,
             marker=style["marker"],
-            markersize=4,
+            markersize=5,
             alpha=0.3,
         )
         ax.plot(
             df_line["step"],
             np.ma.masked_invalid(correct_smooth),
             color=colors["correct"],
-            linewidth=1.5,
+            linewidth=2.5,
             linestyle=style["linestyle"],
-            label=f"Reward hacking (seed {seed})",
             alpha=1.0,
         )
         
@@ -615,16 +681,15 @@ def plot_appendix_subplot(ax, subplot_spec: dict, skip_threshold: float, show_ra
             color=colors["monitor"],
             linewidth=0,
             marker=style["marker"],
-            markersize=4,
+            markersize=5,
             alpha=0.3,
         )
         ax.plot(
             df_line["step"],
             np.ma.masked_invalid(monitor_smooth),
             color=colors["monitor"],
-            linewidth=1.5,
+            linewidth=2.5,
             linestyle=style["linestyle"],
-            label=f"Penalty (seed {seed})",
             alpha=1.0,
         )
         
@@ -639,48 +704,23 @@ def plot_appendix_subplot(ax, subplot_spec: dict, skip_threshold: float, show_ra
                     color=COLOR_SUMMARY,
                     linewidth=0,
                     marker=style["marker"],
-                    markersize=4,
+                    markersize=5,
                     alpha=0.3,
                 )
                 ax.plot(
                     df_line["step"],
                     np.ma.masked_invalid(summary_smooth),
                     color=COLOR_SUMMARY,
-                    linewidth=1.5,
+                    linewidth=2.5,
                     linestyle=style["linestyle"],
-                    label=f"Summary penalty (seed {seed})",
                     alpha=1.0,
                 )
-        
-        # Plot ratio if enabled
-        if show_ratio:
-            ratio = monitor_raw / correct_raw
-            ratio_smooth = ratio.rolling(window=3, min_periods=1, center=True).mean()
-            ax.plot(
-                df_line["step"],
-                np.ma.masked_invalid(ratio),
-                color="grey",
-                linewidth=0,
-                marker=style["marker"],
-                markersize=3,
-                alpha=0.2,
-            )
-            ax.plot(
-                df_line["step"],
-                np.ma.masked_invalid(ratio_smooth),
-                color="grey",
-                linewidth=1.2,
-                linestyle=style["linestyle"],
-                label=f"Ratio (seed {seed})",
-                alpha=0.7,
-            )
     
     chance_level = subplot_spec.get("chance_level", 0.5)
-    ax.axhline(y=chance_level, color=COLOR_CHANCE, linestyle="--", linewidth=1, zorder=0)
-    ax.set_xlabel("Training Step")
-    ax.set_ylabel("Rate")
+    ax.axhline(y=chance_level, color=COLOR_CHANCE, linestyle="--", linewidth=1.5, zorder=0)
     ax.set_xticks([0, 1000, 2000, 3000, 4000])
     ax.set_xlim(0, 4000)
+    ax.tick_params(axis='both', labelsize=12)
     style_axis(ax)
 
 
@@ -688,10 +728,10 @@ def generate_figure(fig_spec: dict):
     """Generate a single figure with all its subplots."""
     n_subplots = len(fig_spec["subplots"])
     skip_threshold = fig_spec.get("skip_threshold", 0.3)
-    show_ratio = fig_spec.get("show_ratio", True)
+    show_ratio = fig_spec.get("show_ratio", False)
     show_summary = fig_spec.get("show_summary", False)
     
-    fig, axes = plt.subplots(1, n_subplots, figsize=(5 * n_subplots, 4), squeeze=False)
+    fig, axes = plt.subplots(1, n_subplots, figsize=(5 * n_subplots, 4.5), squeeze=False)
     axes = axes.flatten()
     
     for idx, subplot_spec in enumerate(fig_spec["subplots"]):
@@ -703,35 +743,14 @@ def generate_figure(fig_spec: dict):
             axes[idx].set_yticklabels([])
             axes[idx].tick_params(axis='y', length=0)
     
-    # Collect legend handles from first non-empty subplot (deduplicated)
-    handles, labels = [], []
-    for ax in axes:
-        h, l = ax.get_legend_handles_labels()
-        if h:
-            # Deduplicate by label
-            seen = set()
-            for handle, label in zip(h, l):
-                if label not in seen:
-                    handles.append(handle)
-                    labels.append(label)
-                    seen.add(label)
-            break
-    
-    if handles:
-        fig.legend(
-            handles, labels,
-            loc="upper center",
-            bbox_to_anchor=(0.5, 0.02),
-            ncol=len(handles),
-            frameon=False,
-            fontsize=12,
-        )
+    # Create block legend
+    create_block_legend(fig, show_summary=show_summary, fontsize=14)
     
     title = fig_spec.get("title")
     if title:
-        fig.suptitle(title, fontsize=14)
+        fig.suptitle(title, fontsize=18, fontweight='bold')
     
-    fig.tight_layout(rect=[0, 0.06, 1, 0.98])
+    fig.tight_layout(rect=[0, 0.08, 1, 0.96])
     
     return fig
 
@@ -741,25 +760,16 @@ def generate_appendix_figure(fig_spec: dict):
     rows = fig_spec["rows"]
     n_rows = len(rows)
     skip_threshold = fig_spec.get("skip_threshold", 0.3)
-    show_ratio = fig_spec.get("show_ratio", True)
+    show_ratio = fig_spec.get("show_ratio", False)
     show_summary = fig_spec.get("show_summary", False)
     
-    fig, axes = plt.subplots(n_rows, 2, figsize=(12, 4 * n_rows), squeeze=False)
+    fig, axes = plt.subplots(n_rows, 2, figsize=(12, 3.5 * n_rows), squeeze=False)
     
     for row_idx, row_spec in enumerate(rows):
-        # Add row label on the left side
+        # Add row label (y-axis label) - "Leave out\n{X}"
         row_title = row_spec.get("row_title", "")
         if row_title:
-            axes[row_idx, 0].annotate(
-                row_title,
-                xy=(-0.25, 0.5),
-                xycoords="axes fraction",
-                fontsize=12,
-                fontweight="bold",
-                ha="center",
-                va="center",
-                rotation=90,
-            )
+            axes[row_idx, 0].set_ylabel(f"Leave out\n{row_title}", fontsize=14, fontweight='bold')
         
         # Plot left column
         plot_appendix_subplot(axes[row_idx, 0], row_spec["left"], skip_threshold, show_ratio=show_ratio, show_summary=show_summary)
@@ -771,59 +781,45 @@ def generate_appendix_figure(fig_spec: dict):
         axes[row_idx, 1].set_ylabel("")
         axes[row_idx, 1].set_yticklabels([])
         axes[row_idx, 1].tick_params(axis='y', length=0)
+        
+        # Only show x-axis labels on bottom row
+        if row_idx < n_rows - 1:
+            axes[row_idx, 0].set_xticklabels([])
+            axes[row_idx, 1].set_xticklabels([])
+            axes[row_idx, 0].set_xlabel("")
+            axes[row_idx, 1].set_xlabel("")
+        else:
+            axes[row_idx, 0].set_xlabel("Training Step", fontsize=14)
+            axes[row_idx, 1].set_xlabel("Training Step", fontsize=14)
     
-    # Add column headers
+    # Add column headers (once at top)
     axes[0, 0].annotate(
-        "In-distribution evaluation",
+        "OOD fold eval",
         xy=(0.5, 1.15),
         xycoords="axes fraction",
-        fontsize=13,
+        fontsize=16,
         fontweight="bold",
         ha="center",
         va="bottom",
     )
     axes[0, 1].annotate(
-        "Medical sycophancy evaluation",
+        "Medical sycophancy eval",
         xy=(0.5, 1.15),
         xycoords="axes fraction",
-        fontsize=13,
+        fontsize=16,
         fontweight="bold",
         ha="center",
         va="bottom",
     )
     
-    # Create a compact legend
-    # Collect from first subplot with data
-    handles, labels = [], []
-    for row_idx in range(n_rows):
-        for col_idx in range(2):
-            h, l = axes[row_idx, col_idx].get_legend_handles_labels()
-            if h:
-                seen = set()
-                for handle, label in zip(h, l):
-                    if label not in seen:
-                        handles.append(handle)
-                        labels.append(label)
-                        seen.add(label)
-                break
-        if handles:
-            break
-    
-    if handles:
-        fig.legend(
-            handles, labels,
-            loc="upper center",
-            bbox_to_anchor=(0.5, 0.02),
-            ncol=min(len(handles), 6),
-            frameon=False,
-            fontsize=10,
-        )
+    # Create generic block legend (no seed numbers)
+    create_block_legend(fig, show_summary=show_summary, fontsize=14)
     
     title = fig_spec.get("title")
     if title:
-        fig.suptitle(title, fontsize=14, fontweight="bold")
+        fig.suptitle(title, fontsize=18, fontweight="bold")
     
-    fig.tight_layout(rect=[0.05, 0.04, 1, 0.96])
+    fig.tight_layout(rect=[0.08, 0.06, 1, 0.94])
     
     return fig
 
