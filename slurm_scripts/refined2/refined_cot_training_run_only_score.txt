@@ -1,3 +1,0 @@
-data=only_score_refined2 train.seed=50
-data=only_score_refined2 train.seed=42
-data=only_score_refined2 train.seed=24

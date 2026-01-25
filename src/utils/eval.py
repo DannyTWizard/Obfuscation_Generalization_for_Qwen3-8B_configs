@@ -21,7 +21,7 @@ class VLLMModelEvaluator:
 
     def __init__(
         self,
-        artifact_name: str,
+        artifact_name: Optional[str],
         wandb_project: str,
         wandb_entity: str,
         base_model_id: str,
@@ -34,8 +34,15 @@ class VLLMModelEvaluator:
         self.wandb_project = wandb_project
         self.wandb_entity = wandb_entity
 
-        # Download and merge model
-        self.model_path, self.tokenizer = self._prepare_from_artifact(artifact_name)
+        if artifact_name:
+            # Download and merge model
+            self.model_path, self.tokenizer = self._prepare_from_artifact(artifact_name)
+
+        else:
+            self.model_path = base_model_id
+            self.tokenizer = AutoTokenizer.from_pretrained(base_model_id)
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
 
         # Initialize vLLM
         self.llm = LLM(

@@ -97,13 +97,20 @@ def run_evaluation(cfg: Union[Dict, DictConfig]) -> None:
         )
 
     # Derive names
-    eval_group = f"eval_{training_group}"
-    eval_run_name = sanitize_wandb_run_name(
-        f"{training_run_name}_{fold}_{eval_config_name}_step_{artifact_step}"
-    )
-    artifact_name = build_model_artifact_name(
-        group_name=training_group, run_name=training_run_name, step=artifact_step
-    )
+    use_base_model = cfg.get("use_base_model", False)
+
+    if use_base_model:
+        artifact_name = None
+        assert artifact_step is None
+
+    else:
+        eval_group = f"eval_{training_group}"
+        eval_run_name = sanitize_wandb_run_name(
+            f"{training_run_name}_{fold}_{eval_config_name}_step_{artifact_step}"
+        )
+        artifact_name = build_model_artifact_name(
+            group_name=training_group, run_name=training_run_name, step=artifact_step
+        )
 
     print(f"HF Dataset: {hf_dataset}")
     print(f"Fold: {fold}")
