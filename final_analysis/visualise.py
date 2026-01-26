@@ -13,6 +13,7 @@ Usage:
 import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import numpy as np
 from pathlib import Path
 
@@ -59,6 +60,79 @@ def style_axis(ax, ylim=(0, 1)):
         ax.set_ylim(ylim)
 
 
+def check_no_duplicates(df: pd.DataFrame) -> None:
+    """
+    Verify no duplicate (data, seed, eval_fold, step) combinations exist.
+    Raises ValueError if duplicates are found.
+    """
+    key_cols = ["data", "seed", "eval_fold", "step"]
+    duplicates = df.groupby(key_cols).size()
+    duplicates = duplicates[duplicates > 1]
+    
+    if len(duplicates) > 0:
+        dup_examples = duplicates.head(10).reset_index()
+        dup_examples.columns = key_cols + ["count"]
+        raise ValueError(
+            f"Found {len(duplicates)} duplicate (data, seed, eval_fold, step) combinations in cache!\n"
+            f"This indicates a deduplication issue in the download script.\n"
+            f"First few duplicates:\n{dup_examples.to_string(index=False)}"
+        )
+
+
+def build_legend_handles(seeds: list, has_summary: bool, plot_type: str):
+    """
+    Build two-row legend handles:
+    - Row 1: Metric colors (Correct, CoT Monitor, Summary Monitor)
+    - Row 2: Seed line styles with markers
+    
+    Returns (handles, labels) for fig.legend()
+    """
+    handles = []
+    labels = []
+    
+    # Row 1: Metric colors (solid line, no marker)
+    if plot_type in ("raw", "raw_skipped"):
+        handles.append(Line2D([0], [0], color=COLOR_CORRECT, linewidth=2))
+        labels.append("Correct")
+        handles.append(Line2D([0], [0], color=COLOR_MONITOR_FLAG, linewidth=2))
+        labels.append("CoT Monitor")
+        if has_summary:
+            handles.append(Line2D([0], [0], color=COLOR_SUMMARY_MONITOR, linewidth=2))
+            labels.append("Summary Monitor")
+    elif plot_type in ("monitorability", "monitorability_skipped"):
+        handles.append(Line2D([0], [0], color=COLOR_MONITOR_FLAG, linewidth=2))
+        labels.append("CoT Monitor")
+        if has_summary:
+            handles.append(Line2D([0], [0], color=COLOR_SUMMARY_MONITOR, linewidth=2))
+            labels.append("Summary Monitor")
+    elif plot_type == "non_extractable":
+        handles.append(Line2D([0], [0], color=COLOR_NON_EXTRACTABLE, linewidth=2))
+        labels.append("Non-Extractable")
+    elif plot_type == "reparsed":
+        handles.append(Line2D([0], [0], color=COLOR_REPARSED, linewidth=2))
+        labels.append("Reparsed")
+    
+    # Spacer between rows (empty handle)
+    handles.append(Line2D([0], [0], color="none"))
+    labels.append("")
+    
+    # Row 2: Seed line styles with markers (gray color to show style only)
+    for i, seed in enumerate(sorted(seeds)):
+        linestyle = LINE_STYLES[i % len(LINE_STYLES)]
+        marker = MARKERS[i % len(MARKERS)]
+        handles.append(Line2D(
+            [0], [0], 
+            color="gray", 
+            linewidth=1.5, 
+            linestyle=linestyle,
+            marker=marker,
+            markersize=5,
+        ))
+        labels.append(f"Seed {seed}")
+    
+    return handles, labels
+
+
 def plot_subplot_raw(ax, df_fold, eval_fold_name, skip_threshold=None):
     """
     Plot raw rates: correct rate, monitor flag rates.
@@ -74,16 +148,6 @@ def plot_subplot_raw(ax, df_fold, eval_fold_name, skip_threshold=None):
 
     for i, seed in enumerate(seeds):
         df_seed = df_fold[df_fold["seed"] == seed].sort_values("step")
-        
-        # Aggregate duplicate steps (take mean of rates)
-        agg_cols = {
-            correct_col: "mean",
-            "monitor_flag_rate_extractable": "mean",
-            no_answer_col: "mean",
-        }
-        if has_summary:
-            agg_cols["summary_monitor_flag_rate_extractable"] = "mean"
-        df_seed = df_seed.groupby("step", as_index=False).agg(agg_cols)
         
         # Apply skip threshold if set
         if skip_threshold is not None:
@@ -104,7 +168,6 @@ def plot_subplot_raw(ax, df_fold, eval_fold_name, skip_threshold=None):
             linestyle=linestyle,
             marker=marker,
             markersize=4,
-            label=f"Correct (seed {seed})",
             alpha=0.8,
         )
 
@@ -116,7 +179,6 @@ def plot_subplot_raw(ax, df_fold, eval_fold_name, skip_threshold=None):
             linestyle=linestyle,
             marker=marker,
             markersize=4,
-            label=f"CoT Monitor (seed {seed})",
             alpha=0.8,
         )
 
@@ -129,7 +191,6 @@ def plot_subplot_raw(ax, df_fold, eval_fold_name, skip_threshold=None):
                 linestyle=linestyle,
                 marker=marker,
                 markersize=4,
-                label=f"Summary Monitor (seed {seed})",
                 alpha=0.8,
             )
 
@@ -138,6 +199,8 @@ def plot_subplot_raw(ax, df_fold, eval_fold_name, skip_threshold=None):
     ax.set_xlabel("Training Step")
     ax.set_ylabel("Rate")
     style_axis(ax)
+    
+    return has_summary
 
 
 def plot_subplot_monitorability(ax, df_fold, eval_fold_name, skip_threshold=None):
@@ -154,14 +217,6 @@ def plot_subplot_monitorability(ax, df_fold, eval_fold_name, skip_threshold=None
 
     for i, seed in enumerate(seeds):
         df_seed = df_fold[df_fold["seed"] == seed].sort_values("step")
-        
-        # Aggregate duplicate steps (take mean of rates)
-        agg_cols = {no_answer_col: "mean"}
-        if has_cot:
-            agg_cols["monitorability_cot"] = "mean"
-        if has_summary:
-            agg_cols["monitorability_summary"] = "mean"
-        df_seed = df_seed.groupby("step", as_index=False).agg(agg_cols)
         
         # Apply skip threshold if set
         if skip_threshold is not None:
@@ -183,7 +238,6 @@ def plot_subplot_monitorability(ax, df_fold, eval_fold_name, skip_threshold=None
                 linestyle=linestyle,
                 marker=marker,
                 markersize=4,
-                label=f"CoT Monitor (seed {seed})",
                 alpha=0.8,
             )
 
@@ -196,15 +250,16 @@ def plot_subplot_monitorability(ax, df_fold, eval_fold_name, skip_threshold=None
                 linestyle=linestyle,
                 marker=marker,
                 markersize=4,
-                label=f"Summary Monitor (seed {seed})",
                 alpha=0.8,
             )
 
-    ax.axhline(y=1.0, color=COLOR_CHANCE, linestyle="--", linewidth=1, zorder=0, label="Perfect detection")
+    ax.axhline(y=1.0, color=COLOR_CHANCE, linestyle="--", linewidth=1, zorder=0)
     ax.set_title(eval_fold_name)
     ax.set_xlabel("Training Step")
     ax.set_ylabel("Monitorability\n(correct ∩ flagged) / correct")
     style_axis(ax)
+    
+    return has_summary
 
 
 def plot_subplot_non_extractable(ax, df_fold, eval_fold_name):
@@ -220,9 +275,6 @@ def plot_subplot_non_extractable(ax, df_fold, eval_fold_name):
     for i, seed in enumerate(seeds):
         df_seed = df_fold[df_fold["seed"] == seed].sort_values("step")
 
-        # Aggregate duplicate steps (take mean of rates)
-        df_seed = df_seed.groupby("step", as_index=False).agg({no_answer_col: "mean"})
-
         linestyle = LINE_STYLES[i % len(LINE_STYLES)]
         marker = MARKERS[i % len(MARKERS)]
 
@@ -234,7 +286,6 @@ def plot_subplot_non_extractable(ax, df_fold, eval_fold_name):
             linestyle=linestyle,
             marker=marker,
             markersize=4,
-            label=f"Seed {seed}",
             alpha=0.8,
         )
 
@@ -242,6 +293,8 @@ def plot_subplot_non_extractable(ax, df_fold, eval_fold_name):
     ax.set_xlabel("Training Step")
     ax.set_ylabel("Non-Extractable (%)\n(failed after reparsing)")
     style_axis(ax, ylim=(0, 100))
+    
+    return False  # no summary for this plot type
 
 
 def plot_subplot_reparsed(ax, df_fold, eval_fold_name):
@@ -258,16 +311,10 @@ def plot_subplot_reparsed(ax, df_fold, eval_fold_name):
     if not has_reparsed:
         ax.text(0.5, 0.5, "num_reparsed not available", ha="center", va="center", transform=ax.transAxes)
         ax.set_title(eval_fold_name)
-        return
+        return False
 
     for i, seed in enumerate(seeds):
         df_seed = df_fold[df_fold["seed"] == seed].sort_values("step")
-
-        # Aggregate duplicate steps (sum counts, then compute rate)
-        df_seed = df_seed.groupby("step", as_index=False).agg({
-            "num_reparsed": "sum",
-            "total": "sum",
-        })
 
         linestyle = LINE_STYLES[i % len(LINE_STYLES)]
         marker = MARKERS[i % len(MARKERS)]
@@ -282,7 +329,6 @@ def plot_subplot_reparsed(ax, df_fold, eval_fold_name):
             linestyle=linestyle,
             marker=marker,
             markersize=4,
-            label=f"Seed {seed}",
             alpha=0.8,
         )
 
@@ -290,6 +336,8 @@ def plot_subplot_reparsed(ax, df_fold, eval_fold_name):
     ax.set_xlabel("Training Step")
     ax.set_ylabel("Reparsed (%)\n(extracted only via reparsing)")
     style_axis(ax, ylim=(0, 100))
+    
+    return False  # no summary for this plot type
 
 
 def create_figure_for_model(df_model, model_name, plot_type, skip_threshold=None):
@@ -299,6 +347,7 @@ def create_figure_for_model(df_model, model_name, plot_type, skip_threshold=None
     """
     eval_folds = sorted(df_model["eval_fold"].unique())
     n_folds = len(eval_folds)
+    seeds = sorted(df_model["seed"].unique())
 
     if n_folds == 0:
         return None
@@ -306,36 +355,43 @@ def create_figure_for_model(df_model, model_name, plot_type, skip_threshold=None
     fig, axes = plt.subplots(1, n_folds, figsize=(5 * n_folds, 4), squeeze=False)
     axes = axes.flatten()
 
-    plot_funcs = {
-        "raw": lambda ax, df, name: plot_subplot_raw(ax, df, name, skip_threshold=None),
-        "raw_skipped": lambda ax, df, name: plot_subplot_raw(ax, df, name, skip_threshold=skip_threshold),
-        "monitorability": lambda ax, df, name: plot_subplot_monitorability(ax, df, name, skip_threshold=None),
-        "monitorability_skipped": lambda ax, df, name: plot_subplot_monitorability(ax, df, name, skip_threshold=skip_threshold),
-        "non_extractable": plot_subplot_non_extractable,
-        "reparsed": plot_subplot_reparsed,
-    }
-    plot_func = plot_funcs[plot_type]
+    # Track if any subplot has summary data
+    any_has_summary = False
 
     for idx, eval_fold in enumerate(eval_folds):
         df_fold = df_model[df_model["eval_fold"] == eval_fold]
-        plot_func(axes[idx], df_fold, eval_fold)
+        
+        if plot_type in ("raw", "raw_skipped"):
+            threshold = skip_threshold if plot_type == "raw_skipped" else None
+            has_summary = plot_subplot_raw(axes[idx], df_fold, eval_fold, skip_threshold=threshold)
+        elif plot_type in ("monitorability", "monitorability_skipped"):
+            threshold = skip_threshold if plot_type == "monitorability_skipped" else None
+            has_summary = plot_subplot_monitorability(axes[idx], df_fold, eval_fold, skip_threshold=threshold)
+        elif plot_type == "non_extractable":
+            has_summary = plot_subplot_non_extractable(axes[idx], df_fold, eval_fold)
+        elif plot_type == "reparsed":
+            has_summary = plot_subplot_reparsed(axes[idx], df_fold, eval_fold)
+        else:
+            raise ValueError(f"Unknown plot type: {plot_type}")
+        
+        any_has_summary = any_has_summary or has_summary
 
     for idx in range(n_folds, len(axes)):
         axes[idx].set_visible(False)
 
-    # Add legend
-    if n_folds > 0:
-        handles, labels = axes[0].get_legend_handles_labels()
-        if handles:
-            fig.legend(
-                handles,
-                labels,
-                loc="upper center",
-                bbox_to_anchor=(0.5, -0.02),
-                ncol=min(len(handles), 4),
-                frameon=False,
-                fontsize=9,
-            )
+    # Build and add legend
+    handles, labels = build_legend_handles(seeds, any_has_summary, plot_type)
+    if handles:
+        fig.legend(
+            handles,
+            labels,
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.02),
+            ncol=max(len(seeds) + 1, 4),  # enough columns to fit on ~2 rows
+            frameon=False,
+            fontsize=9,
+            columnspacing=1.5,
+        )
 
     title_suffixes = {
         "raw": "(Raw Rates)",
@@ -423,6 +479,11 @@ Plot types:
     print(f"Loading data from: {csv_path}")
     print(f"Skip threshold: {args.skip_threshold:.0%}")
     df = pd.read_csv(csv_path)
+
+    # Check for duplicates before proceeding
+    print("Checking for duplicate (data, seed, eval_fold, step) combinations...")
+    check_no_duplicates(df)
+    print("  No duplicates found ✓")
 
     # Get unique models (data column)
     models = df["data"].unique()

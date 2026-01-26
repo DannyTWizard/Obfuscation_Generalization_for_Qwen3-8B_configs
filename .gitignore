@@ -213,3 +213,4 @@ asdf.sh
 final_analysis/cache
 final_analysis/metrics
 final_analysis/checkpoints
+final_analysis/barcharts/cache

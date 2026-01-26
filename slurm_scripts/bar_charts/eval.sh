@@ -1,13 +1,11 @@
 #!/bin/bash
 # ==============================================================================
-# SLURM Evaluation Launcher - In-Distribution + Base Model Evals
+# SLURM Evaluation Launcher - In-Distribution + Base Model (Limited Set)
 # ==============================================================================
-# Runs:
-# 1. Base model eval on all 6 datasets (no artifact)
-# 2. In-distribution evals at step 3800 for:
-#    - Baseline runs (puria-radmard)
-#    - Summary runs (puria-radmard)  
-#    - Normal runs (nathanielmitrani-cfis-upc)
+# Limited set for quick testing:
+# - Base model: 6 evals (with_summary)
+# - Baseline: seed 24 only, 4 folds × 3 in-dist (non-summary)
+# - Summary: seeds 24,42,50, 4 folds × 3 in-dist (with_summary)
 # ==============================================================================
 
 set -e
@@ -20,16 +18,15 @@ CONFIG_FILE="slurm_scripts/bar_charts/eval_ind_and_base.txt"
 NUM_JOBS=$(wc -l < "$CONFIG_FILE")
 
 echo "============================================"
-echo "In-Distribution + Base Model Eval Launcher"
+echo "In-Dist + Base Model Eval (Limited Set)"
 echo "============================================"
 echo "Config file: $CONFIG_FILE"
 echo "Total jobs: $NUM_JOBS"
 echo ""
 echo "Job breakdown:"
-echo "  - 1 base model eval (all 6 datasets)"
-echo "  - 8 baseline in-dist (4 folds × 2 seeds)"
-echo "  - 8 summary in-dist (4 folds × 2 seeds)"
-echo "  - 8 normal in-dist (4 folds × 2 seeds)"
+echo "  - 1 base model (6 evals via multirun)"
+echo "  - 4 baseline in-dist (4 folds, seed 24, 3 evals each via multirun)"
+echo "  - 12 summary in-dist (4 folds × 3 seeds, 3 evals each via multirun)"
 echo "============================================"
 echo ""
 

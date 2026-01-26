@@ -348,6 +348,7 @@ def query_runs_for_segment(
     
     def _fetch():
         runs = api.runs(f"{entity}/{project}", filters=filters, per_page=50)
+
         result = list(runs)
         
         if client_side_filters:
@@ -402,6 +403,8 @@ def scan_all_segments(
     eval_folds = segments_config["eval_folds"]
     filter_template = query_config["filters"]
     client_side_filters = query_config.get("client_side")
+
+    assert len(datasets == 1)
     
     # Load checkpoint
     checkpoint = checkpoint_mgr.load_scan_checkpoint()
