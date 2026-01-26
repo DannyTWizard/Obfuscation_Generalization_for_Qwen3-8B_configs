@@ -225,9 +225,12 @@ def parse_run_name_baseline_or_summary(run_name: str) -> Optional[Dict[str, Any]
     """
     Parse a baseline or summary eval_ind run name to extract metadata.
     
-    Expected formats:
+    Expected formats (may be truncated with hash suffix):
         Summary: run_ref_summary_ovs_refined_summary_data_leave_out_{dataset}_refined2_ts_{seed}_eval_{fold}_eval_ind_step_3800
         Baseline: run_ref_baseline_data_leave_out_{dataset}_refined2_ts_{seed}_eval_{fold}_eval_ind_step_3800
+    
+    Truncated example:
+        run_ref_summary_ovs_refined_summary_data_leave_out_sycophancy_refined2_ts_24_eval_world_affecting_reward_reorg_formatte_8be7e579
     
     Returns dict with: run_type, leave_out, seed, eval_fold (short names)
     """
@@ -239,8 +242,9 @@ def parse_run_name_baseline_or_summary(run_name: str) -> Optional[Dict[str, Any]
     else:
         return None
     
-    # Extract: leave_out_{dataset}_refined2_ts_{seed}_eval_{fold}_eval_ind
-    pattern = r"leave_out_(\w+)_refined2_ts_(\d+)_eval_(.+)_eval_ind"
+    # Extract: leave_out_{dataset}_refined2_ts_{seed}_eval_{...}
+    # The eval fold part may be truncated, so we capture everything after _eval_
+    pattern = r"leave_out_(\w+)_refined2_ts_(\d+)_eval_(.+?)(?:_eval_ind|_[a-f0-9]{8}$|_step_)"
     match = re.search(pattern, run_name)
     
     if not match:
@@ -248,16 +252,21 @@ def parse_run_name_baseline_or_summary(run_name: str) -> Optional[Dict[str, Any]
     
     leave_out = match.group(1)  # sycophancy, war, code, score
     seed = int(match.group(2))
-    eval_fold_raw = match.group(3)  # e.g., "sycophancy_formatted", "world_affecting_reward_reorg_formatted"
+    eval_fold_raw = match.group(3)  # e.g., "sycophancy_formatted" or "world_affecting_reward_reorg_formatte" (truncated)
     
-    # Map eval fold to short name
-    fold_mapping = {
-        "sycophancy_formatted": "sycophancy",
-        "world_affecting_reward_reorg_formatted": "war",
-        "code_formatted": "code",
-        "revealing_score_formatted": "score",
-    }
-    eval_fold = fold_mapping.get(eval_fold_raw)
+    # Map eval fold to short name using startswith to handle truncation
+    fold_prefixes = [
+        ("world_affecting_reward_reorg", "war"),  # Check longest first
+        ("revealing_score", "score"),
+        ("sycophancy", "sycophancy"),
+        ("code", "code"),
+    ]
+    
+    eval_fold = None
+    for prefix, short_name in fold_prefixes:
+        if eval_fold_raw.startswith(prefix):
+            eval_fold = short_name
+            break
     
     if eval_fold is None:
         return None
@@ -278,7 +287,7 @@ def parse_run_name_cot(run_name: str) -> Optional[Dict[str, Any]]:
     """
     Parse a CoT penalisation run name to extract metadata.
     
-    Expected format:
+    Expected format (may be truncated with hash suffix):
         run_ref_ovs_refined_pen_{penalty}_data_leave_out_{dataset}_refined2_ts_{seed}_eval_{fold}_formatted_step_3800
     
     Returns dict with: run_type, leave_out, seed, eval_fold, penalty (short names)
@@ -287,8 +296,9 @@ def parse_run_name_cot(run_name: str) -> Optional[Dict[str, Any]]:
     if not run_name.startswith("run_ref_ovs_refined_pen_"):
         return None
     
-    # Extract: pen_{penalty}_data_leave_out_{dataset}_refined2_ts_{seed}_eval_{fold}_formatted
-    pattern = r"run_ref_ovs_refined_pen_([-\d.]+)_data_leave_out_(\w+)_refined2_ts_(\d+)_eval_(.+)_formatted_step_"
+    # Extract: pen_{penalty}_data_leave_out_{dataset}_refined2_ts_{seed}_eval_{fold}
+    # The fold part may be truncated, so we're flexible about what comes after
+    pattern = r"run_ref_ovs_refined_pen_([-\d.]+)_data_leave_out_(\w+)_refined2_ts_(\d+)_eval_(.+?)(?:_formatted|_formatte|_[a-f0-9]{8}$|_step_)"
     match = re.search(pattern, run_name)
     
     if not match:
@@ -299,14 +309,19 @@ def parse_run_name_cot(run_name: str) -> Optional[Dict[str, Any]]:
     seed = int(match.group(3))
     eval_fold_raw = match.group(4)  # e.g., "sycophancy", "world_affecting_reward_reorg", "code", "revealing_score"
     
-    # Map eval fold to short name
-    fold_mapping = {
-        "sycophancy": "sycophancy",
-        "world_affecting_reward_reorg": "war",
-        "code": "code",
-        "revealing_score": "score",
-    }
-    eval_fold = fold_mapping.get(eval_fold_raw)
+    # Map eval fold to short name using startswith to handle any partial matching
+    fold_prefixes = [
+        ("world_affecting_reward_reorg", "war"),  # Check longest first
+        ("revealing_score", "score"),
+        ("sycophancy", "sycophancy"),
+        ("code", "code"),
+    ]
+    
+    eval_fold = None
+    for prefix, short_name in fold_prefixes:
+        if eval_fold_raw.startswith(prefix):
+            eval_fold = short_name
+            break
     
     if eval_fold is None:
         return None

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+exit 1
+
 TRAINING_GROUP=$1
 TRAINING_RUN_NAME=$2
 CONFIG_PATH=$3

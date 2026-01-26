@@ -404,7 +404,7 @@ def scan_all_segments(
     filter_template = query_config["filters"]
     client_side_filters = query_config.get("client_side")
 
-    assert len(datasets == 1)
+    assert len(datasets)  == 1
     
     # Load checkpoint
     checkpoint = checkpoint_mgr.load_scan_checkpoint()
