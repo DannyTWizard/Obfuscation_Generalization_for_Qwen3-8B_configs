@@ -3,9 +3,9 @@
 Download eval_ind experiment data from W&B and generate bar charts.
 
 This script handles:
-1. Scanning W&B for eval_ind runs (baseline and summary types)
+1. Scanning W&B for eval_ind runs (baseline, cot, and summary types)
 2. Downloading trial tables and caching as parquet
-3. Generating combined bar charts with both run types
+3. Generating combined bar charts with all three run types
 
 Directory Structure:
     final_analysis/
@@ -13,6 +13,7 @@ Directory Structure:
     └── barcharts/
         ├── cache/
         │   ├── eval_ind_baseline.parquet
+        │   ├── eval_ind_cot.parquet
         │   └── eval_ind_summary.parquet
         └── figures/
             ├── eval_ind_combined.png
@@ -62,7 +63,12 @@ FIGURES_DIR = OUTPUT_DIR / "figures"
 # W&B CONFIG
 # =============================================================================
 
-WANDB_ENTITY = "puria-radmard"
+# Entity configuration per run type
+WANDB_ENTITIES = {
+    "baseline": "puria-radmard",
+    "cot": "nathanielmitrani-cfis-upc",
+    "summary": "puria-radmard",
+}
 WANDB_PROJECT = "obfuscation_generalization"
 API_TIMEOUT = 120
 MAX_RETRIES = 5
@@ -95,13 +101,20 @@ EVAL_FOLD_MAP = {
 }
 
 # Seeds to look for
-SEEDS = [24, 42, 50]
+SEEDS = [24, 33, 42, 50]
 
-# Run types
-RUN_TYPES = ["baseline", "summary"]
+# Run types in display order
+RUN_TYPES = ["baseline", "cot", "summary"]
+
+# Stats available for each run type
+RUN_TYPE_STATS = {
+    "baseline": ["correct", "cot_penalty", "summary_penalty"],
+    "cot": ["correct", "cot_penalty"],
+    "summary": ["correct", "cot_penalty", "summary_penalty"],
+}
 
 # =============================================================================
-# STYLE CONFIG (matching generate_final_figures.py)
+# STYLE CONFIG
 # =============================================================================
 
 plt.rcParams.update({
@@ -110,12 +123,12 @@ plt.rcParams.update({
     "axes.titleweight": "bold",
     "axes.labelweight": "normal",
     "figure.titleweight": "normal",
-    "font.size": 14,
-    "axes.titlesize": 16,
-    "axes.labelsize": 14,
-    "xtick.labelsize": 12,
-    "ytick.labelsize": 12,
-    "legend.fontsize": 14,
+    "font.size": 18,
+    "axes.titlesize": 20,
+    "axes.labelsize": 18,
+    "xtick.labelsize": 16,
+    "ytick.labelsize": 16,
+    "legend.fontsize": 16,
 })
 
 # Colors for each dataset (used when that dataset is being evaluated)
@@ -136,6 +149,7 @@ STAT_HATCHES = {
 # Markers for each seed
 SEED_MARKERS = {
     24: "o",   # Circle
+    33: "D",   # Diamond
     42: "s",   # Square
     50: "^",   # Triangle
 }
@@ -143,6 +157,7 @@ SEED_MARKERS = {
 # Display names for run types
 RUN_TYPE_DISPLAY = {
     "baseline": "No Penalisation",
+    "cot": "CoT Penalisation",
     "summary": "Summary Penalisation",
 }
 
@@ -206,9 +221,9 @@ def get_table_from_run(run: wandb.apis.public.Run, table_key: str) -> Optional[p
     return None
 
 
-def parse_run_name(run_name: str) -> Optional[Dict[str, Any]]:
+def parse_run_name_baseline_or_summary(run_name: str) -> Optional[Dict[str, Any]]:
     """
-    Parse an eval_ind run name to extract metadata.
+    Parse a baseline or summary eval_ind run name to extract metadata.
     
     Expected formats:
         Summary: run_ref_summary_ovs_refined_summary_data_leave_out_{dataset}_refined2_ts_{seed}_eval_{fold}_eval_ind_step_3800
@@ -259,6 +274,69 @@ def parse_run_name(run_name: str) -> Optional[Dict[str, Any]]:
     }
 
 
+def parse_run_name_cot(run_name: str) -> Optional[Dict[str, Any]]:
+    """
+    Parse a CoT penalisation run name to extract metadata.
+    
+    Expected format:
+        run_ref_ovs_refined_pen_{penalty}_data_leave_out_{dataset}_refined2_ts_{seed}_eval_{fold}_formatted_step_3800
+    
+    Returns dict with: run_type, leave_out, seed, eval_fold, penalty (short names)
+    """
+    # Check prefix
+    if not run_name.startswith("run_ref_ovs_refined_pen_"):
+        return None
+    
+    # Extract: pen_{penalty}_data_leave_out_{dataset}_refined2_ts_{seed}_eval_{fold}_formatted
+    pattern = r"run_ref_ovs_refined_pen_([-\d.]+)_data_leave_out_(\w+)_refined2_ts_(\d+)_eval_(.+)_formatted_step_"
+    match = re.search(pattern, run_name)
+    
+    if not match:
+        return None
+    
+    penalty = match.group(1)  # e.g., "-0.05"
+    leave_out = match.group(2)  # sycophancy, war, code, score
+    seed = int(match.group(3))
+    eval_fold_raw = match.group(4)  # e.g., "sycophancy", "world_affecting_reward_reorg", "code", "revealing_score"
+    
+    # Map eval fold to short name
+    fold_mapping = {
+        "sycophancy": "sycophancy",
+        "world_affecting_reward_reorg": "war",
+        "code": "code",
+        "revealing_score": "score",
+    }
+    eval_fold = fold_mapping.get(eval_fold_raw)
+    
+    if eval_fold is None:
+        return None
+    
+    # Validate leave_out is a known dataset
+    if leave_out not in ALL_DATASETS:
+        return None
+    
+    return {
+        "run_type": "cot",
+        "leave_out": leave_out,
+        "seed": seed,
+        "eval_fold": eval_fold,
+        "penalty": penalty,
+    }
+
+
+def parse_run_name(run_name: str, run_type: str) -> Optional[Dict[str, Any]]:
+    """
+    Parse a run name based on expected run type.
+    """
+    if run_type == "cot":
+        return parse_run_name_cot(run_name)
+    else:
+        result = parse_run_name_baseline_or_summary(run_name)
+        if result and result["run_type"] == run_type:
+            return result
+        return None
+
+
 def _to_datetime(value: Any) -> Optional[datetime]:
     """Best-effort conversion of various W&B timestamp formats to datetime."""
     if value is None:
@@ -302,11 +380,15 @@ def scan_eval_ind_runs(run_type: str, verbose: bool = True) -> List[Dict[str, An
     """
     api = wandb.Api(timeout=API_TIMEOUT)
     
+    entity = WANDB_ENTITIES[run_type]
+    
     # Build filter based on run type
     if run_type == "summary":
         name_pattern = "run_ref_summary_ovs_refined_summary_data_leave_out_.*_eval_ind_step_"
-    else:  # baseline
+    elif run_type == "baseline":
         name_pattern = "run_ref_baseline_data_leave_out_.*_eval_ind_step_"
+    else:  # cot
+        name_pattern = "run_ref_ovs_refined_pen_.*_data_leave_out_.*_formatted_step_"
     
     filters = {
         "state": "finished",
@@ -314,11 +396,12 @@ def scan_eval_ind_runs(run_type: str, verbose: bool = True) -> List[Dict[str, An
         "createdAt": {"$gte": MIN_CREATED_AT},
     }
     
-    print(f"Scanning for {run_type} eval_ind runs...")
+    print(f"Scanning for {run_type} runs...")
+    print(f"  Entity: {entity}")
     print(f"  Pattern: {name_pattern}")
     
     def _fetch():
-        runs = api.runs(f"{WANDB_ENTITY}/{WANDB_PROJECT}", filters=filters, per_page=100)
+        runs = api.runs(f"{entity}/{WANDB_PROJECT}", filters=filters, per_page=100)
         return list(runs)
     
     runs = retry_with_backoff(_fetch)
@@ -327,8 +410,8 @@ def scan_eval_ind_runs(run_type: str, verbose: bool = True) -> List[Dict[str, An
     # Parse run names and filter valid ones
     parsed_runs = []
     for run in runs:
-        parsed = parse_run_name(run.name)
-        if parsed and parsed["run_type"] == run_type:
+        parsed = parse_run_name(run.name, run_type)
+        if parsed:
             parsed["id"] = run.id
             parsed["name"] = run.name
             parsed["created_at"] = _run_created_at(run)
@@ -359,6 +442,7 @@ def download_runs_to_cache(
     Download trial tables for runs and save to cache.
     """
     api = wandb.Api(timeout=API_TIMEOUT)
+    entity = WANDB_ENTITIES[run_type]
     
     all_rows = []
     
@@ -368,7 +452,7 @@ def download_runs_to_cache(
         pbar.set_postfix_str(f"{run_info['leave_out']}/{run_info['eval_fold']}/s{run_info['seed']}")
         
         try:
-            run = api.run(f"{WANDB_ENTITY}/{WANDB_PROJECT}/{run_info['id']}")
+            run = api.run(f"{entity}/{WANDB_PROJECT}/{run_info['id']}")
             
             # Get the eval table
             table_key = f"{EVAL_FOLD_MAP[run_info['eval_fold']]}_samples"
@@ -383,6 +467,8 @@ def download_runs_to_cache(
                 table_df["_leave_out"] = run_info["leave_out"]
                 table_df["_seed"] = run_info["seed"]
                 table_df["_eval_fold"] = run_info["eval_fold"]
+                if "penalty" in run_info:
+                    table_df["_penalty"] = run_info["penalty"]
                 
                 all_rows.append(table_df)
             else:
@@ -487,20 +573,26 @@ def compute_metrics(cache_df: pd.DataFrame) -> pd.DataFrame:
         # CoT penalty rate
         cot_penalty_rate = None
         if cot_col and cot_col in extractable_df.columns:
-            flagged = sum(
-                1 for val in extractable_df[cot_col]
-                if val is not None and pd.notna(val) and float(val) > 0
-            )
-            cot_penalty_rate = flagged / total_extractable
+            try:
+                flagged = sum(
+                    1 for val in extractable_df[cot_col]
+                    if val is not None and pd.notna(val) and float(val) > 0
+                )
+                cot_penalty_rate = flagged / total_extractable
+            except (ValueError, TypeError):
+                pass
         
         # Summary penalty rate
         summary_penalty_rate = None
         if summary_col and summary_col in extractable_df.columns:
-            flagged = sum(
-                1 for val in extractable_df[summary_col]
-                if val is not None and pd.notna(val) and float(val) > 0
-            )
-            summary_penalty_rate = flagged / total_extractable
+            try:
+                flagged = sum(
+                    1 for val in extractable_df[summary_col]
+                    if val is not None and pd.notna(val) and float(val) > 0
+                )
+                summary_penalty_rate = flagged / total_extractable
+            except (ValueError, TypeError):
+                pass
         
         # Non-parsable rate
         non_parsable_rate = (total - total_extractable) / total
@@ -530,45 +622,60 @@ def get_in_distribution_datasets(leave_out: str) -> List[str]:
 
 
 def create_combined_eval_ind_figure(
-    metrics_baseline: pd.DataFrame,
-    metrics_summary: pd.DataFrame,
+    all_metrics: Dict[str, pd.DataFrame],
 ) -> plt.Figure:
     """
-    Create combined eval_ind bar chart with two rows:
-    - Top row: No Penalisation (baseline)
-    - Bottom row: Summary Penalisation
+    Create combined eval_ind bar chart with three rows:
+    - Row 1: No Penalisation (baseline)
+    - Row 2: CoT Penalisation
+    - Row 3: Summary Penalisation
     
     Each row has 4 subplots (one per leave_out mega-group).
-    X-axis is broken between subplots for visual separation.
+    Bar groups are centered at same positions; 2-bar rows are narrower.
     """
-    fig, axes = plt.subplots(2, 4, figsize=(20, 8), sharey=True)
+    fig, axes = plt.subplots(3, 4, figsize=(24, 14), sharey=True)
     
     # Layout parameters
-    bar_width = 0.22
-    group_gap = 0.08
-    group_width = 3 * bar_width + group_gap
+    bar_width = 0.25
     
-    stats = ["correct", "cot_penalty", "summary_penalty"]
-    stat_offsets = {stat: (i - 1) * bar_width for i, stat in enumerate(stats)}
-    seed_jitter = {24: -0.05, 42: 0.0, 50: 0.05}
+    # For 3 stats: positions at -bar_width, 0, +bar_width from group center
+    # For 2 stats: positions at -bar_width/2, +bar_width/2 from group center
     
-    row_data = [
-        (metrics_baseline, "No Penalisation"),
-        (metrics_summary, "Summary Penalisation"),
+    # Group centers at x = 1, 2, 3 for the 3 in-distribution datasets
+    group_positions = [1, 2, 3]
+    
+    seed_jitter = {24: -0.06, 33: -0.02, 42: 0.02, 50: 0.06}
+    
+    # Row configuration
+    row_configs = [
+        ("baseline", "No Penalisation"),
+        ("cot", "CoT Penalisation"),
+        ("summary", "Summary Penalisation"),
     ]
     
-    for row_idx, (metrics_df, row_label) in enumerate(row_data):
+    for row_idx, (run_type, row_label) in enumerate(row_configs):
+        metrics_df = all_metrics.get(run_type, pd.DataFrame())
+        stats = RUN_TYPE_STATS[run_type]
+        n_stats = len(stats)
+        
+        # Compute bar offsets to center the group
+        if n_stats == 3:
+            stat_offsets = {stats[0]: -bar_width, stats[1]: 0, stats[2]: bar_width}
+        else:  # n_stats == 2
+            stat_offsets = {stats[0]: -bar_width/2, stats[1]: bar_width/2}
+        
         for col_idx, leave_out in enumerate(ALL_DATASETS):
             ax = axes[row_idx, col_idx]
             in_dist = get_in_distribution_datasets(leave_out)
             
-            all_bar_positions = []
-            
             for group_idx, eval_ds in enumerate(in_dist):
-                group_center = group_idx * (group_width + 0.15)
+                group_center = group_positions[group_idx]
                 
                 for stat in stats:
                     bar_x = group_center + stat_offsets[stat]
+                    
+                    if metrics_df.empty:
+                        continue
                     
                     mask = (metrics_df["leave_out"] == leave_out) & (metrics_df["eval_fold"] == eval_ds)
                     subset = metrics_df[mask]
@@ -577,6 +684,9 @@ def create_combined_eval_ind_figure(
                         continue
                     
                     col_name = f"{stat}_rate"
+                    if col_name not in subset.columns:
+                        continue
+                    
                     valid_values = []
                     all_seed_data = []
                     
@@ -599,6 +709,8 @@ def create_combined_eval_ind_figure(
                     
                     if valid_values:
                         mean_val = np.mean(valid_values)
+                        stderr_val = np.std(valid_values, ddof=1) / np.sqrt(len(valid_values)) if len(valid_values) > 1 else 0
+                        
                         ax.bar(
                             bar_x, mean_val,
                             width=bar_width,
@@ -607,6 +719,9 @@ def create_combined_eval_ind_figure(
                             edgecolor="black",
                             linewidth=0.5,
                             alpha=0.8,
+                            yerr=stderr_val,
+                            capsize=3,
+                            error_kw={"elinewidth": 1.5, "capthick": 1.5, "ecolor": "black"},
                         )
                     
                     for seed, val, is_valid in all_seed_data:
@@ -615,22 +730,20 @@ def create_combined_eval_ind_figure(
                         
                         if is_valid:
                             ax.scatter(bar_x + jitter, val, color="black", marker=marker,
-                                      s=25, zorder=5, alpha=0.8)
+                                      s=35, zorder=5, alpha=0.8)
                         else:
                             ax.scatter(bar_x + jitter, val, facecolors="none", edgecolors="black",
-                                      marker=marker, s=25, zorder=5, alpha=0.8, linewidths=1.0)
-                
-                all_bar_positions.append((group_center, eval_ds.capitalize()))
+                                      marker=marker, s=35, zorder=5, alpha=0.8, linewidths=1.0)
             
             # Styling for this subplot
-            ax.set_ylim(0, 1)
-            ax.set_xlim(-0.3, len(in_dist) * (group_width + 0.15) - 0.15 + 0.3)
+            ax.set_ylim(0, 1.05)
+            ax.set_xlim(0.3, 3.7)
             
-            # X-axis
-            ax.set_xticks([pos for pos, _ in all_bar_positions])
-            ax.set_xticklabels([name for _, name in all_bar_positions], fontsize=10)
+            # Remove x-axis ticks (legend handles dataset identification)
+            ax.set_xticks([])
+            ax.set_xticklabels([])
             
-            # Spines - only left spine on leftmost, none on others
+            # Spines
             ax.spines["top"].set_visible(False)
             ax.spines["right"].set_visible(False)
             ax.spines["bottom"].set_visible(True)
@@ -640,19 +753,19 @@ def create_combined_eval_ind_figure(
             
             # Title on top row only
             if row_idx == 0:
-                ax.set_title(f"Leave out {leave_out.capitalize()}", fontsize=12, fontweight="bold")
+                ax.set_title(f"Leave out {leave_out.capitalize()}", fontsize=18, fontweight="bold")
             
             # Y-axis label on leftmost only
             if col_idx == 0:
-                ax.set_ylabel("Rate", fontsize=12)
+                ax.set_ylabel("Rate", fontsize=18)
     
     # Row labels on the left
-    for row_idx, (_, row_label) in enumerate(row_data):
+    for row_idx, (_, row_label) in enumerate(row_configs):
         axes[row_idx, 0].annotate(
             row_label,
-            xy=(-0.35, 0.5),
+            xy=(-0.22, 0.5),
             xycoords="axes fraction",
-            fontsize=12,
+            fontsize=18,
             fontweight="bold",
             ha="right",
             va="center",
@@ -670,72 +783,75 @@ def create_combined_eval_ind_figure(
         mpatches.Patch(facecolor="white", edgecolor="black", hatch="xx", label="Summary Penalty"),
     ]
     
-    # First legend row (colors) - on top
+    # First legend row (colors)
     leg1 = fig.legend(
         color_handles,
         [h.get_label() for h in color_handles],
         loc="upper center",
-        bbox_to_anchor=(0.5, 0.06),
+        bbox_to_anchor=(0.5, 0.075),
         ncol=4,
         frameon=False,
-        fontsize=11,
+        fontsize=18,
+        handlelength=3,
+        handleheight=2,
     )
-    # Second legend row (hatches) - below
+    # Second legend row (hatches)
     fig.legend(
         hatch_handles,
         [h.get_label() for h in hatch_handles],
         loc="upper center",
-        bbox_to_anchor=(0.5, 0.02),
+        bbox_to_anchor=(0.5, 0.025),
         ncol=3,
         frameon=False,
-        fontsize=11,
+        fontsize=18,
+        handlelength=3,
+        handleheight=2,
     )
-    fig.add_artist(leg1)  # Keep first legend visible
+    fig.add_artist(leg1)
     
-    fig.suptitle("In-Distribution Evaluation", fontsize=16, fontweight="bold")
-    fig.tight_layout(rect=[0.05, 0.08, 1, 0.95])
+    fig.suptitle("In-Distribution Evaluation", fontsize=22, fontweight="bold")
+    fig.tight_layout(rect=[0.06, 0.10, 1, 0.95])
     
     return fig
 
 
 def create_combined_non_parsable_figure(
-    metrics_baseline: pd.DataFrame,
-    metrics_summary: pd.DataFrame,
+    all_metrics: Dict[str, pd.DataFrame],
 ) -> plt.Figure:
     """
-    Create combined non-parsable rate figure with two rows:
-    - Top row: No Penalisation (baseline)
-    - Bottom row: Summary Penalisation
-    
-    Each row has 4 subplots (one per leave_out mega-group).
+    Create combined non-parsable rate figure with three rows.
     """
-    fig, axes = plt.subplots(2, 4, figsize=(18, 7), sharey=True)
+    fig, axes = plt.subplots(3, 4, figsize=(24, 16), sharey=True)
     
     # Layout parameters
-    bar_width = 0.6
-    group_gap = 0.3
-    seed_jitter = {24: -0.15, 42: 0.0, 50: 0.15}
+    bar_width = 0.5
+    group_positions = [1, 2, 3]
+    seed_jitter = {24: -0.12, 33: -0.04, 42: 0.04, 50: 0.12}
     
-    row_data = [
-        (metrics_baseline, "No Penalisation"),
-        (metrics_summary, "Summary Penalisation"),
+    # Row configuration
+    row_configs = [
+        ("baseline", "No Penalisation"),
+        ("cot", "CoT Penalisation"),
+        ("summary", "Summary Penalisation"),
     ]
     
-    for row_idx, (metrics_df, row_label) in enumerate(row_data):
+    for row_idx, (run_type, row_label) in enumerate(row_configs):
+        metrics_df = all_metrics.get(run_type, pd.DataFrame())
+        
         for col_idx, leave_out in enumerate(ALL_DATASETS):
             ax = axes[row_idx, col_idx]
             in_dist = get_in_distribution_datasets(leave_out)
             
-            all_bar_positions = []
-            
             for group_idx, eval_ds in enumerate(in_dist):
-                bar_x = group_idx * (bar_width + group_gap)
+                bar_x = group_positions[group_idx]
+                
+                if metrics_df.empty:
+                    continue
                 
                 mask = (metrics_df["leave_out"] == leave_out) & (metrics_df["eval_fold"] == eval_ds)
                 subset = metrics_df[mask]
                 
                 if subset.empty:
-                    all_bar_positions.append((bar_x, eval_ds.capitalize()))
                     continue
                 
                 valid_values = []
@@ -756,6 +872,8 @@ def create_combined_non_parsable_figure(
                 
                 if valid_values:
                     mean_val = np.mean(valid_values)
+                    stderr_val = np.std(valid_values, ddof=1) / np.sqrt(len(valid_values)) if len(valid_values) > 1 else 0
+                    
                     ax.bar(
                         bar_x, mean_val,
                         width=bar_width,
@@ -763,6 +881,9 @@ def create_combined_non_parsable_figure(
                         edgecolor="black",
                         linewidth=0.5,
                         alpha=0.8,
+                        yerr=stderr_val,
+                        capsize=4,
+                        error_kw={"elinewidth": 1.5, "capthick": 1.5, "ecolor": "black"},
                     )
                 
                 for seed, val, is_valid in all_seed_data:
@@ -771,19 +892,18 @@ def create_combined_non_parsable_figure(
                     
                     if is_valid:
                         ax.scatter(bar_x + jitter, val, color="black", marker=marker,
-                                  s=25, zorder=5, alpha=0.8)
+                                  s=35, zorder=5, alpha=0.8)
                     else:
                         ax.scatter(bar_x + jitter, val, facecolors="none", edgecolors="black",
-                                  marker=marker, s=25, zorder=5, alpha=0.8, linewidths=1.0)
-                
-                all_bar_positions.append((bar_x, eval_ds.capitalize()))
+                                  marker=marker, s=35, zorder=5, alpha=0.8, linewidths=1.0)
             
             # Styling
-            ax.set_ylim(0, 40)
-            ax.set_xlim(-0.4, len(in_dist) * (bar_width + group_gap) - group_gap + 0.4)
+            ax.set_ylim(0, 105)
+            ax.set_xlim(0.3, 3.7)
             
-            ax.set_xticks([pos for pos, _ in all_bar_positions])
-            ax.set_xticklabels([name for _, name in all_bar_positions], fontsize=10)
+            # Remove x-axis ticks
+            ax.set_xticks([])
+            ax.set_xticklabels([])
             
             ax.spines["top"].set_visible(False)
             ax.spines["right"].set_visible(False)
@@ -793,18 +913,18 @@ def create_combined_non_parsable_figure(
                 ax.tick_params(left=False)
             
             if row_idx == 0:
-                ax.set_title(f"Leave out {leave_out.capitalize()}", fontsize=12, fontweight="bold")
+                ax.set_title(f"Leave out {leave_out.capitalize()}", fontsize=18, fontweight="bold")
             
             if col_idx == 0:
-                ax.set_ylabel("Non-Parsable (%)", fontsize=12)
+                ax.set_ylabel("Non-Parsable (%)", fontsize=18)
     
     # Row labels
-    for row_idx, (_, row_label) in enumerate(row_data):
+    for row_idx, (_, row_label) in enumerate(row_configs):
         axes[row_idx, 0].annotate(
             row_label,
-            xy=(-0.35, 0.5),
+            xy=(-0.22, 0.5),
             xycoords="axes fraction",
-            fontsize=12,
+            fontsize=18,
             fontweight="bold",
             ha="right",
             va="center",
@@ -820,14 +940,16 @@ def create_combined_non_parsable_figure(
         color_handles,
         [h.get_label() for h in color_handles],
         loc="upper center",
-        bbox_to_anchor=(0.5, 0.04),
+        bbox_to_anchor=(0.5, 0.05),
         ncol=4,
         frameon=False,
-        fontsize=11,
+        fontsize=18,
+        handlelength=3,
+        handleheight=2,
     )
     
-    fig.suptitle("In-Distribution Non-Parsable Rate", fontsize=16, fontweight="bold")
-    fig.tight_layout(rect=[0.05, 0.06, 1, 0.95])
+    fig.suptitle("In-Distribution Non-Parsable Rate", fontsize=22, fontweight="bold")
+    fig.tight_layout(rect=[0.06, 0.07, 1, 0.95])
     
     return fig
 
@@ -861,19 +983,21 @@ def main():
     print(f"\n{'=' * 70}")
     print("EVAL_IND BAR CHART GENERATOR")
     print(f"{'=' * 70}")
-    print(f"W&B Entity:  {WANDB_ENTITY}")
     print(f"W&B Project: {WANDB_PROJECT}")
+    print(f"Entities:")
+    for rt, ent in WANDB_ENTITIES.items():
+        print(f"  {rt}: {ent}")
     print(f"Min Date:    {MIN_CREATED_AT}")
     print(f"Cache Dir:   {CACHE_DIR}")
     print(f"Figures Dir: {FIGURES_DIR}")
     print(f"{'=' * 70}\n")
     
-    # Collect metrics for both run types
+    # Collect metrics for all run types
     all_metrics = {}
     
     for run_type in RUN_TYPES:
         print(f"\n{'=' * 50}")
-        print(f"Processing: {run_type}")
+        print(f"Processing: {run_type} ({WANDB_ENTITIES[run_type]})")
         print(f"{'=' * 50}")
         
         cache_path = CACHE_DIR / f"eval_ind_{run_type}.parquet"
@@ -920,23 +1044,22 @@ def main():
     print("Generating combined figures...")
     print(f"{'=' * 50}")
     
-    metrics_baseline = all_metrics.get("baseline", pd.DataFrame())
-    metrics_summary = all_metrics.get("summary", pd.DataFrame())
+    # Check if we have any data
+    has_data = any(not df.empty for df in all_metrics.values())
     
-    if metrics_baseline.empty and metrics_summary.empty:
-        print("No data available for either run type. Cannot generate figures.")
+    if not has_data:
+        print("No data available for any run type. Cannot generate figures.")
         return 1
     
-    # Use empty DataFrame if one is missing (will just show empty subplots)
-    if metrics_baseline.empty:
-        print("WARNING: No baseline data, top row will be empty")
-        metrics_baseline = pd.DataFrame(columns=metrics_summary.columns)
-    if metrics_summary.empty:
-        print("WARNING: No summary data, bottom row will be empty")
-        metrics_summary = pd.DataFrame(columns=metrics_baseline.columns)
+    # Fill in empty DataFrames with proper columns for consistency
+    sample_df = next(df for df in all_metrics.values() if not df.empty)
+    for run_type in RUN_TYPES:
+        if all_metrics[run_type].empty:
+            print(f"WARNING: No {run_type} data, row will be empty")
+            all_metrics[run_type] = pd.DataFrame(columns=sample_df.columns)
     
     # Main metrics figure
-    fig = create_combined_eval_ind_figure(metrics_baseline, metrics_summary)
+    fig = create_combined_eval_ind_figure(all_metrics)
     for ext in ["png", "pdf"]:
         path = FIGURES_DIR / f"eval_ind_combined.{ext}"
         fig.savefig(path, dpi=150, bbox_inches="tight", facecolor="white")
@@ -944,7 +1067,7 @@ def main():
     plt.close(fig)
     
     # Non-parsable figure
-    fig = create_combined_non_parsable_figure(metrics_baseline, metrics_summary)
+    fig = create_combined_non_parsable_figure(all_metrics)
     for ext in ["png", "pdf"]:
         path = FIGURES_DIR / f"non_parsable_combined.{ext}"
         fig.savefig(path, dpi=150, bbox_inches="tight", facecolor="white")
