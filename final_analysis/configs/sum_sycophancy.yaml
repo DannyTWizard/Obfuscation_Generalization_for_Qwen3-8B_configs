@@ -9,7 +9,7 @@ wandb:
 # Segmentation - what to iterate over
 # Each combination of (dataset, seed, eval_fold) becomes one atomic query
 segments:
-  seeds: [50, 24, 42]
+  seeds: [50, 24, 42, 33]
   datasets:
     - leave_out_sycophancy_refined2
     # - leave_out_war_refined2

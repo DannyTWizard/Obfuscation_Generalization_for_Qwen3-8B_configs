@@ -12,6 +12,7 @@ import matplotlib.patches as mpatches
 from matplotlib.lines import Line2D
 import numpy as np
 from pathlib import Path
+from typing import Dict, List, Optional, Set, Tuple
 
 # =============================================================================
 # PATHS
@@ -20,6 +21,9 @@ from pathlib import Path
 BASE_DIR = Path(__file__).parent
 METRICS_DIR = BASE_DIR / "metrics"
 OUTPUT_DIR = BASE_DIR / "final_figures"
+OUTPUT_PDFS = OUTPUT_DIR / "pdfs"
+OUTPUT_PNGS = OUTPUT_DIR / "pngs"
+OUTPUT_TXTS = OUTPUT_DIR / "txts"
 
 # =============================================================================
 # STYLE CONFIG
@@ -31,19 +35,19 @@ plt.rcParams.update({
     "axes.titleweight": "bold",
     "axes.labelweight": "normal",
     "figure.titleweight": "normal",
-    "font.size": 14,
-    "axes.titlesize": 16,
-    "axes.labelsize": 14,
-    "xtick.labelsize": 12,
-    "ytick.labelsize": 12,
-    "legend.fontsize": 14,
+    "font.size": 16,
+    "axes.titlesize": 18,
+    "axes.labelsize": 16,
+    "xtick.labelsize": 14,
+    "ytick.labelsize": 14,
+    "legend.fontsize": 16,
 })
 
-# Default colors (can be overridden per-line)
-COLOR_CORRECT = "#FF9999"
-COLOR_MONITOR = "#99CCFF"
-COLOR_SUMMARY = "#CC99FF"  # Pastel purple for summary monitor
-COLOR_CHANCE = "#CCCCCC"
+# Default colors
+COLOR_CORRECT = "#FF9999"       # Pastel red for reward hacking rate
+COLOR_MONITOR = "#99CCFF"       # Pastel blue for CoT detection rate
+COLOR_SUMMARY = "#CC99FF"       # Pastel purple for summary detection rate
+COLOR_CHANCE = "#CCCCCC"        # Gray for chance level
 COLOR_NON_EXTRACTABLE = "#99CC99"  # Pastel green for unparsable rate
 
 # Line styles for different seeds in appendix figures
@@ -64,227 +68,141 @@ SEED_COLORS = {
 # FIGURE SPECIFICATIONS
 # =============================================================================
 
-# Each figure is a dict with:
-#   - "name": output filename (without extension)
-#   - "title": figure suptitle
-#   - "subplots": list of subplot specs, each with:
-#       - "title": subplot title
-#       - "lines": list of line specs, each with:
-#           - "config": config name (metrics subdirectory)
-#           - "seed": which seed to use
-#           - "eval_fold": which eval fold to plot
-#           - "label": legend label (optional, auto-generated if missing)
-#           - "color_correct": color for correct rate line (optional)
-#           - "color_monitor": color for monitor flag line (optional)
+# Combined main figures: 2 rows x 4 columns
+# Top row: evaluated on leave-out set, Bottom row: evaluated on medical sycophancy
 
-FIGURES = {
+COMBINED_FIGURES = {
     "figure1": {
         "name": "figure1",
-        "title": None,
         "skip_threshold": 0.3,
-        "show_ratio": False,
-        "subplots": [
+        "show_summary": False,
+        "columns": [
             {
-                "title": "Factual sycophancy",
-                "chance_level": 0.5,
-                "lines": [
-                    {
-                        "config": "sycophancy",
-                        "seed": 24,
-                        "eval_fold": "eval_sycophancy_formatted",
-                    },
-                ],
+                "top_title": "Leave out\nFactual sycophancy",
+                "top": {
+                    "chance_level": 0.5,
+                    "config": "sycophancy",
+                    "seed": 24,
+                    "eval_fold": "eval_sycophancy_formatted",
+                },
+                "bottom": {
+                    "chance_level": 0.5,
+                    "config": "sycophancy",
+                    "seed": 24,
+                    "eval_fold": "eval_medical_sycophancy_fact_formatted",
+                },
             },
             {
-                "title": "Code selection",
-                "chance_level": 0.5,
-                "lines": [
-                    {
-                        "config": "code",
-                        "seed": 50,
-                        "eval_fold": "eval_code_formatted",
-                    },
-                ],
+                "top_title": "Leave out\nCode selection",
+                "top": {
+                    "chance_level": 0.5,
+                    "config": "code",
+                    "seed": 50,
+                    "eval_fold": "eval_code_formatted",
+                },
+                "bottom": {
+                    "chance_level": 0.5,
+                    "config": "code",
+                    "seed": 50,
+                    "eval_fold": "eval_medical_sycophancy_fact_formatted",
+                },
             },
             {
-                "title": "Revealed score MMLU",
-                "chance_level": 0.25,
-                "lines": [
-                    {
-                        "config": "score",
-                        "seed": 42,
-                        "eval_fold": "eval_revealing_score_formatted",
-                    },
-                ],
+                "top_title": "Leave out\nRevealed score MMLU",
+                "top": {
+                    "chance_level": 0.25,
+                    "config": "score",
+                    "seed": 42,
+                    "eval_fold": "eval_revealing_score_formatted",
+                },
+                "bottom": {
+                    "chance_level": 0.5,
+                    "config": "score",
+                    "seed": 42,
+                    "eval_fold": "eval_medical_sycophancy_fact_formatted",
+                },
             },
             {
-                "title": "World affecting reward",
-                "chance_level": 0.5,
-                "lines": [
-                    {
-                        "config": "war",
-                        "seed": 50,
-                        "eval_fold": "eval_world_affecting_reward_reorg_formatted",
-                    },
-                ],
+                "top_title": "Leave out\nWorld affecting reward",
+                "top": {
+                    "chance_level": 0.5,
+                    "config": "war",
+                    "seed": 50,
+                    "eval_fold": "eval_world_affecting_reward_reorg_formatted",
+                },
+                "bottom": {
+                    "chance_level": 0.5,
+                    "config": "war",
+                    "seed": 50,
+                    "eval_fold": "eval_medical_sycophancy_fact_formatted",
+                },
             },
         ],
     },
     "figure2": {
         "name": "figure2",
-        "title": "Evaluated on medical sycophancy dataset",
         "skip_threshold": 0.3,
-        "show_ratio": False,
-        "subplots": [
-            {
-                "title": "Leave out factual sycophancy",
-                "chance_level": 0.5,
-                "lines": [
-                    {
-                        "config": "sycophancy",
-                        "seed": 24,
-                        "eval_fold": "eval_medical_sycophancy_fact_formatted",
-                    },
-                ],
-            },
-            {
-                "title": "Leave out code selection",
-                "chance_level": 0.5,
-                "lines": [
-                    {
-                        "config": "code",
-                        "seed": 50,
-                        "eval_fold": "eval_medical_sycophancy_fact_formatted",
-                    },
-                ],
-            },
-            {
-                "title": "Leave out revealed score",
-                "chance_level": 0.5,
-                "lines": [
-                    {
-                        "config": "score",
-                        "seed": 42,
-                        "eval_fold": "eval_medical_sycophancy_fact_formatted",
-                    },
-                ],
-            },
-            {
-                "title": "Leave out world affecting reward",
-                "chance_level": 0.5,
-                "lines": [
-                    {
-                        "config": "war",
-                        "seed": 50,
-                        "eval_fold": "eval_medical_sycophancy_fact_formatted",
-                    },
-                ],
-            },
-        ],
-    },
-    "figure3": {
-        "name": "figure3",
-        "title": None,
-        "skip_threshold": 0.3,
-        "show_ratio": False,
         "show_summary": True,
-        "subplots": [
+        "columns": [
             {
-                "title": "Factual sycophancy",
-                "chance_level": 0.5,
-                "lines": [
-                    {
-                        "config": "sum_sycophancy",
-                        "seed": 24,
-                        "eval_fold": "eval_sycophancy_formatted",
-                    },
-                ],
+                "top_title": "Leave out\nFactual sycophancy",
+                "top": {
+                    "chance_level": 0.5,
+                    "config": "sum_sycophancy",
+                    "seed": 24,
+                    "eval_fold": "eval_sycophancy_formatted",
+                },
+                "bottom": {
+                    "chance_level": 0.5,
+                    "config": "sum_sycophancy",
+                    "seed": 24,
+                    "eval_fold": "eval_medical_sycophancy_fact_formatted",
+                },
             },
             {
-                "title": "Code selection",
-                "chance_level": 0.5,
-                "lines": [
-                    {
-                        "config": "sum_code",
-                        "seed": 42,
-                        "eval_fold": "eval_code_formatted",
-                    },
-                ],
+                "top_title": "Leave out\nCode selection",
+                "top": {
+                    "chance_level": 0.5,
+                    "config": "sum_code",
+                    "seed": 42,
+                    "eval_fold": "eval_code_formatted",
+                },
+                "bottom": {
+                    "chance_level": 0.5,
+                    "config": "sum_code",
+                    "seed": 42,
+                    "eval_fold": "eval_medical_sycophancy_fact_formatted",
+                },
             },
             {
-                "title": "Revealed score MMLU",
-                "chance_level": 0.25,
-                "lines": [
-                    {
-                        "config": "sum_score",
-                        "seed": 50,
-                        "eval_fold": "eval_revealing_score_formatted",
-                    },
-                ],
+                "top_title": "Leave out\nRevealed score MMLU",
+                "top": {
+                    "chance_level": 0.25,
+                    "config": "sum_score",
+                    "seed": 50,
+                    "eval_fold": "eval_revealing_score_formatted",
+                },
+                "bottom": {
+                    "chance_level": 0.5,
+                    "config": "sum_score",
+                    "seed": 50,
+                    "eval_fold": "eval_medical_sycophancy_fact_formatted",
+                },
             },
             {
-                "title": "World affecting reward",
-                "chance_level": 0.5,
-                "lines": [
-                    {
-                        "config": "sum_war",
-                        "seed": 42,
-                        "eval_fold": "eval_world_affecting_reward_reorg_formatted",
-                    },
-                ],
-            },
-        ],
-    },
-    "figure4": {
-        "name": "figure4",
-        "title": "Summary monitor evaluated on medical sycophancy dataset",
-        "skip_threshold": 0.3,
-        "show_ratio": False,
-        "show_summary": True,
-        "subplots": [
-            {
-                "title": "Leave out factual sycophancy",
-                "chance_level": 0.5,
-                "lines": [
-                    {
-                        "config": "sum_sycophancy",
-                        "seed": 24,
-                        "eval_fold": "eval_medical_sycophancy_fact_formatted",
-                    },
-                ],
-            },
-            {
-                "title": "Leave out code selection",
-                "chance_level": 0.5,
-                "lines": [
-                    {
-                        "config": "sum_code",
-                        "seed": 42,
-                        "eval_fold": "eval_medical_sycophancy_fact_formatted",
-                    },
-                ],
-            },
-            {
-                "title": "Leave out revealed score",
-                "chance_level": 0.5,
-                "lines": [
-                    {
-                        "config": "sum_score",
-                        "seed": 50,
-                        "eval_fold": "eval_medical_sycophancy_fact_formatted",
-                    },
-                ],
-            },
-            {
-                "title": "Leave out world affecting reward",
-                "chance_level": 0.5,
-                "lines": [
-                    {
-                        "config": "sum_war",
-                        "seed": 42,
-                        "eval_fold": "eval_medical_sycophancy_fact_formatted",
-                    },
-                ],
+                "top_title": "Leave out\nWorld affecting reward",
+                "top": {
+                    "chance_level": 0.5,
+                    "config": "sum_war",
+                    "seed": 42,
+                    "eval_fold": "eval_world_affecting_reward_reorg_formatted",
+                },
+                "bottom": {
+                    "chance_level": 0.5,
+                    "config": "sum_war",
+                    "seed": 42,
+                    "eval_fold": "eval_medical_sycophancy_fact_formatted",
+                },
             },
         ],
     },
@@ -296,11 +214,10 @@ APPENDIX_FIGURES = {
         "name": "appendix_figure0",
         "title": "No penalisation",
         "skip_threshold": 0.3,
-        "show_ratio": False,
-        "show_summary": False,
+        "show_summary": True,
         "rows": [
             {
-                "row_title": "Factual\nsycophancy",
+                "row_title": "Leave out\nFactual sycophancy",
                 "left": {
                     "chance_level": 0.5,
                     "config": "base_sycophancy",
@@ -315,7 +232,7 @@ APPENDIX_FIGURES = {
                 },
             },
             {
-                "row_title": "Code\nselection",
+                "row_title": "Leave out\nCode selection",
                 "left": {
                     "chance_level": 0.5,
                     "config": "base_code",
@@ -330,7 +247,7 @@ APPENDIX_FIGURES = {
                 },
             },
             {
-                "row_title": "Revealed\nscore MMLU",
+                "row_title": "Leave out\nRevealed score MMLU",
                 "left": {
                     "chance_level": 0.25,
                     "config": "base_score",
@@ -345,7 +262,7 @@ APPENDIX_FIGURES = {
                 },
             },
             {
-                "row_title": "World affecting\nreward",
+                "row_title": "Leave out\nWorld affecting reward",
                 "left": {
                     "chance_level": 0.5,
                     "config": "base_war",
@@ -364,13 +281,12 @@ APPENDIX_FIGURES = {
     "appendix_figure0b": {
         "name": "appendix_figure0b",
         "title": "No penalisation - Unparsable rate",
-        "skip_threshold": None,  # No skip threshold for unparsable plots
-        "show_ratio": False,
-        "show_summary": False,
+        "skip_threshold": None,
+        "show_summary": True,
         "plot_unparsable": True,
         "rows": [
             {
-                "row_title": "Factual\nsycophancy",
+                "row_title": "Leave out\nFactual sycophancy",
                 "left": {
                     "config": "base_sycophancy",
                     "eval_fold": "eval_sycophancy_formatted",
@@ -383,7 +299,7 @@ APPENDIX_FIGURES = {
                 },
             },
             {
-                "row_title": "Code\nselection",
+                "row_title": "Leave out\nCode selection",
                 "left": {
                     "config": "base_code",
                     "eval_fold": "eval_code_formatted",
@@ -396,7 +312,7 @@ APPENDIX_FIGURES = {
                 },
             },
             {
-                "row_title": "Revealed\nscore MMLU",
+                "row_title": "Leave out\nRevealed score MMLU",
                 "left": {
                     "config": "base_score",
                     "eval_fold": "eval_revealing_score_formatted",
@@ -409,7 +325,7 @@ APPENDIX_FIGURES = {
                 },
             },
             {
-                "row_title": "World affecting\nreward",
+                "row_title": "Leave out\nWorld affecting reward",
                 "left": {
                     "config": "base_war",
                     "eval_fold": "eval_world_affecting_reward_reorg_formatted",
@@ -427,11 +343,10 @@ APPENDIX_FIGURES = {
         "name": "appendix_figure1",
         "title": "CoT penalisation",
         "skip_threshold": 0.3,
-        "show_ratio": False,
         "show_summary": False,
         "rows": [
             {
-                "row_title": "Factual\nsycophancy",
+                "row_title": "Leave out\nFactual sycophancy",
                 "left": {
                     "chance_level": 0.5,
                     "config": "sycophancy",
@@ -446,7 +361,7 @@ APPENDIX_FIGURES = {
                 },
             },
             {
-                "row_title": "Code\nselection",
+                "row_title": "Leave out\nCode selection",
                 "left": {
                     "chance_level": 0.5,
                     "config": "code",
@@ -461,7 +376,7 @@ APPENDIX_FIGURES = {
                 },
             },
             {
-                "row_title": "Revealed\nscore MMLU",
+                "row_title": "Leave out\nRevealed score MMLU",
                 "left": {
                     "chance_level": 0.25,
                     "config": "score",
@@ -476,7 +391,7 @@ APPENDIX_FIGURES = {
                 },
             },
             {
-                "row_title": "World affecting\nreward",
+                "row_title": "Leave out\nWorld affecting reward",
                 "left": {
                     "chance_level": 0.5,
                     "config": "war",
@@ -495,13 +410,12 @@ APPENDIX_FIGURES = {
     "appendix_figure1b": {
         "name": "appendix_figure1b",
         "title": "CoT penalisation - Unparsable rate",
-        "skip_threshold": None,  # No skip threshold for unparsable plots
-        "show_ratio": False,
+        "skip_threshold": None,
         "show_summary": False,
         "plot_unparsable": True,
         "rows": [
             {
-                "row_title": "Factual\nsycophancy",
+                "row_title": "Leave out\nFactual sycophancy",
                 "left": {
                     "config": "sycophancy",
                     "eval_fold": "eval_sycophancy_formatted",
@@ -514,7 +428,7 @@ APPENDIX_FIGURES = {
                 },
             },
             {
-                "row_title": "Code\nselection",
+                "row_title": "Leave out\nCode selection",
                 "left": {
                     "config": "code",
                     "eval_fold": "eval_code_formatted",
@@ -527,7 +441,7 @@ APPENDIX_FIGURES = {
                 },
             },
             {
-                "row_title": "Revealed\nscore MMLU",
+                "row_title": "Leave out\nRevealed score MMLU",
                 "left": {
                     "config": "score",
                     "eval_fold": "eval_revealing_score_formatted",
@@ -540,7 +454,7 @@ APPENDIX_FIGURES = {
                 },
             },
             {
-                "row_title": "World affecting\nreward",
+                "row_title": "Leave out\nWorld affecting reward",
                 "left": {
                     "config": "war",
                     "eval_fold": "eval_world_affecting_reward_reorg_formatted",
@@ -558,11 +472,10 @@ APPENDIX_FIGURES = {
         "name": "appendix_figure2",
         "title": "Summary penalisation",
         "skip_threshold": 0.3,
-        "show_ratio": False,
         "show_summary": True,
         "rows": [
             {
-                "row_title": "Factual\nsycophancy",
+                "row_title": "Leave out\nFactual sycophancy",
                 "left": {
                     "chance_level": 0.5,
                     "config": "sum_sycophancy",
@@ -577,7 +490,7 @@ APPENDIX_FIGURES = {
                 },
             },
             {
-                "row_title": "Code\nselection",
+                "row_title": "Leave out\nCode selection",
                 "left": {
                     "chance_level": 0.5,
                     "config": "sum_code",
@@ -592,7 +505,7 @@ APPENDIX_FIGURES = {
                 },
             },
             {
-                "row_title": "Revealed\nscore MMLU",
+                "row_title": "Leave out\nRevealed score MMLU",
                 "left": {
                     "chance_level": 0.25,
                     "config": "sum_score",
@@ -607,7 +520,7 @@ APPENDIX_FIGURES = {
                 },
             },
             {
-                "row_title": "World affecting\nreward",
+                "row_title": "Leave out\nWorld affecting reward",
                 "left": {
                     "chance_level": 0.5,
                     "config": "sum_war",
@@ -626,13 +539,12 @@ APPENDIX_FIGURES = {
     "appendix_figure2b": {
         "name": "appendix_figure2b",
         "title": "Summary penalisation - Unparsable rate",
-        "skip_threshold": None,  # No skip threshold for unparsable plots
-        "show_ratio": False,
+        "skip_threshold": None,
         "show_summary": True,
         "plot_unparsable": True,
         "rows": [
             {
-                "row_title": "Factual\nsycophancy",
+                "row_title": "Leave out\nFactual sycophancy",
                 "left": {
                     "config": "sum_sycophancy",
                     "eval_fold": "eval_sycophancy_formatted",
@@ -645,7 +557,7 @@ APPENDIX_FIGURES = {
                 },
             },
             {
-                "row_title": "Code\nselection",
+                "row_title": "Leave out\nCode selection",
                 "left": {
                     "config": "sum_code",
                     "eval_fold": "eval_code_formatted",
@@ -658,7 +570,7 @@ APPENDIX_FIGURES = {
                 },
             },
             {
-                "row_title": "Revealed\nscore MMLU",
+                "row_title": "Leave out\nRevealed score MMLU",
                 "left": {
                     "config": "sum_score",
                     "eval_fold": "eval_revealing_score_formatted",
@@ -671,7 +583,7 @@ APPENDIX_FIGURES = {
                 },
             },
             {
-                "row_title": "World affecting\nreward",
+                "row_title": "Leave out\nWorld affecting reward",
                 "left": {
                     "config": "sum_war",
                     "eval_fold": "eval_world_affecting_reward_reorg_formatted",
@@ -687,12 +599,118 @@ APPENDIX_FIGURES = {
     },
 }
 
+# Standalone example figures (single panel each)
+EXAMPLE_FIGURES = {
+    "example_sycophancy_sum_s24": {
+        "name": "example_sycophancy_sum_s24",
+        "title": "Leave out factual sycophancy\nPenalisation applied to summary",
+        "skip_threshold": 0.3,
+        "show_summary": True,
+        "spec": {
+            "chance_level": 0.5,
+            "config": "sum_sycophancy",
+            "seed": 24,
+            "eval_fold": "eval_sycophancy_formatted",
+        },
+    },
+    "example_score_sum_s50_medical": {
+        "name": "example_score_sum_s50_medical",
+        "title": "Leave out revealed score MMLU\nEval on medical sycophancy\nPenalisation applied to summary",
+        "skip_threshold": 0.3,
+        "show_summary": True,
+        "spec": {
+            "chance_level": 0.5,
+            "config": "sum_score",
+            "seed": 50,
+            "eval_fold": "eval_medical_sycophancy_fact_formatted",
+        },
+    },
+    "example_war_sum_s24": {
+        "name": "example_war_sum_s24",
+        "title": "Leave out world affecting reward\nPenalisation applied to summary",
+        "skip_threshold": 0.3,
+        "show_summary": True,
+        "spec": {
+            "chance_level": 0.5,
+            "config": "sum_war",
+            "seed": 24,
+            "eval_fold": "eval_world_affecting_reward_reorg_formatted",
+        },
+    },
+}
+
+
+# =============================================================================
+# RUN TRACKING
+# =============================================================================
+
+class RunTracker:
+    """Track which runs are used in each figure with full wandb details."""
+    
+    def __init__(self):
+        self.runs: List[Dict] = []  # List of run info dicts
+    
+    def add(self, run_info: Dict):
+        """Record a run being used with full details."""
+        # Check if this exact run is already tracked
+        key = (run_info.get("config"), run_info.get("seed"), 
+               run_info.get("eval_fold"), run_info.get("step"))
+        existing_keys = [
+            (r.get("config"), r.get("seed"), r.get("eval_fold"), r.get("step"))
+            for r in self.runs
+        ]
+        if key not in existing_keys:
+            self.runs.append(run_info)
+    
+    def save(self, filepath: Path):
+        """Save runs to a text file with full wandb details."""
+        with open(filepath, "w") as f:
+            f.write("# Runs used in this figure\n")
+            f.write("# Full wandb run details with all checkpoints\n")
+            f.write("#" + "=" * 60 + "\n\n")
+            
+            # Group by (config, seed, eval_fold) -> list of checkpoints
+            grouped: Dict[Tuple[str, int, str], List[Dict]] = {}
+            for run_info in self.runs:
+                key = (run_info.get("config", ""), 
+                       run_info.get("seed", 0), 
+                       run_info.get("eval_fold", ""))
+                if key not in grouped:
+                    grouped[key] = []
+                grouped[key].append(run_info)
+            
+            for (config, seed, eval_fold), checkpoints in sorted(grouped.items()):
+                f.write(f"[{config}] seed={seed}, eval_fold={eval_fold}\n")
+                
+                # Get unique run names/ids from checkpoints
+                run_names = set()
+                run_ids = set()
+                for cp in checkpoints:
+                    if cp.get("run_name"):
+                        run_names.add(cp["run_name"])
+                    if cp.get("run_id"):
+                        run_ids.add(cp["run_id"])
+                
+                if run_names:
+                    f.write(f"  run_name(s): {', '.join(sorted(run_names))}\n")
+                if run_ids:
+                    f.write(f"  run_id(s): {', '.join(sorted(run_ids))}\n")
+                
+                # List all checkpoints/steps
+                steps = sorted(set(cp.get("step", 0) for cp in checkpoints))
+                f.write(f"  checkpoints ({len(steps)}): {steps}\n")
+                f.write("\n")
+    
+    def __len__(self):
+        return len(self.runs)
+
 
 # =============================================================================
 # DATA LOADING
 # =============================================================================
 
-_data_cache = {}
+_data_cache: Dict[str, pd.DataFrame] = {}
+
 
 def load_config_data(config: str) -> pd.DataFrame:
     """Load and cache data for a config."""
@@ -704,7 +722,13 @@ def load_config_data(config: str) -> pd.DataFrame:
     return _data_cache[config]
 
 
-def get_line_data(config: str, seed: int, eval_fold: str, skip_threshold: float = 0.3) -> pd.DataFrame:
+def get_line_data(
+    config: str,
+    seed: int,
+    eval_fold: str,
+    skip_threshold: Optional[float] = 0.3,
+    tracker: Optional[RunTracker] = None,
+) -> pd.DataFrame:
     """Extract and prepare data for a single line.
     
     Note: Smoothing is applied AFTER filtering by skip_threshold, so the rolling
@@ -719,18 +743,33 @@ def get_line_data(config: str, seed: int, eval_fold: str, skip_threshold: float 
         print(f"  WARNING: No data for config={config}, seed={seed}, eval_fold={eval_fold}")
         return df_line
     
+    # Track runs with full details before aggregation
+    if tracker is not None:
+        for _, row in df_line.iterrows():
+            run_info = {
+                "config": config,
+                "seed": seed,
+                "eval_fold": eval_fold,
+                "step": row.get("step"),
+                "run_name": row.get("run_name"),
+                "run_id": row.get("run_id"),
+            }
+            tracker.add(run_info)
+    
     # Detect column names
     correct_col = "correct_rate_extractable" if "correct_rate_extractable" in df_line.columns else "reward_hack_rate_extractable"
     no_answer_col = "no_answer_rate" if "no_answer_rate" in df_line.columns else "no_answer_tags_rate"
-    has_summary = "summary_monitor_flag_rate_extractable" in df_line.columns
     
-    # Aggregate duplicate steps
+    # Build aggregation dict with available columns
     agg_cols = {
         correct_col: "mean",
-        "monitor_flag_rate_extractable": "mean",
         no_answer_col: "mean",
     }
-    if has_summary:
+    
+    # Add monitor columns if available
+    if "monitor_flag_rate_extractable" in df_line.columns:
+        agg_cols["monitor_flag_rate_extractable"] = "mean"
+    if "summary_monitor_flag_rate_extractable" in df_line.columns:
         agg_cols["summary_monitor_flag_rate_extractable"] = "mean"
     
     df_line = df_line.groupby("step", as_index=False).agg(agg_cols)
@@ -746,7 +785,12 @@ def get_line_data(config: str, seed: int, eval_fold: str, skip_threshold: float 
     return df_line.sort_values("step")
 
 
-def get_unparsable_data(config: str, seed: int, eval_fold: str) -> pd.DataFrame:
+def get_unparsable_data(
+    config: str,
+    seed: int,
+    eval_fold: str,
+    tracker: Optional[RunTracker] = None,
+) -> pd.DataFrame:
     """Extract unparsable rate data for a single line (no filtering, no smoothing)."""
     df = load_config_data(config)
     
@@ -756,6 +800,19 @@ def get_unparsable_data(config: str, seed: int, eval_fold: str) -> pd.DataFrame:
     if df_line.empty:
         print(f"  WARNING: No data for config={config}, seed={seed}, eval_fold={eval_fold}")
         return df_line
+    
+    # Track runs with full details before aggregation
+    if tracker is not None:
+        for _, row in df_line.iterrows():
+            run_info = {
+                "config": config,
+                "seed": seed,
+                "eval_fold": eval_fold,
+                "step": row.get("step"),
+                "run_name": row.get("run_name"),
+                "run_id": row.get("run_id"),
+            }
+            tracker.add(run_info)
     
     # Detect column names
     no_answer_col = "no_answer_rate" if "no_answer_rate" in df_line.columns else "no_answer_tags_rate"
@@ -771,7 +828,7 @@ def get_unparsable_data(config: str, seed: int, eval_fold: str) -> pd.DataFrame:
 
 
 # =============================================================================
-# PLOTTING
+# PLOTTING HELPERS
 # =============================================================================
 
 def style_axis(ax, ylim=(0, 1)):
@@ -783,15 +840,15 @@ def style_axis(ax, ylim=(0, 1)):
         ax.set_ylim(ylim)
 
 
-def create_block_legend(fig, show_summary=False, fontsize=14):
+def create_block_legend(fig, show_summary=False, fontsize=16):
     """Create a legend with colored blocks instead of lines."""
     legend_elements = [
         mpatches.Patch(facecolor=COLOR_CORRECT, edgecolor='none', label='Reward hacking rate'),
-        mpatches.Patch(facecolor=COLOR_MONITOR, edgecolor='none', label='Penalty rate'),
+        mpatches.Patch(facecolor=COLOR_MONITOR, edgecolor='none', label='CoT detection rate'),
     ]
     if show_summary:
         legend_elements.append(
-            mpatches.Patch(facecolor=COLOR_SUMMARY, edgecolor='none', label='Summary penalty rate')
+            mpatches.Patch(facecolor=COLOR_SUMMARY, edgecolor='none', label='Summary detection rate')
         )
     
     legend = fig.legend(
@@ -807,175 +864,240 @@ def create_block_legend(fig, show_summary=False, fontsize=14):
     return legend
 
 
-def create_appendix_legend(fig, seeds, show_summary=False, fontsize=12):
-    """Create a legend for appendix figures with linestyles and seed numbers."""
-    legend_elements = []
-    
-    # First row: metric colors (as patches)
-    legend_elements.append(
-        mpatches.Patch(facecolor=COLOR_CORRECT, edgecolor='none', label='Reward hacking rate')
-    )
-    legend_elements.append(
-        mpatches.Patch(facecolor=COLOR_MONITOR, edgecolor='none', label='Penalty rate')
-    )
+def create_vertical_legend(fig, show_summary=False, fontsize=14):
+    """Create a vertical legend with colored blocks below the plot (for example figures)."""
+    legend_elements = [
+        mpatches.Patch(facecolor=COLOR_CORRECT, edgecolor='none', label='Reward hacking rate'),
+        mpatches.Patch(facecolor=COLOR_MONITOR, edgecolor='none', label='CoT detection rate'),
+    ]
     if show_summary:
         legend_elements.append(
-            mpatches.Patch(facecolor=COLOR_SUMMARY, edgecolor='none', label='Summary penalty rate')
-        )
-    
-    # Second row: seed linestyles (as lines)
-    for seed in sorted(seeds):
-        style = SEED_STYLES.get(seed, {"linestyle": "-"})
-        legend_elements.append(
-            Line2D([0], [0], color='gray', linewidth=2, linestyle=style["linestyle"], label=f'Seed {seed}')
+            mpatches.Patch(facecolor=COLOR_SUMMARY, edgecolor='none', label='Summary detection rate')
         )
     
     legend = fig.legend(
         handles=legend_elements,
         loc="upper center",
-        bbox_to_anchor=(0.5, 0.02),
-        ncol=len(seeds) + (3 if show_summary else 2),
+        bbox_to_anchor=(0.5, 0.2),
+        ncol=1,
         frameon=False,
         fontsize=fontsize,
-        handlelength=2.0,
+        handlelength=1.5,
         handleheight=1.5,
     )
     return legend
 
 
-def create_unparsable_legend(fig, seeds, fontsize=12):
-    """Create a legend for unparsable rate figures."""
-    legend_elements = []
+def create_appendix_legend(fig, seeds, show_summary=False, fontsize=14):
+    """Create a two-row legend for appendix figures with colors and seed linestyles."""
+    # Row 1: metric colors (as patches)
+    color_elements = [
+        mpatches.Patch(facecolor=COLOR_CORRECT, edgecolor='none', label='Reward hacking rate'),
+        mpatches.Patch(facecolor=COLOR_MONITOR, edgecolor='none', label='CoT detection rate'),
+    ]
+    if show_summary:
+        color_elements.append(
+            mpatches.Patch(facecolor=COLOR_SUMMARY, edgecolor='none', label='Summary detection rate')
+        )
     
-    # Metric color
-    legend_elements.append(
+    # Row 2: seed linestyles (as lines)
+    seed_elements = []
+    for seed in sorted(seeds):
+        style = SEED_STYLES.get(seed, {"linestyle": "-"})
+        seed_elements.append(
+            Line2D([0], [0], color='gray', linewidth=2, linestyle=style["linestyle"], label=f'Seed {seed}')
+        )
+    
+    # Create two separate legends stacked vertically
+    legend1 = fig.legend(
+        handles=color_elements,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.05),
+        ncol=len(color_elements),
+        frameon=False,
+        fontsize=fontsize,
+        handlelength=1.5,
+        handleheight=1.5,
+    )
+    
+    legend2 = fig.legend(
+        handles=seed_elements,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.02),
+        ncol=len(seed_elements),
+        frameon=False,
+        fontsize=fontsize,
+        handlelength=2.0,
+        handleheight=1.5,
+    )
+    
+    # Add first legend back (it gets removed when adding second)
+    fig.add_artist(legend1)
+    
+    return legend1, legend2
+
+
+def create_unparsable_legend(fig, seeds, fontsize=14):
+    """Create a two-row legend for unparsable rate figures."""
+    # Row 1: metric color
+    color_elements = [
         mpatches.Patch(facecolor=COLOR_NON_EXTRACTABLE, edgecolor='none', label='Unparsable rate')
-    )
+    ]
     
-    # Seed linestyles
+    # Row 2: seed linestyles
+    seed_elements = []
     for seed in sorted(seeds):
         style = SEED_STYLES.get(seed, {"linestyle": "-"})
-        legend_elements.append(
+        seed_elements.append(
             Line2D([0], [0], color='gray', linewidth=2, linestyle=style["linestyle"], label=f'Seed {seed}')
         )
     
-    legend = fig.legend(
-        handles=legend_elements,
+    # Create two separate legends stacked vertically
+    legend1 = fig.legend(
+        handles=color_elements,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.05),
+        ncol=len(color_elements),
+        frameon=False,
+        fontsize=fontsize,
+        handlelength=1.5,
+        handleheight=1.5,
+    )
+    
+    legend2 = fig.legend(
+        handles=seed_elements,
         loc="upper center",
         bbox_to_anchor=(0.5, 0.02),
-        ncol=len(seeds) + 1,
+        ncol=len(seed_elements),
         frameon=False,
         fontsize=fontsize,
         handlelength=2.0,
         handleheight=1.5,
     )
-    return legend
-
-
-def plot_subplot(ax, subplot_spec: dict, skip_threshold: float, show_ratio: bool = False, show_summary: bool = False):
-    """Plot a single subplot with multiple lines."""
-    ax.set_title(subplot_spec["title"], fontsize=16, fontweight='bold')
     
-    if not subplot_spec.get("lines"):
-        ax.text(0.5, 0.5, "TBD", ha="center", va="center", transform=ax.transAxes, fontsize=14, color="gray")
+    # Add first legend back
+    fig.add_artist(legend1)
+    
+    return legend1, legend2
+
+
+# =============================================================================
+# SUBPLOT PLOTTING
+# =============================================================================
+
+def plot_combined_subplot(
+    ax,
+    subplot_spec: dict,
+    skip_threshold: float,
+    show_summary: bool = False,
+    tracker: Optional[RunTracker] = None,
+):
+    """Plot a single subplot for combined main figures."""
+    if subplot_spec is None:
+        ax.text(0.5, 0.5, "TBD", ha="center", va="center", transform=ax.transAxes, fontsize=16, color="gray")
         style_axis(ax)
         return
     
-    for line_spec in subplot_spec["lines"]:
-        df_line = get_line_data(
-            config=line_spec["config"],
-            seed=line_spec["seed"],
-            eval_fold=line_spec["eval_fold"],
-            skip_threshold=skip_threshold,
-        )
-        
-        if df_line.empty:
-            continue
-        
-        color_correct = line_spec.get("color_correct", COLOR_CORRECT)
-        color_monitor = line_spec.get("color_monitor", COLOR_MONITOR)
-        
-        # Compute rolling averages (now in step-space since filtering already applied)
-        correct_raw = df_line["correct_rate"]
+    df_line = get_line_data(
+        config=subplot_spec["config"],
+        seed=subplot_spec["seed"],
+        eval_fold=subplot_spec["eval_fold"],
+        skip_threshold=skip_threshold,
+        tracker=tracker,
+    )
+    
+    if df_line.empty:
+        ax.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax.transAxes, fontsize=16, color="gray")
+        style_axis(ax)
+        return
+    
+    color_correct = subplot_spec.get("color_correct", COLOR_CORRECT)
+    color_monitor = subplot_spec.get("color_monitor", COLOR_MONITOR)
+    
+    # Compute rolling averages for correct rate
+    correct_raw = df_line["correct_rate"]
+    correct_smooth = correct_raw.rolling(window=3, min_periods=1, center=True).mean()
+    
+    # Plot correct rate (reward hacking) - faint markers, solid line
+    ax.plot(
+        df_line["step"],
+        np.ma.masked_invalid(correct_raw),
+        color=color_correct,
+        linewidth=0,
+        marker="o",
+        markersize=5,
+        alpha=0.3,
+    )
+    ax.plot(
+        df_line["step"],
+        np.ma.masked_invalid(correct_smooth),
+        color=color_correct,
+        linewidth=2.5,
+        linestyle="-",
+        alpha=1.0,
+    )
+    
+    # Plot monitor flag rate (CoT penalty) if available
+    if "monitor_flag_rate_extractable" in df_line.columns:
         monitor_raw = df_line["monitor_flag_rate_extractable"]
-        correct_smooth = correct_raw.rolling(window=3, min_periods=1, center=True).mean()
-        monitor_smooth = monitor_raw.rolling(window=3, min_periods=1, center=True).mean()
-        
-        # Plot correct rate (reward hacking) - faint markers, solid line
-        ax.plot(
-            df_line["step"],
-            np.ma.masked_invalid(correct_raw),
-            color=color_correct,
-            linewidth=0,
-            marker="o",
-            markersize=5,
-            alpha=0.3,
-        )
-        ax.plot(
-            df_line["step"],
-            np.ma.masked_invalid(correct_smooth),
-            color=color_correct,
-            linewidth=2.5,
-            linestyle="-",
-            label="Reward hacking rate",
-            alpha=1.0,
-        )
-        
-        # Plot monitor flag rate (penalty) - faint markers, solid line
-        ax.plot(
-            df_line["step"],
-            np.ma.masked_invalid(monitor_raw),
-            color=color_monitor,
-            linewidth=0,
-            marker="o",
-            markersize=5,
-            alpha=0.3,
-        )
-        ax.plot(
-            df_line["step"],
-            np.ma.masked_invalid(monitor_smooth),
-            color=color_monitor,
-            linewidth=2.5,
-            linestyle="-",
-            label="Penalty rate",
-            alpha=1.0,
-        )
-        
-        # Plot summary monitor rate if enabled and available
-        if show_summary and "summary_monitor_flag_rate_extractable" in df_line.columns:
-            summary_raw = df_line["summary_monitor_flag_rate_extractable"]
-            if summary_raw.notna().any():
-                summary_smooth = summary_raw.rolling(window=3, min_periods=1, center=True).mean()
-                ax.plot(
-                    df_line["step"],
-                    np.ma.masked_invalid(summary_raw),
-                    color=COLOR_SUMMARY,
-                    linewidth=0,
-                    marker="o",
-                    markersize=5,
-                    alpha=0.3,
-                )
-                ax.plot(
-                    df_line["step"],
-                    np.ma.masked_invalid(summary_smooth),
-                    color=COLOR_SUMMARY,
-                    linewidth=2.5,
-                    linestyle="-",
-                    label="Summary penalty rate",
-                    alpha=1.0,
-                )
+        if monitor_raw.notna().any():
+            monitor_smooth = monitor_raw.rolling(window=3, min_periods=1, center=True).mean()
+            ax.plot(
+                df_line["step"],
+                np.ma.masked_invalid(monitor_raw),
+                color=color_monitor,
+                linewidth=0,
+                marker="o",
+                markersize=5,
+                alpha=0.3,
+            )
+            ax.plot(
+                df_line["step"],
+                np.ma.masked_invalid(monitor_smooth),
+                color=color_monitor,
+                linewidth=2.5,
+                linestyle="-",
+                alpha=1.0,
+            )
+    
+    # Plot summary monitor rate if enabled and available
+    if show_summary and "summary_monitor_flag_rate_extractable" in df_line.columns:
+        summary_raw = df_line["summary_monitor_flag_rate_extractable"]
+        if summary_raw.notna().any():
+            summary_smooth = summary_raw.rolling(window=3, min_periods=1, center=True).mean()
+            ax.plot(
+                df_line["step"],
+                np.ma.masked_invalid(summary_raw),
+                color=COLOR_SUMMARY,
+                linewidth=0,
+                marker="o",
+                markersize=5,
+                alpha=0.3,
+            )
+            ax.plot(
+                df_line["step"],
+                np.ma.masked_invalid(summary_smooth),
+                color=COLOR_SUMMARY,
+                linewidth=2.5,
+                linestyle="-",
+                alpha=1.0,
+            )
     
     chance_level = subplot_spec.get("chance_level", 0.5)
     ax.axhline(y=chance_level, color=COLOR_CHANCE, linestyle="--", linewidth=1.5, zorder=0)
-    ax.set_xlabel("Training Step", fontsize=14)
-    ax.set_ylabel("Rate", fontsize=14)
     ax.set_xticks([0, 1000, 2000, 3000, 4000])
     ax.set_xlim(0, 4000)
-    ax.tick_params(axis='both', labelsize=12)
+    ax.tick_params(axis='both', labelsize=14)
     style_axis(ax)
 
 
-def plot_appendix_subplot(ax, subplot_spec: dict, skip_threshold: float, show_ratio: bool = False, show_summary: bool = False):
+def plot_appendix_subplot(
+    ax,
+    subplot_spec: dict,
+    skip_threshold: float,
+    show_summary: bool = False,
+    tracker: Optional[RunTracker] = None,
+):
     """Plot a single appendix subplot with multiple seeds (no markers)."""
     if subplot_spec is None:
         ax.text(0.5, 0.5, "TBD", ha="center", va="center", transform=ax.transAxes, fontsize=14, color="gray")
@@ -994,6 +1116,7 @@ def plot_appendix_subplot(ax, subplot_spec: dict, skip_threshold: float, show_ra
             seed=seed,
             eval_fold=eval_fold,
             skip_threshold=skip_threshold,
+            tracker=tracker,
         )
         
         if df_line.empty:
@@ -1002,11 +1125,9 @@ def plot_appendix_subplot(ax, subplot_spec: dict, skip_threshold: float, show_ra
         style = SEED_STYLES.get(seed, {"linestyle": "-"})
         colors = SEED_COLORS.get(seed, {"correct": COLOR_CORRECT, "monitor": COLOR_MONITOR})
         
-        # Compute rolling averages (in step-space)
+        # Compute rolling averages for correct rate
         correct_raw = df_line["correct_rate"]
-        monitor_raw = df_line["monitor_flag_rate_extractable"]
         correct_smooth = correct_raw.rolling(window=3, min_periods=1, center=True).mean()
-        monitor_smooth = monitor_raw.rolling(window=3, min_periods=1, center=True).mean()
         
         # Plot correct rate (reward hacking) - no markers, styled line
         ax.plot(
@@ -1018,15 +1139,19 @@ def plot_appendix_subplot(ax, subplot_spec: dict, skip_threshold: float, show_ra
             alpha=1.0,
         )
         
-        # Plot monitor flag rate (penalty) - no markers, styled line
-        ax.plot(
-            df_line["step"],
-            np.ma.masked_invalid(monitor_smooth),
-            color=colors["monitor"],
-            linewidth=2.5,
-            linestyle=style["linestyle"],
-            alpha=1.0,
-        )
+        # Plot monitor flag rate (CoT penalty) if available - no markers, styled line
+        if "monitor_flag_rate_extractable" in df_line.columns:
+            monitor_raw = df_line["monitor_flag_rate_extractable"]
+            if monitor_raw.notna().any():
+                monitor_smooth = monitor_raw.rolling(window=3, min_periods=1, center=True).mean()
+                ax.plot(
+                    df_line["step"],
+                    np.ma.masked_invalid(monitor_smooth),
+                    color=colors["monitor"],
+                    linewidth=2.5,
+                    linestyle=style["linestyle"],
+                    alpha=1.0,
+                )
         
         # Plot summary monitor rate if enabled and available
         if show_summary and "summary_monitor_flag_rate_extractable" in df_line.columns:
@@ -1050,7 +1175,11 @@ def plot_appendix_subplot(ax, subplot_spec: dict, skip_threshold: float, show_ra
     style_axis(ax)
 
 
-def plot_unparsable_subplot(ax, subplot_spec: dict):
+def plot_unparsable_subplot(
+    ax,
+    subplot_spec: dict,
+    tracker: Optional[RunTracker] = None,
+):
     """Plot unparsable rate for a single appendix subplot (no smoothing, no markers)."""
     if subplot_spec is None:
         ax.text(0.5, 0.5, "TBD", ha="center", va="center", transform=ax.transAxes, fontsize=14, color="gray")
@@ -1068,6 +1197,7 @@ def plot_unparsable_subplot(ax, subplot_spec: dict):
             config=config,
             seed=seed,
             eval_fold=eval_fold,
+            tracker=tracker,
         )
         
         if df_line.empty:
@@ -1091,45 +1221,85 @@ def plot_unparsable_subplot(ax, subplot_spec: dict):
     style_axis(ax)
 
 
-def generate_figure(fig_spec: dict):
-    """Generate a single figure with all its subplots."""
-    n_subplots = len(fig_spec["subplots"])
+# =============================================================================
+# FIGURE GENERATION
+# =============================================================================
+
+def generate_combined_figure(fig_spec: dict) -> Tuple[plt.Figure, RunTracker]:
+    """Generate a combined main figure with 2 rows x 4 columns."""
+    columns = fig_spec["columns"]
+    n_cols = len(columns)
     skip_threshold = fig_spec.get("skip_threshold", 0.3)
-    show_ratio = fig_spec.get("show_ratio", False)
     show_summary = fig_spec.get("show_summary", False)
     
-    fig, axes = plt.subplots(1, n_subplots, figsize=(5 * n_subplots, 4.5), squeeze=False)
-    axes = axes.flatten()
+    tracker = RunTracker()
     
-    for idx, subplot_spec in enumerate(fig_spec["subplots"]):
-        plot_subplot(axes[idx], subplot_spec, skip_threshold, show_ratio=show_ratio, show_summary=show_summary)
+    fig, axes = plt.subplots(2, n_cols, figsize=(5 * n_cols, 10), squeeze=False)
+    
+    for col_idx, col_spec in enumerate(columns):
+        # Top row: evaluated on leave-out set
+        plot_combined_subplot(
+            axes[0, col_idx],
+            col_spec["top"],
+            skip_threshold,
+            show_summary=show_summary,
+            tracker=tracker,
+        )
+        
+        # Bottom row: evaluated on medical sycophancy
+        plot_combined_subplot(
+            axes[1, col_idx],
+            col_spec["bottom"],
+            skip_threshold,
+            show_summary=show_summary,
+            tracker=tracker,
+        )
+        
+        # Add subplot title only to top row
+        axes[0, col_idx].set_title(col_spec["top_title"], fontsize=18, fontweight='bold')
         
         # Remove y label and ticks from non-leftmost subplots
-        if idx > 0:
-            axes[idx].set_ylabel("")
-            axes[idx].set_yticklabels([])
-            axes[idx].tick_params(axis='y', length=0)
+        if col_idx > 0:
+            axes[0, col_idx].set_yticklabels([])
+            axes[0, col_idx].tick_params(axis='y', length=0)
+            axes[1, col_idx].set_yticklabels([])
+            axes[1, col_idx].tick_params(axis='y', length=0)
+        
+        # Remove x labels from top row
+        axes[0, col_idx].set_xticklabels([])
+        axes[0, col_idx].tick_params(axis='x', length=0)
+        
+        # Add x label only to bottom row
+        axes[1, col_idx].set_xlabel("Training Step", fontsize=16)
+    
+    # Add shared y-axis labels
+    axes[0, 0].set_ylabel("Rate", fontsize=16)
+    axes[1, 0].set_ylabel("Rate", fontsize=16)
+    
+    # Add row titles centered above each row
+    fig.text(0.5, 0.94, "Evaluated on leave out set", ha='center', va='bottom',
+             fontsize=20, fontweight='bold')
+    fig.text(0.5, 0.46, "Evaluated on medical sycophancy", ha='center', va='bottom',
+             fontsize=20, fontweight='bold')
     
     # Create block legend
-    create_block_legend(fig, show_summary=show_summary, fontsize=14)
+    create_block_legend(fig, show_summary=show_summary, fontsize=16)
     
-    title = fig_spec.get("title")
-    if title:
-        fig.suptitle(title, fontsize=18, fontweight='bold')
+    fig.tight_layout(rect=[0, 0.06, 1, 0.92])
+    fig.subplots_adjust(hspace=0.25)
     
-    fig.tight_layout(rect=[0, 0.08, 1, 0.96])
-    
-    return fig
+    return fig, tracker
 
 
-def generate_appendix_figure(fig_spec: dict):
+def generate_appendix_figure(fig_spec: dict) -> Tuple[plt.Figure, RunTracker]:
     """Generate an appendix figure with 4 rows x 2 columns grid."""
     rows = fig_spec["rows"]
     n_rows = len(rows)
     skip_threshold = fig_spec.get("skip_threshold", 0.3)
-    show_ratio = fig_spec.get("show_ratio", False)
     show_summary = fig_spec.get("show_summary", False)
     plot_unparsable = fig_spec.get("plot_unparsable", False)
+    
+    tracker = RunTracker()
     
     # Collect all seeds for legend
     all_seeds = set()
@@ -1142,19 +1312,29 @@ def generate_appendix_figure(fig_spec: dict):
     fig, axes = plt.subplots(n_rows, 2, figsize=(12, 3.5 * n_rows), squeeze=False)
     
     for row_idx, row_spec in enumerate(rows):
-        # Add row label (y-axis label) - "Leave out\n{X}"
+        # Add row label (y-axis label)
         row_title = row_spec.get("row_title", "")
         if row_title:
-            axes[row_idx, 0].set_ylabel(f"Leave out\n{row_title}", fontsize=14, fontweight='bold')
+            axes[row_idx, 0].set_ylabel(row_title, fontsize=14, fontweight='bold')
         
         if plot_unparsable:
-            # Plot unparsable rate
-            plot_unparsable_subplot(axes[row_idx, 0], row_spec["left"])
-            plot_unparsable_subplot(axes[row_idx, 1], row_spec["right"])
+            plot_unparsable_subplot(axes[row_idx, 0], row_spec["left"], tracker=tracker)
+            plot_unparsable_subplot(axes[row_idx, 1], row_spec["right"], tracker=tracker)
         else:
-            # Plot regular metrics
-            plot_appendix_subplot(axes[row_idx, 0], row_spec["left"], skip_threshold, show_ratio=show_ratio, show_summary=show_summary)
-            plot_appendix_subplot(axes[row_idx, 1], row_spec["right"], skip_threshold, show_ratio=show_ratio, show_summary=show_summary)
+            plot_appendix_subplot(
+                axes[row_idx, 0],
+                row_spec["left"],
+                skip_threshold,
+                show_summary=show_summary,
+                tracker=tracker,
+            )
+            plot_appendix_subplot(
+                axes[row_idx, 1],
+                row_spec["right"],
+                skip_threshold,
+                show_summary=show_summary,
+                tracker=tracker,
+            )
         
         # Remove y label from right column
         axes[row_idx, 1].set_ylabel("")
@@ -1191,54 +1371,71 @@ def generate_appendix_figure(fig_spec: dict):
         va="bottom",
     )
     
-    # Create appropriate legend
+    # Create appropriate legend (two rows)
     if plot_unparsable:
-        create_unparsable_legend(fig, sorted(all_seeds), fontsize=12)
+        create_unparsable_legend(fig, sorted(all_seeds), fontsize=14)
     else:
-        create_appendix_legend(fig, sorted(all_seeds), show_summary=show_summary, fontsize=12)
+        create_appendix_legend(fig, sorted(all_seeds), show_summary=show_summary, fontsize=14)
     
     title = fig_spec.get("title")
     if title:
         fig.suptitle(title, fontsize=18, fontweight="bold")
     
-    fig.tight_layout(rect=[0.08, 0.06, 1, 0.94])
+    fig.tight_layout(rect=[0.08, 0.08, 1, 0.94])
     
-    return fig
+    return fig, tracker
 
+
+def generate_example_figure(fig_spec: dict) -> Tuple[plt.Figure, RunTracker]:
+    """Generate a standalone single-panel example figure."""
+    spec = fig_spec["spec"]
+    skip_threshold = fig_spec.get("skip_threshold", 0.3)
+    show_summary = fig_spec.get("show_summary", False)
+    title = fig_spec.get("title", "")
+    
+    tracker = RunTracker()
+    
+    fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+    
+    plot_combined_subplot(
+        ax,
+        spec,
+        skip_threshold,
+        show_summary=show_summary,
+        tracker=tracker,
+    )
+    
+    ax.set_xlabel("Training Step", fontsize=16)
+    ax.set_ylabel("Rate", fontsize=16)
+    
+    if title:
+        ax.set_title(title, fontsize=16, fontweight='bold')
+    
+    # Create vertical legend below the plot
+    create_vertical_legend(fig, show_summary=show_summary, fontsize=14)
+    
+    # Leave room at bottom for vertical legend (3 items stacked)
+    fig.tight_layout(rect=[0, 0.15, 1, 1])
+    
+    return fig, tracker
+
+
+# =============================================================================
+# MAIN
+# =============================================================================
 
 def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    OUTPUT_PDFS.mkdir(parents=True, exist_ok=True)
+    OUTPUT_PNGS.mkdir(parents=True, exist_ok=True)
+    OUTPUT_TXTS.mkdir(parents=True, exist_ok=True)
     
-    # Generate main figures
-    for fig_key, fig_spec in FIGURES.items():
+    # Generate combined main figures
+    for fig_key, fig_spec in COMBINED_FIGURES.items():
         print(f"\nGenerating {fig_key}...")
         
         try:
-            fig = generate_figure(fig_spec)
-        except Exception as e:
-            print(f"  ERROR: {e}")
-            continue
-        
-        name = fig_spec.get("name", fig_key)
-        
-        # Save PNG
-        png_path = OUTPUT_DIR / f"{name}.png"
-        fig.savefig(png_path, dpi=150, bbox_inches="tight", facecolor="white")
-        print(f"  Saved: {png_path}")
-        
-        # Save PDF
-        pdf_path = OUTPUT_DIR / f"{name}.pdf"
-        fig.savefig(pdf_path, bbox_inches="tight", facecolor="white")
-        print(f"  Saved: {pdf_path}")
-        
-        plt.close(fig)
-    
-    # Generate appendix figures
-    for fig_key, fig_spec in APPENDIX_FIGURES.items():
-        print(f"\nGenerating {fig_key}...")
-        
-        try:
-            fig = generate_appendix_figure(fig_spec)
+            fig, tracker = generate_combined_figure(fig_spec)
         except Exception as e:
             print(f"  ERROR: {e}")
             import traceback
@@ -1248,14 +1445,81 @@ def main():
         name = fig_spec.get("name", fig_key)
         
         # Save PNG
-        png_path = OUTPUT_DIR / f"{name}.png"
+        png_path = OUTPUT_PNGS / f"{name}.png"
         fig.savefig(png_path, dpi=150, bbox_inches="tight", facecolor="white")
         print(f"  Saved: {png_path}")
         
         # Save PDF
-        pdf_path = OUTPUT_DIR / f"{name}.pdf"
+        pdf_path = OUTPUT_PDFS / f"{name}.pdf"
         fig.savefig(pdf_path, bbox_inches="tight", facecolor="white")
         print(f"  Saved: {pdf_path}")
+        
+        # Save runs list
+        runs_path = OUTPUT_TXTS / f"{name}_runs.txt"
+        tracker.save(runs_path)
+        print(f"  Saved: {runs_path} ({len(tracker)} checkpoints)")
+        
+        plt.close(fig)
+    
+    # Generate appendix figures
+    for fig_key, fig_spec in APPENDIX_FIGURES.items():
+        print(f"\nGenerating {fig_key}...")
+        
+        try:
+            fig, tracker = generate_appendix_figure(fig_spec)
+        except Exception as e:
+            print(f"  ERROR: {e}")
+            import traceback
+            traceback.print_exc()
+            continue
+        
+        name = fig_spec.get("name", fig_key)
+        
+        # Save PNG
+        png_path = OUTPUT_PNGS / f"{name}.png"
+        fig.savefig(png_path, dpi=150, bbox_inches="tight", facecolor="white")
+        print(f"  Saved: {png_path}")
+        
+        # Save PDF
+        pdf_path = OUTPUT_PDFS / f"{name}.pdf"
+        fig.savefig(pdf_path, bbox_inches="tight", facecolor="white")
+        print(f"  Saved: {pdf_path}")
+        
+        # Save runs list
+        runs_path = OUTPUT_TXTS / f"{name}_runs.txt"
+        tracker.save(runs_path)
+        print(f"  Saved: {runs_path} ({len(tracker)} checkpoints)")
+        
+        plt.close(fig)
+    
+    # Generate example figures
+    for fig_key, fig_spec in EXAMPLE_FIGURES.items():
+        print(f"\nGenerating {fig_key}...")
+        
+        try:
+            fig, tracker = generate_example_figure(fig_spec)
+        except Exception as e:
+            print(f"  ERROR: {e}")
+            import traceback
+            traceback.print_exc()
+            continue
+        
+        name = fig_spec.get("name", fig_key)
+        
+        # Save PNG
+        png_path = OUTPUT_PNGS / f"{name}.png"
+        fig.savefig(png_path, dpi=150, bbox_inches="tight", facecolor="white")
+        print(f"  Saved: {png_path}")
+        
+        # Save PDF
+        pdf_path = OUTPUT_PDFS / f"{name}.pdf"
+        fig.savefig(pdf_path, bbox_inches="tight", facecolor="white")
+        print(f"  Saved: {pdf_path}")
+        
+        # Save runs list
+        runs_path = OUTPUT_TXTS / f"{name}_runs.txt"
+        tracker.save(runs_path)
+        print(f"  Saved: {runs_path} ({len(tracker)} checkpoints)")
         
         plt.close(fig)
     

@@ -44,6 +44,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import numpy as np
 import pandas as pd
 import wandb
@@ -84,6 +85,14 @@ MIN_CREATED_AT = "2026-01-25T00:00:00"
 # The four datasets
 ALL_DATASETS = ["sycophancy", "war", "code", "score"]
 
+# Display names for datasets
+DATASET_DISPLAY_NAMES = {
+    "sycophancy": "Sycophancy",
+    "war": "World Affecting Reward",
+    "code": "Code",
+    "score": "Score",
+}
+
 # Map from short name to the full dataset name used in run names
 DATASET_NAME_MAP = {
     "sycophancy": "leave_out_sycophancy_refined2",
@@ -99,6 +108,14 @@ EVAL_FOLD_MAP = {
     "code": "eval_code_formatted",
     "score": "eval_revealing_score_formatted",
 }
+
+# Prefixes for matching eval folds in potentially truncated names
+EVAL_FOLD_PREFIXES = [
+    ("world_affecting_reward", "war"),  # Check longest first
+    ("revealing_score", "score"),
+    ("sycophancy", "sycophancy"),
+    ("code", "code"),
+]
 
 # Seeds to look for
 SEEDS = [24, 33, 42, 50]
@@ -221,49 +238,41 @@ def get_table_from_run(run: wandb.apis.public.Run, table_key: str) -> Optional[p
     return None
 
 
-def parse_run_name_baseline_or_summary(run_name: str) -> Optional[Dict[str, Any]]:
+def parse_run_name(run_name: str) -> Optional[Dict[str, Any]]:
     """
-    Parse a baseline or summary eval_ind run name to extract metadata.
+    Parse a run name to extract leave_out dataset, seed, and eval_fold.
     
-    Expected formats (may be truncated with hash suffix):
-        Summary: run_ref_summary_ovs_refined_summary_data_leave_out_{dataset}_refined2_ts_{seed}_eval_{fold}_eval_ind_step_3800
-        Baseline: run_ref_baseline_data_leave_out_{dataset}_refined2_ts_{seed}_eval_{fold}_eval_ind_step_3800
+    Works with potentially truncated names by using flexible pattern matching.
     
-    Truncated example:
-        run_ref_summary_ovs_refined_summary_data_leave_out_sycophancy_refined2_ts_24_eval_world_affecting_reward_reorg_formatte_8be7e579
-    
-    Returns dict with: run_type, leave_out, seed, eval_fold (short names)
+    Returns dict with: leave_out, seed, eval_fold (short names), or None if unparseable.
     """
-    # Determine run type from prefix
-    if "run_ref_summary_ovs_refined_summary_data_" in run_name:
-        run_type = "summary"
-    elif "run_ref_baseline_data_" in run_name:
-        run_type = "baseline"
-    else:
+    # Extract leave_out dataset
+    leave_out_match = re.search(r"leave_out_(\w+)_refined2", run_name)
+    if not leave_out_match:
         return None
     
-    # Extract: leave_out_{dataset}_refined2_ts_{seed}_eval_{...}
-    # The eval fold part may be truncated, so we capture everything after _eval_
-    pattern = r"leave_out_(\w+)_refined2_ts_(\d+)_eval_(.+?)(?:_eval_ind|_[a-f0-9]{8}$|_step_)"
-    match = re.search(pattern, run_name)
-    
-    if not match:
+    leave_out = leave_out_match.group(1)
+    if leave_out not in ALL_DATASETS:
         return None
     
-    leave_out = match.group(1)  # sycophancy, war, code, score
-    seed = int(match.group(2))
-    eval_fold_raw = match.group(3)  # e.g., "sycophancy_formatted" or "world_affecting_reward_reorg_formatte" (truncated)
+    # Extract seed
+    seed_match = re.search(r"_ts_(\d+)_", run_name)
+    if not seed_match:
+        return None
     
-    # Map eval fold to short name using startswith to handle truncation
-    fold_prefixes = [
-        ("world_affecting_reward_reorg", "war"),  # Check longest first
-        ("revealing_score", "score"),
-        ("sycophancy", "sycophancy"),
-        ("code", "code"),
-    ]
+    seed = int(seed_match.group(1))
+    if seed not in SEEDS:
+        return None
+    
+    # Extract eval fold - look for _eval_ and match against known prefixes
+    eval_match = re.search(r"_eval_(\w+)", run_name)
+    if not eval_match:
+        return None
+    
+    eval_fold_raw = eval_match.group(1)
     
     eval_fold = None
-    for prefix, short_name in fold_prefixes:
+    for prefix, short_name in EVAL_FOLD_PREFIXES:
         if eval_fold_raw.startswith(prefix):
             eval_fold = short_name
             break
@@ -271,85 +280,11 @@ def parse_run_name_baseline_or_summary(run_name: str) -> Optional[Dict[str, Any]
     if eval_fold is None:
         return None
     
-    # Validate leave_out is a known dataset
-    if leave_out not in ALL_DATASETS:
-        return None
-    
     return {
-        "run_type": run_type,
         "leave_out": leave_out,
         "seed": seed,
         "eval_fold": eval_fold,
     }
-
-
-def parse_run_name_cot(run_name: str) -> Optional[Dict[str, Any]]:
-    """
-    Parse a CoT penalisation run name to extract metadata.
-    
-    Expected format (may be truncated with hash suffix):
-        run_ref_ovs_refined_pen_{penalty}_data_leave_out_{dataset}_refined2_ts_{seed}_eval_{fold}_formatted_step_3800
-    
-    Returns dict with: run_type, leave_out, seed, eval_fold, penalty (short names)
-    """
-    # Check prefix
-    if not run_name.startswith("run_ref_ovs_refined_pen_"):
-        return None
-    
-    # Extract: pen_{penalty}_data_leave_out_{dataset}_refined2_ts_{seed}_eval_{fold}
-    # The fold part may be truncated, so we're flexible about what comes after
-    pattern = r"run_ref_ovs_refined_pen_([-\d.]+)_data_leave_out_(\w+)_refined2_ts_(\d+)_eval_(.+?)(?:_formatted|_formatte|_[a-f0-9]{8}$|_step_)"
-    match = re.search(pattern, run_name)
-    
-    if not match:
-        return None
-    
-    penalty = match.group(1)  # e.g., "-0.05"
-    leave_out = match.group(2)  # sycophancy, war, code, score
-    seed = int(match.group(3))
-    eval_fold_raw = match.group(4)  # e.g., "sycophancy", "world_affecting_reward_reorg", "code", "revealing_score"
-    
-    # Map eval fold to short name using startswith to handle any partial matching
-    fold_prefixes = [
-        ("world_affecting_reward_reorg", "war"),  # Check longest first
-        ("revealing_score", "score"),
-        ("sycophancy", "sycophancy"),
-        ("code", "code"),
-    ]
-    
-    eval_fold = None
-    for prefix, short_name in fold_prefixes:
-        if eval_fold_raw.startswith(prefix):
-            eval_fold = short_name
-            break
-    
-    if eval_fold is None:
-        return None
-    
-    # Validate leave_out is a known dataset
-    if leave_out not in ALL_DATASETS:
-        return None
-    
-    return {
-        "run_type": "cot",
-        "leave_out": leave_out,
-        "seed": seed,
-        "eval_fold": eval_fold,
-        "penalty": penalty,
-    }
-
-
-def parse_run_name(run_name: str, run_type: str) -> Optional[Dict[str, Any]]:
-    """
-    Parse a run name based on expected run type.
-    """
-    if run_type == "cot":
-        return parse_run_name_cot(run_name)
-    else:
-        result = parse_run_name_baseline_or_summary(run_name)
-        if result and result["run_type"] == run_type:
-            return result
-        return None
 
 
 def _to_datetime(value: Any) -> Optional[datetime]:
@@ -391,29 +326,33 @@ def scan_eval_ind_runs(run_type: str, verbose: bool = True) -> List[Dict[str, An
     """
     Scan W&B for eval_ind runs of a specific type.
     
+    Uses artifact_step=3800 config filter and leave_out_ pattern matching.
+    Only returns in-distribution runs (leave_out != eval_fold).
+    
     Returns list of run metadata dicts.
     """
     api = wandb.Api(timeout=API_TIMEOUT)
     
     entity = WANDB_ENTITIES[run_type]
     
-    # Build filter based on run type
-    if run_type == "summary":
-        name_pattern = "run_ref_summary_ovs_refined_summary_data_leave_out_.*_eval_ind_step_"
-    elif run_type == "baseline":
-        name_pattern = "run_ref_baseline_data_leave_out_.*_eval_ind_step_"
-    else:  # cot
-        name_pattern = "run_ref_ovs_refined_pen_.*_data_leave_out_.*_formatted_step_"
-    
+    # Build filter: finished runs with artifact_step=3800, created after min date
     filters = {
         "state": "finished",
-        "displayName": {"$regex": name_pattern},
+        "config.artifact_step": 3800,
         "createdAt": {"$gte": MIN_CREATED_AT},
     }
     
+    # Add run type specific name pattern
+    if run_type == "summary":
+        filters["displayName"] = {"$regex": "run_ref_summary_ovs_refined_summary_data_leave_out_"}
+    elif run_type == "baseline":
+        filters["displayName"] = {"$regex": "run_ref_baseline_data_leave_out_"}
+    else:  # cot
+        filters["displayName"] = {"$regex": "run_ref_ovs_refined_pen_.*_data_leave_out_"}
+    
     print(f"Scanning for {run_type} runs...")
     print(f"  Entity: {entity}")
-    print(f"  Pattern: {name_pattern}")
+    print(f"  Filter: artifact_step=3800, created >= {MIN_CREATED_AT}")
     
     def _fetch():
         runs = api.runs(f"{entity}/{WANDB_PROJECT}", filters=filters, per_page=100)
@@ -425,14 +364,19 @@ def scan_eval_ind_runs(run_type: str, verbose: bool = True) -> List[Dict[str, An
     # Parse run names and filter valid ones
     parsed_runs = []
     for run in runs:
-        parsed = parse_run_name(run.name, run_type)
+        parsed = parse_run_name(run.name)
         if parsed:
+            # Skip if leave_out == eval_fold (out-of-distribution, not in-distribution)
+            if parsed["leave_out"] == parsed["eval_fold"]:
+                continue
+            
             parsed["id"] = run.id
             parsed["name"] = run.name
             parsed["created_at"] = _run_created_at(run)
+            parsed["run_type"] = run_type
             parsed_runs.append(parsed)
     
-    print(f"  Parsed {len(parsed_runs)} valid runs")
+    print(f"  Parsed {len(parsed_runs)} valid in-distribution runs")
     
     # Deduplicate by (leave_out, seed, eval_fold), keeping latest
     best_runs = {}
@@ -482,8 +426,6 @@ def download_runs_to_cache(
                 table_df["_leave_out"] = run_info["leave_out"]
                 table_df["_seed"] = run_info["seed"]
                 table_df["_eval_fold"] = run_info["eval_fold"]
-                if "penalty" in run_info:
-                    table_df["_penalty"] = run_info["penalty"]
                 
                 all_rows.append(table_df)
             else:
@@ -768,7 +710,7 @@ def create_combined_eval_ind_figure(
             
             # Title on top row only
             if row_idx == 0:
-                ax.set_title(f"Leave out {leave_out.capitalize()}", fontsize=18, fontweight="bold")
+                ax.set_title(f"Leave out {DATASET_DISPLAY_NAMES[leave_out]}", fontsize=18, fontweight="bold")
             
             # Y-axis label on leftmost only
             if col_idx == 0:
@@ -787,9 +729,9 @@ def create_combined_eval_ind_figure(
             rotation=90,
         )
     
-    # Build two-row legend at bottom
+    # Build three-row legend at bottom
     color_handles = [
-        mpatches.Patch(facecolor=DATASET_COLORS[ds], edgecolor="black", label=ds.capitalize())
+        mpatches.Patch(facecolor=DATASET_COLORS[ds], edgecolor="black", label=DATASET_DISPLAY_NAMES[ds])
         for ds in ALL_DATASETS
     ]
     hatch_handles = [
@@ -797,13 +739,18 @@ def create_combined_eval_ind_figure(
         mpatches.Patch(facecolor="white", edgecolor="black", hatch="//", label="CoT Penalty"),
         mpatches.Patch(facecolor="white", edgecolor="black", hatch="xx", label="Summary Penalty"),
     ]
+    seed_handles = [
+        Line2D([0], [0], marker=SEED_MARKERS[seed], color='black', linestyle='None',
+               markersize=8, label=f'Seed {seed}')
+        for seed in SEEDS
+    ]
     
     # First legend row (colors)
     leg1 = fig.legend(
         color_handles,
         [h.get_label() for h in color_handles],
         loc="upper center",
-        bbox_to_anchor=(0.5, 0.075),
+        bbox_to_anchor=(0.5, 0.095),
         ncol=4,
         frameon=False,
         fontsize=18,
@@ -811,21 +758,32 @@ def create_combined_eval_ind_figure(
         handleheight=2,
     )
     # Second legend row (hatches)
-    fig.legend(
+    leg2 = fig.legend(
         hatch_handles,
         [h.get_label() for h in hatch_handles],
         loc="upper center",
-        bbox_to_anchor=(0.5, 0.025),
+        bbox_to_anchor=(0.5, 0.055),
         ncol=3,
         frameon=False,
         fontsize=18,
         handlelength=3,
         handleheight=2,
     )
+    # Third legend row (seeds)
+    fig.legend(
+        seed_handles,
+        [h.get_label() for h in seed_handles],
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.015),
+        ncol=4,
+        frameon=False,
+        fontsize=18,
+    )
     fig.add_artist(leg1)
+    fig.add_artist(leg2)
     
     fig.suptitle("In-Distribution Evaluation", fontsize=22, fontweight="bold")
-    fig.tight_layout(rect=[0.06, 0.10, 1, 0.95])
+    fig.tight_layout(rect=[0.06, 0.12, 1, 0.95])
     
     return fig
 
@@ -928,7 +886,7 @@ def create_combined_non_parsable_figure(
                 ax.tick_params(left=False)
             
             if row_idx == 0:
-                ax.set_title(f"Leave out {leave_out.capitalize()}", fontsize=18, fontweight="bold")
+                ax.set_title(f"Leave out {DATASET_DISPLAY_NAMES[leave_out]}", fontsize=18, fontweight="bold")
             
             if col_idx == 0:
                 ax.set_ylabel("Non-Parsable (%)", fontsize=18)
@@ -946,25 +904,41 @@ def create_combined_non_parsable_figure(
             rotation=90,
         )
     
-    # Single-row color legend
+    # Two-row legend (colors + seeds)
     color_handles = [
-        mpatches.Patch(facecolor=DATASET_COLORS[ds], edgecolor="black", label=ds.capitalize())
+        mpatches.Patch(facecolor=DATASET_COLORS[ds], edgecolor="black", label=DATASET_DISPLAY_NAMES[ds])
         for ds in ALL_DATASETS
     ]
-    fig.legend(
+    seed_handles = [
+        Line2D([0], [0], marker=SEED_MARKERS[seed], color='black', linestyle='None',
+               markersize=8, label=f'Seed {seed}')
+        for seed in SEEDS
+    ]
+    
+    leg1 = fig.legend(
         color_handles,
         [h.get_label() for h in color_handles],
         loc="upper center",
-        bbox_to_anchor=(0.5, 0.05),
+        bbox_to_anchor=(0.5, 0.07),
         ncol=4,
         frameon=False,
         fontsize=18,
         handlelength=3,
         handleheight=2,
     )
+    fig.legend(
+        seed_handles,
+        [h.get_label() for h in seed_handles],
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.025),
+        ncol=4,
+        frameon=False,
+        fontsize=18,
+    )
+    fig.add_artist(leg1)
     
     fig.suptitle("In-Distribution Non-Parsable Rate", fontsize=22, fontweight="bold")
-    fig.tight_layout(rect=[0.06, 0.07, 1, 0.95])
+    fig.tight_layout(rect=[0.06, 0.09, 1, 0.95])
     
     return fig
 

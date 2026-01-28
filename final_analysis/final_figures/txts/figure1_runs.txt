@@ -1,0 +1,28 @@
+# Runs used in this figure
+# Full wandb run details with all checkpoints
+#============================================================
+
+[code] seed=50, eval_fold=eval_code_formatted
+  checkpoints (20): [25, 200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400, 2600, 2800, 3000, 3200, 3400, 3600, 3800]
+
+[code] seed=50, eval_fold=eval_medical_sycophancy_fact_formatted
+  checkpoints (20): [25, 200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400, 2600, 2800, 3000, 3200, 3400, 3600, 3800]
+
+[score] seed=42, eval_fold=eval_medical_sycophancy_fact_formatted
+  checkpoints (20): [25, 200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400, 2600, 2800, 3000, 3200, 3400, 3600, 3800]
+
+[score] seed=42, eval_fold=eval_revealing_score_formatted
+  checkpoints (20): [25, 200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400, 2600, 2800, 3000, 3200, 3400, 3600, 3800]
+
+[sycophancy] seed=24, eval_fold=eval_medical_sycophancy_fact_formatted
+  checkpoints (20): [25, 200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400, 2600, 2800, 3000, 3200, 3400, 3600, 3800]
+
+[sycophancy] seed=24, eval_fold=eval_sycophancy_formatted
+  checkpoints (20): [25, 200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400, 2600, 2800, 3000, 3200, 3400, 3600, 3800]
+
+[war] seed=50, eval_fold=eval_medical_sycophancy_fact_formatted
+  checkpoints (20): [25, 200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400, 2600, 2800, 3000, 3200, 3400, 3600, 3800]
+
+[war] seed=50, eval_fold=eval_world_affecting_reward_reorg_formatted
+  checkpoints (20): [25, 200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400, 2600, 2800, 3000, 3200, 3400, 3600, 3800]
+

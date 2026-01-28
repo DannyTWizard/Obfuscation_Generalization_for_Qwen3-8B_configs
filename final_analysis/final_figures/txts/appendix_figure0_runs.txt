@@ -1,0 +1,76 @@
+# Runs used in this figure
+# Full wandb run details with all checkpoints
+#============================================================
+
+[base_code] seed=24, eval_fold=eval_code_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+
+[base_code] seed=24, eval_fold=eval_medical_sycophancy_fact_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+
+[base_code] seed=42, eval_fold=eval_code_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+
+[base_code] seed=42, eval_fold=eval_medical_sycophancy_fact_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+
+[base_code] seed=50, eval_fold=eval_code_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+
+[base_code] seed=50, eval_fold=eval_medical_sycophancy_fact_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+
+[base_score] seed=24, eval_fold=eval_medical_sycophancy_fact_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+
+[base_score] seed=24, eval_fold=eval_revealing_score_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+
+[base_score] seed=42, eval_fold=eval_medical_sycophancy_fact_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+
+[base_score] seed=42, eval_fold=eval_revealing_score_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+
+[base_score] seed=50, eval_fold=eval_medical_sycophancy_fact_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+
+[base_score] seed=50, eval_fold=eval_revealing_score_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+
+[base_sycophancy] seed=24, eval_fold=eval_medical_sycophancy_fact_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+
+[base_sycophancy] seed=24, eval_fold=eval_sycophancy_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+
+[base_sycophancy] seed=42, eval_fold=eval_medical_sycophancy_fact_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+
+[base_sycophancy] seed=42, eval_fold=eval_sycophancy_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+
+[base_sycophancy] seed=50, eval_fold=eval_medical_sycophancy_fact_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+
+[base_sycophancy] seed=50, eval_fold=eval_sycophancy_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+
+[base_war] seed=24, eval_fold=eval_medical_sycophancy_fact_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+
+[base_war] seed=24, eval_fold=eval_world_affecting_reward_reorg_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+
+[base_war] seed=42, eval_fold=eval_medical_sycophancy_fact_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+
+[base_war] seed=42, eval_fold=eval_world_affecting_reward_reorg_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+
+[base_war] seed=50, eval_fold=eval_medical_sycophancy_fact_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+
+[base_war] seed=50, eval_fold=eval_world_affecting_reward_reorg_formatted
+  checkpoints (11): [25, 200, 600, 1000, 1400, 1800, 2200, 2600, 3000, 3400, 3800]
+

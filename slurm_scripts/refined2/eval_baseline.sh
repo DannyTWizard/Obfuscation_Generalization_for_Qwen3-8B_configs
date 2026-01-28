@@ -7,7 +7,7 @@ set -e
 
 # Defaults
 DATASETS="war,score,sycophancy,code"
-SEEDS="50,24"
+SEEDS="33"
 DRY_RUN=false
 THROTTLE=4
 WANDB_ENTITY="puria-radmard"

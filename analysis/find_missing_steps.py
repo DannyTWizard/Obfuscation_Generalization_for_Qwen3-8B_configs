@@ -159,7 +159,7 @@ Modes:
         / f"trial_metrics{csv_suffix}.csv"
     )
 
-    seeds = [24, 42, 50]
+    seeds = [24, 42, 50, 33]
 
     expected_steps = sorted(get_expected_steps())
     print(f"Mode: {mode}")

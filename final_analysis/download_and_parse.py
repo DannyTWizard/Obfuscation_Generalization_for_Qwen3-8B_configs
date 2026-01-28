@@ -4,7 +4,8 @@ Config-driven script to download per-trial eval data from W&B tables and compute
 ARCHITECTURE:
     1. SCAN: Find matching runs via atomic W&B queries (cheap, fast)
     2. DOWNLOAD: Fetch raw trial tables and append to cache (expensive, cached)
-    3. PARSE: Compute metrics from cache using parsing config (cheap, repeatable)
+    3. BASELINE: Fetch step-0 baseline evals from separate entity (shared across training types)
+    4. PARSE: Compute metrics from cache using parsing config (cheap, repeatable)
 
 The CACHE is the source of truth for what's downloaded. Different parsing configs
 just reprocess the same cached raw data differently.
@@ -24,7 +25,7 @@ Directory Structure:
             └── download.json
 
 Usage:
-    # Full pipeline: scan -> download missing -> parse
+    # Full pipeline: scan -> download missing -> fetch baselines -> parse
     python download_wandb_trial_data.py --config loo_sum_aggressive
 
     # Re-parse existing cache with current config (no W&B queries)
@@ -35,6 +36,9 @@ Usage:
 
     # Just scan to see what runs exist (no download)
     python download_wandb_trial_data.py --config loo_sum_aggressive --scan-only
+    
+    # Skip baseline fetching
+    python download_wandb_trial_data.py --config loo_sum_aggressive --no-baseline
 """
 
 import argparse
@@ -70,6 +74,14 @@ CHECKPOINTS_DIR = BASE_DIR / ".checkpoints"
 MAX_RETRIES = 5
 INITIAL_BACKOFF_SECONDS = 5
 API_TIMEOUT = 120
+
+# Default baseline configuration
+# Baseline evals (step 0) are shared across training types and live in Nathaniel's entity
+DEFAULT_BASELINE_CONFIG = {
+    "entity": "nathanielmitrani-cfis-upc",
+    "project": "obfuscation_generalization",
+    "seed_config_path": "train.seed",
+}
 
 
 # =============================================================================
@@ -185,9 +197,37 @@ class CheckpointManager:
         if path.exists():
             path.unlink()
     
+    # Baseline checkpoint
+    def _baseline_checkpoint_path(self) -> Path:
+        return self.checkpoint_dir / "baseline.json"
+    
+    def load_baseline_checkpoint(self) -> Set[str]:
+        """Returns set of (seed, eval_fold) tuples already downloaded."""
+        path = self._baseline_checkpoint_path()
+        if path.exists():
+            with open(path, "r") as f:
+                data = json.load(f)
+                return set(tuple(x) for x in data.get("completed", []))
+        return set()
+    
+    def save_baseline_checkpoint(self, completed: Set[Tuple[int, str]]):
+        path = self._baseline_checkpoint_path()
+        data = {
+            "completed": [list(x) for x in completed],
+            "timestamp": datetime.now().isoformat(),
+        }
+        with open(path, "w") as f:
+            json.dump(data, f, indent=2)
+    
+    def clear_baseline_checkpoint(self):
+        path = self._baseline_checkpoint_path()
+        if path.exists():
+            path.unlink()
+    
     def clear_all(self):
         self.clear_scan_checkpoint()
         self.clear_download_checkpoint()
+        self.clear_baseline_checkpoint()
 
 
 # =============================================================================
@@ -204,6 +244,23 @@ def load_cached_run_ids(cache_path: Path) -> Set[str]:
         return set(df["_run_id"].unique())
     except Exception as e:
         print(f"Warning: Error reading cache: {e}")
+        return set()
+
+
+def load_cached_baseline_keys(cache_path: Path) -> Set[Tuple[int, str]]:
+    """Load the set of (seed, eval_fold) baseline keys already in the cache."""
+    if not cache_path.exists():
+        return set()
+    
+    try:
+        df = pd.read_parquet(cache_path, columns=["_seed", "_eval_fold", "_step"])
+        # Baselines have step=0
+        baseline_df = df[df["_step"] == 0]
+        if baseline_df.empty:
+            return set()
+        return set(zip(baseline_df["_seed"], baseline_df["_eval_fold"]))
+    except Exception as e:
+        print(f"Warning: Error reading cache for baselines: {e}")
         return set()
 
 
@@ -586,6 +643,193 @@ def download_missing_runs_to_cache(
         append_to_cache(cache_path, pd.concat(batch_dfs, ignore_index=True))
     
     print(f"\n✓ Downloaded {downloaded_count} runs to cache")
+    return downloaded_count
+
+
+# =============================================================================
+# PHASE 2.5: DOWNLOADING BASELINE (STEP 0) DATA
+# =============================================================================
+
+def query_baseline_run(
+    api: wandb.Api,
+    entity: str,
+    project: str,
+    eval_fold: str,
+    seed: int,
+    seed_config_path: str,
+) -> Optional[wandb.apis.public.Run]:
+    """
+    Query for a baseline run matching the eval_fold and seed.
+    
+    Baseline runs are named like: base_model_eval_{eval_fold}
+    Seed is stored in config at seed_config_path (e.g., "train.seed")
+    """
+    # Build run name pattern
+    run_name = f"base_model_{eval_fold}"
+    
+    filters = {
+        "displayName": run_name,
+        f"config.{seed_config_path}": seed,
+        "state": "finished",
+    }
+    
+    def _fetch():
+        runs = api.runs(f"{entity}/{project}", filters=filters, per_page=10)
+        result = list(runs)
+        return result
+    
+    try:
+        runs = retry_with_backoff(_fetch)
+        if runs:
+            # Return the most recent one if multiple exist
+            return max(runs, key=_run_created_at)
+        return None
+    except Exception as e:
+        print(f"  Warning: Error querying baseline for {eval_fold}/seed={seed}: {e}")
+        return None
+
+
+def get_baseline_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Get baseline config, applying defaults for any missing fields.
+    
+    If no baseline section exists, returns the full default config.
+    If baseline section exists, fills in any missing fields from defaults.
+    """
+    user_baseline = config.get("baseline", {})
+    if user_baseline is None:
+        user_baseline = {}
+    
+    return {
+        "entity": user_baseline.get("entity", DEFAULT_BASELINE_CONFIG["entity"]),
+        "project": user_baseline.get("project", DEFAULT_BASELINE_CONFIG["project"]),
+        "seed_config_path": user_baseline.get("seed_config_path", DEFAULT_BASELINE_CONFIG["seed_config_path"]),
+    }
+
+
+def download_baselines_to_cache(
+    config: Dict[str, Any],
+    cache_path: Path,
+    checkpoint_mgr: CheckpointManager,
+    verbose: bool = True,
+) -> int:
+    """
+    Download baseline (step 0) evaluations and add to cache.
+    
+    Baselines are fetched from the baseline entity/project (typically Nathaniel's),
+    and are replicated for each dataset in the config since they represent the
+    pre-training model state that's shared across all training types.
+    """
+    baseline_config = get_baseline_config(config)
+    segments_config = config["segments"]
+    
+    api = wandb.Api(timeout=API_TIMEOUT)
+    
+    # Baseline source
+    baseline_entity = baseline_config["entity"]
+    baseline_project = baseline_config["project"]
+    seed_config_path = baseline_config["seed_config_path"]
+    
+    # What we need baselines for
+    seeds = segments_config["seeds"]
+    eval_folds = segments_config["eval_folds"]
+    datasets = segments_config["datasets"]  # Will replicate baseline for each
+    
+    # Check what's already cached
+    cached_baseline_keys = load_cached_baseline_keys(cache_path)
+    
+    # Build list of (seed, eval_fold) pairs we need
+    all_pairs = [(seed, eval_fold) for seed in seeds for eval_fold in eval_folds]
+    pending_pairs = [p for p in all_pairs if p not in cached_baseline_keys]
+    
+    # Also check checkpoint for in-progress downloads
+    completed_from_checkpoint = checkpoint_mgr.load_baseline_checkpoint()
+    pending_pairs = [p for p in pending_pairs if p not in completed_from_checkpoint]
+    
+    if not pending_pairs:
+        print(f"All {len(all_pairs)} baseline evals already in cache.")
+        return 0
+    
+    print(f"\nDownloading {len(pending_pairs)} baseline evals ({len(cached_baseline_keys)} already cached)...")
+    print(f"  Source: {baseline_entity}/{baseline_project}")
+    print(f"  Will replicate for datasets: {datasets}")
+    
+    downloaded_count = 0
+    batch_dfs = []
+    batch_size = 5
+    
+    completed = set(completed_from_checkpoint)
+    
+    pbar = tqdm(pending_pairs, desc="Baselines", disable=not verbose)
+    
+    for seed, eval_fold in pbar:
+        if checkpoint_mgr.shutdown_requested:
+            if batch_dfs:
+                append_to_cache(cache_path, pd.concat(batch_dfs, ignore_index=True))
+            checkpoint_mgr.save_baseline_checkpoint(completed)
+            sys.exit(1)
+        
+        pbar.set_postfix_str(f"seed={seed} / {eval_fold[:25]}...")
+        
+        try:
+            run = query_baseline_run(
+                api, baseline_entity, baseline_project,
+                eval_fold, seed, seed_config_path
+            )
+            
+            if run is None:
+                print(f"\n  Warning: No baseline found for seed={seed}, eval_fold={eval_fold}")
+                completed.add((seed, eval_fold))
+                continue
+            
+            # Get the table - baseline runs use eval_fold directly in table name
+            table_key = f"{eval_fold}_samples"
+            table_df = get_table_from_run(run, table_key)
+            
+            if table_df is None:
+                print(f"\n  Warning: No table found in baseline run {run.name}")
+                completed.add((seed, eval_fold))
+                continue
+            
+            # Replicate for each dataset (baseline is shared across training types)
+            for dataset in datasets:
+                df_copy = table_df.copy()
+                df_copy["_run_id"] = f"baseline_{run.id}_{dataset}"  # Unique ID per dataset
+                df_copy["_run_name"] = f"baseline_{run.name}"
+                df_copy["_dataset"] = dataset
+                df_copy["_seed"] = seed
+                df_copy["_eval_fold"] = eval_fold
+                df_copy["_step"] = 0  # Baseline is always step 0
+                
+                batch_dfs.append(df_copy)
+            
+            downloaded_count += 1
+            completed.add((seed, eval_fold))
+            
+            # Periodically flush
+            if len(batch_dfs) >= batch_size * len(datasets):
+                append_to_cache(cache_path, pd.concat(batch_dfs, ignore_index=True))
+                batch_dfs = []
+                checkpoint_mgr.save_baseline_checkpoint(completed)
+            
+            time.sleep(0.1)
+            
+        except Exception as e:
+            print(f"\n  Error downloading baseline seed={seed}, {eval_fold}: {e}")
+            if batch_dfs:
+                append_to_cache(cache_path, pd.concat(batch_dfs, ignore_index=True))
+                batch_dfs = []
+            checkpoint_mgr.save_baseline_checkpoint(completed)
+    
+    pbar.close()
+    
+    # Flush remaining
+    if batch_dfs:
+        append_to_cache(cache_path, pd.concat(batch_dfs, ignore_index=True))
+    
+    checkpoint_mgr.clear_baseline_checkpoint()
+    
+    print(f"\n✓ Downloaded {downloaded_count} baseline evals to cache")
     return downloaded_count
 
 
@@ -1141,7 +1385,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    # Full pipeline: scan -> download -> parse
+    # Full pipeline: scan -> download -> fetch baselines -> parse
     python download_wandb_trial_data.py --config loo_sum_aggressive
 
     # Just re-parse existing cache (no W&B queries)
@@ -1152,6 +1396,9 @@ Examples:
 
     # Force fresh download (clears cache)
     python download_wandb_trial_data.py --config loo_sum_aggressive --force
+    
+    # Skip baseline fetching
+    python download_wandb_trial_data.py --config loo_sum_aggressive --no-baseline
         """,
     )
 
@@ -1161,6 +1408,7 @@ Examples:
     parser.add_argument("--force", "-f", action="store_true", help="Force re-download (clears cache)")
     parser.add_argument("--scan-only", action="store_true", help="Only scan, don't download or parse")
     parser.add_argument("--parse-only", action="store_true", help="Only parse existing cache, no W&B queries")
+    parser.add_argument("--no-baseline", action="store_true", help="Skip baseline (step 0) fetching")
 
     args = parser.parse_args()
 
@@ -1227,6 +1475,7 @@ Examples:
     # Print header
     wandb_config = config["wandb"]
     segments_config = config["segments"]
+    baseline_config = get_baseline_config(config)
     
     print(f"\n{'=' * 70}")
     print("W&B TRIAL DATA DOWNLOADER")
@@ -1239,6 +1488,8 @@ Examples:
     print(f"Eval folds:     {segments_config['eval_folds']}")
     total_segments = len(segments_config['datasets']) * len(segments_config['seeds']) * len(segments_config['eval_folds'])
     print(f"Total segments: {total_segments}")
+    if not args.no_baseline:
+        print(f"Baseline:       {baseline_config['entity']}/{baseline_config['project']}")
     cached_runs = len(load_cached_run_ids(paths["cache"]))
     print(f"Cached runs:    {cached_runs}")
     print(f"Cache:          {paths['cache']}")
@@ -1258,6 +1509,10 @@ Examples:
 
     # Phase 2: Download missing runs to cache
     download_missing_runs_to_cache(config, matching_runs, paths["cache"], checkpoint_mgr, verbose=verbose)
+
+    # Phase 2.5: Download baselines (step 0)
+    if not args.no_baseline:
+        download_baselines_to_cache(config, paths["cache"], checkpoint_mgr, verbose=verbose)
 
     # Phase 3: Parse cache to metrics
     df = parse_cache_to_metrics(

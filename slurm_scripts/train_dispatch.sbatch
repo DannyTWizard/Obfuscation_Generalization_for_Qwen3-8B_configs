@@ -38,7 +38,7 @@ echo "Started: $(date)"
 echo "============================================"
 
 # Combine common args ($@) with job-specific args
-python -m src.train --resume_checkpoint latest "$@" $JOB_ARGS
+python -m src.train "$@" $JOB_ARGS
 EXIT_CODE=$?
 
 echo "============================================"
