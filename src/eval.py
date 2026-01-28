@@ -52,10 +52,22 @@ def run_evaluation(cfg: Union[Dict, DictConfig]) -> None:
     # if not eval_config_name:
     #     raise ValueError("config_name is required in eval config")
 
+    # Check if using base model
+    use_base_model = cfg.get("use_base_model", False)
+
     # Get training run information from config
-    training_group = cfg.training_group
-    training_run_name = cfg.training_run_name
-    artifact_step = cfg.artifact_step
+    training_group = cfg.get("training_group")
+    training_run_name = cfg.get("training_run_name")
+    artifact_step = cfg.get("artifact_step")
+
+    # Validate required fields when not using base model
+    if not use_base_model:
+        if not training_group:
+            raise ValueError("training_group is required when not using base model")
+        if not training_run_name:
+            raise ValueError("training_run_name is required when not using base model")
+        if artifact_step is None:
+            raise ValueError("artifact_step is required when not using base model")
 
     # Wandb config
     wandb_cfg = cfg.wandb
@@ -96,12 +108,13 @@ def run_evaluation(cfg: Union[Dict, DictConfig]) -> None:
             source_dataset_to_system_prompt, resolve=True
         )
 
-    # Derive names
-    use_base_model = cfg.get("use_base_model", False)
-
+    # Derive names for wandb logging
     if use_base_model:
         artifact_name = None
-        assert artifact_step is None
+        assert artifact_step is None, "artifact_step must be None when using base model"
+        # For base model, use special naming
+        eval_group = "eval_base_model"
+        eval_run_name = sanitize_wandb_run_name(f"base_model_{fold}_{eval_config_name}")
 
     else:
         eval_group = f"eval_{training_group}"
@@ -150,9 +163,7 @@ def run_evaluation(cfg: Union[Dict, DictConfig]) -> None:
         wandb_entity=wandb_entity,
         base_model_id=base_model_id,
         tensor_parallel_size=int(model_cfg.get("tensor_parallel_size", 1)),
-        gpu_memory_utilization=float(
-            model_cfg.get("vllm_gpu_memory_utilization", 0.9)
-        ),
+        gpu_memory_utilization=float(model_cfg.get("vllm_gpu_memory_utilization", 0.9)),
     )
 
     # Run evaluation
