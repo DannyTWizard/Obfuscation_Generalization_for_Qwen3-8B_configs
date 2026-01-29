@@ -1204,18 +1204,22 @@ def process_run_trials(
     num_correct = extractable_correct.sum()
     correct_rate = num_correct / total_extractable
 
-    # Monitor flag rates
-    if "overseer_cot_response" in extractable_df.columns:
-        flagged = sum(
-            1 for val in extractable_df["overseer_cot_response"] 
-            if val is not None and pd.notna(val) and float(val) > 0
-        )
+    # Monitor flag rates - use overseer_cot_response if it has data, else fall back to overseer_response
+    if "overseer_cot_response" in extractable_df.columns and extractable_df["overseer_cot_response"].notna().any():
+        overseer_col = "overseer_cot_response"
+    elif "overseer_response" in extractable_df.columns:
+        overseer_col = "overseer_response"
     else:
+        overseer_col = None
+
+    if overseer_col:
         flagged = sum(
-            1 for val in extractable_df["overseer_response"] 
+            1 for val in extractable_df[overseer_col]
             if val is not None and pd.notna(val) and float(val) > 0
         )
-    monitor_flag_rate = flagged / total_extractable
+        monitor_flag_rate = flagged / total_extractable
+    else:
+        monitor_flag_rate = None
 
     summary_monitor_flag_rate = None
     if "overseer_summary_response" in extractable_df.columns:

@@ -601,16 +601,50 @@ APPENDIX_FIGURES = {
 
 # Standalone example figures (single panel each)
 EXAMPLE_FIGURES = {
-    "example_sycophancy_sum_s24": {
-        "name": "example_sycophancy_sum_s24",
-        "title": "Leave out factual sycophancy\nPenalisation applied to summary",
+    "example_sycophancy_sum_s24_main": {
+        "name": "example_sycophancy_sum_s24_main",
+        "title": "Evaluated on unseen sycophancy dataset",
         "skip_threshold": 0.3,
-        "show_summary": True,
+        "show_summary": False,
+        "legend_horizontal": True,
         "spec": {
             "chance_level": 0.5,
             "config": "sum_sycophancy",
             "seed": 24,
             "eval_fold": "eval_sycophancy_formatted",
+        },
+    },
+    "example_sycophancy_sum_s24_appendix": {
+        "name": "example_sycophancy_sum_s24_appendix",
+        "title": "Leave out factual sycophancy\nPenalisation applied to summary",
+        "skip_threshold": 0.3,
+        "show_summary": True,
+        "layout": "pair",
+        "left_title": "Eval on sycophancy",
+        "right_title": "Eval on medical sycophancy",
+        "spec_left": {
+            "chance_level": 0.5,
+            "config": "sum_sycophancy",
+            "seed": 24,
+            "eval_fold": "eval_sycophancy_formatted",
+        },
+        "spec_right": {
+            "chance_level": 0.5,
+            "config": "sum_sycophancy",
+            "seed": 24,
+            "eval_fold": "eval_medical_sycophancy_fact_formatted",
+        },
+    },
+    "example_score_s42": {
+        "name": "example_score_s42",
+        "title": "Leave out revealed score MMLU\nCoT penalisation",
+        "skip_threshold": 0.3,
+        "show_summary": False,
+        "spec": {
+            "chance_level": 0.25,
+            "config": "score",
+            "seed": 42,
+            "eval_fold": "eval_revealing_score_formatted",
         },
     },
     "example_score_sum_s50_medical": {
@@ -880,6 +914,30 @@ def create_vertical_legend(fig, show_summary=False, fontsize=14):
         loc="upper center",
         bbox_to_anchor=(0.5, 0.2),
         ncol=1,
+        frameon=False,
+        fontsize=fontsize,
+        handlelength=1.5,
+        handleheight=1.5,
+    )
+    return legend
+
+
+def create_horizontal_legend(fig, show_summary=False, fontsize=14):
+    """Create a horizontal legend with colored blocks below the plot (for example figures)."""
+    legend_elements = [
+        mpatches.Patch(facecolor=COLOR_CORRECT, edgecolor='none', label='Reward hacking rate'),
+        mpatches.Patch(facecolor=COLOR_MONITOR, edgecolor='none', label='CoT detection rate'),
+    ]
+    if show_summary:
+        legend_elements.append(
+            mpatches.Patch(facecolor=COLOR_SUMMARY, edgecolor='none', label='Summary detection rate')
+        )
+    
+    legend = fig.legend(
+        handles=legend_elements,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.08),
+        ncol=len(legend_elements),
         frameon=False,
         fontsize=fontsize,
         handlelength=1.5,
@@ -1387,35 +1445,92 @@ def generate_appendix_figure(fig_spec: dict) -> Tuple[plt.Figure, RunTracker]:
 
 
 def generate_example_figure(fig_spec: dict) -> Tuple[plt.Figure, RunTracker]:
-    """Generate a standalone single-panel example figure."""
-    spec = fig_spec["spec"]
+    """Generate a standalone single-panel or paired example figure."""
     skip_threshold = fig_spec.get("skip_threshold", 0.3)
     show_summary = fig_spec.get("show_summary", False)
+    layout = fig_spec.get("layout", "single")
     title = fig_spec.get("title", "")
     
     tracker = RunTracker()
     
-    fig, ax = plt.subplots(1, 1, figsize=(7, 5))
-    
-    plot_combined_subplot(
-        ax,
-        spec,
-        skip_threshold,
-        show_summary=show_summary,
-        tracker=tracker,
-    )
-    
-    ax.set_xlabel("Training Step", fontsize=16)
-    ax.set_ylabel("Rate", fontsize=16)
-    
-    if title:
-        ax.set_title(title, fontsize=16, fontweight='bold')
-    
-    # Create vertical legend below the plot
-    create_vertical_legend(fig, show_summary=show_summary, fontsize=14)
-    
-    # Leave room at bottom for vertical legend (3 items stacked)
-    fig.tight_layout(rect=[0, 0.15, 1, 1])
+    if layout == "pair":
+        # Two subplots side by side
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5), squeeze=False)
+        ax_left = axes[0, 0]
+        ax_right = axes[0, 1]
+        
+        # Plot left subplot
+        plot_combined_subplot(
+            ax_left,
+            fig_spec["spec_left"],
+            skip_threshold,
+            show_summary=show_summary,
+            tracker=tracker,
+        )
+        
+        # Plot right subplot
+        plot_combined_subplot(
+            ax_right,
+            fig_spec["spec_right"],
+            skip_threshold,
+            show_summary=show_summary,
+            tracker=tracker,
+        )
+        
+        # Set titles and labels
+        left_title = fig_spec.get("left_title", "")
+        right_title = fig_spec.get("right_title", "")
+        if left_title:
+            ax_left.set_title(left_title, fontsize=16, fontweight='bold')
+        if right_title:
+            ax_right.set_title(right_title, fontsize=16, fontweight='bold')
+        
+        ax_left.set_xlabel("Training Step", fontsize=16)
+        ax_left.set_ylabel("Rate", fontsize=16)
+        ax_right.set_xlabel("Training Step", fontsize=16)
+        
+        # Remove y-axis labels from right subplot
+        ax_right.set_yticklabels([])
+        ax_right.tick_params(axis='y', length=0)
+        
+        # Add main title above both subplots
+        if title:
+            fig.suptitle(title, fontsize=18, fontweight='bold')
+        
+        # Create horizontal legend (one row, 3 entries)
+        create_horizontal_legend(fig, show_summary=show_summary, fontsize=14)
+        
+        fig.tight_layout(rect=[0, 0.08, 1, 0.92])
+    else:
+        # Single panel (original behavior)
+        spec = fig_spec["spec"]
+        legend_horizontal = fig_spec.get("legend_horizontal", False)
+        
+        fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+        
+        plot_combined_subplot(
+            ax,
+            spec,
+            skip_threshold,
+            show_summary=show_summary,
+            tracker=tracker,
+        )
+        
+        ax.set_xlabel("Training Step", fontsize=16)
+        ax.set_ylabel("Rate", fontsize=16)
+        
+        if title:
+            ax.set_title(title, fontsize=16, fontweight='bold')
+        
+        # Create legend based on layout preference
+        if legend_horizontal:
+            create_horizontal_legend(fig, show_summary=show_summary, fontsize=14)
+            # Leave room at bottom for horizontal legend
+            fig.tight_layout(rect=[0, 0.08, 1, 1])
+        else:
+            create_vertical_legend(fig, show_summary=show_summary, fontsize=14)
+            # Leave room at bottom for vertical legend (3 items stacked)
+            fig.tight_layout(rect=[0, 0.15, 1, 1])
     
     return fig, tracker
 

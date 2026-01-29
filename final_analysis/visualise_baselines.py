@@ -682,11 +682,11 @@ def create_baselines_figure(metrics_df: pd.DataFrame) -> plt.Figure:
     
     # Row 4: Open vs closed marker explanation
     marker_handles = [
-        Line2D([0], [0], marker='o', color='black', linestyle='None',
-               markersize=8, label='Valid (included in avg)'),
-        Line2D([0], [0], marker='o', markerfacecolor='none', markeredgecolor='black',
-               linestyle='None', markersize=8, markeredgewidth=1.5,
-               label=f'Non-parsable >{NON_PARSABLE_THRESHOLD:.0%} (excluded)'),
+        # Line2D([0], [0], marker='o', color='black', linestyle='None',
+        #        markersize=8, label='Valid (included in avg)'),
+        # Line2D([0], [0], marker='o', markerfacecolor='none', markeredgecolor='black',
+        #        linestyle='None', markersize=8, markeredgewidth=1.5,
+        #        label=f'Non-parsable >{NON_PARSABLE_THRESHOLD:.0%} (excluded)'),
     ]
     
     # Add legends
@@ -721,15 +721,15 @@ def create_baselines_figure(metrics_df: pd.DataFrame) -> plt.Figure:
         frameon=False,
         fontsize=14,
     )
-    fig.legend(
-        marker_handles,
-        [h.get_label() for h in marker_handles],
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.005),
-        ncol=2,
-        frameon=False,
-        fontsize=14,
-    )
+    # fig.legend(
+    #     marker_handles,
+    #     [h.get_label() for h in marker_handles],
+    #     loc="upper center",
+    #     bbox_to_anchor=(0.5, -0.005),
+    #     ncol=2,
+    #     frameon=False,
+    #     fontsize=14,
+    # )
     fig.add_artist(leg1)
     fig.add_artist(leg2)
     fig.add_artist(leg3)
