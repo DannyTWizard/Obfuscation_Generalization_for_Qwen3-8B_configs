@@ -19,10 +19,14 @@ defaults:
 # Can be overridden by experiment configs or via CLI
 config_name: ""
 
-# Training run information (required for eval - must be set via CLI)
-training_group: ???
-training_run_name: ???
-artifact_step: ???
+# Training run information (required for eval unless use_base_model=true)
+# Set these via CLI when evaluating fine-tuned models
+training_group: null
+training_run_name: null
+artifact_step: null
+
+# Set to true to evaluate the base model without loading a checkpoint
+use_base_model: false
 
 # Hydra configuration
 hydra:
