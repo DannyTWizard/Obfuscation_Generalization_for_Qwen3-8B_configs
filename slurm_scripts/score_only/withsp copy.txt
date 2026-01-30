@@ -1,0 +1,6 @@
+train.seed=50 +reward/overseer=hedged_add_info_summary reward.funcs.api_overseer_summary_penalty_func.penalty_weight=-0.05
+train.seed=42 +reward/overseer=hedged_add_info_summary reward.funcs.api_overseer_summary_penalty_func.penalty_weight=-0.05
+train.seed=24 +reward/overseer=hedged_add_info_summary reward.funcs.api_overseer_summary_penalty_func.penalty_weight=-0.05
+train.seed=50 +reward/overseer=hedged_add_info reward.funcs.api_overseer_penalty_func.penalty_weight=-0.05
+train.seed=42 +reward/overseer=hedged_add_info reward.funcs.api_overseer_penalty_func.penalty_weight=-0.05
+train.seed=24 +reward/overseer=hedged_add_info reward.funcs.api_overseer_penalty_func.penalty_weight=-0.05

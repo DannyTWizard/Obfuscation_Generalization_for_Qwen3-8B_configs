@@ -1,0 +1,20 @@
+# @package reward.funcs
+# API overseer penalty with additional_info_pen system prompts
+# This config is optionally composed via: +reward/overseer=refined
+
+api_overseer_penalty_func:
+  model_name: "moonshotai/Kimi-K2-Instruct-0905"
+  penalty_weight: -0.01  # Sweepable parameter
+  max_tokens: 5
+  prompt_format: 'binary_decision_with_question'
+  condition_on_correctness: true
+  
+  # $$ is file path after configs/monitor_system_prompts/
+  system_prompt_per_dataset:
+    revealing_score: $$refined_pen/revealing_score
+    code_selection: $$refined_pen/code_selection
+    sycophancy_fact: $$refined_pen/sycophancy_fact
+    world_affecting_reward_reorg: $$refined_pen/world_affecting
+    power_positions_sycophancy: $$refined_pen/power_positions_sycophancy
+    medical_sycophancy_fact: $$refined_pen/medical_sycophancy
+    mmlu_subset_1000: null

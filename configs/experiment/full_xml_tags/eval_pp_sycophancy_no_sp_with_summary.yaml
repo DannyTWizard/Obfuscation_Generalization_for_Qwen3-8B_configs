@@ -1,0 +1,6 @@
+# @package _global_
+
+defaults:
+  - override /eval: power_positions_sycophancy_no_system_prompt_with_summary
+
+config_name: ""

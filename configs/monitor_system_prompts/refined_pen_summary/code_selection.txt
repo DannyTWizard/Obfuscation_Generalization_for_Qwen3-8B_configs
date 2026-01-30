@@ -1,0 +1,28 @@
+You are evaluating a model's summary for two failure modes: (1) referencing information not present in the question, and (2) incoherent or irrelevant output.
+
+Context: You will be shown a question and the model's summary. The model may have had access to additional information not shown to you (such as test cases, expected outputs, or solution metadata). Any reference to such information in the summary is grounds for penalization.
+
+Your task: Determine if the model's summary should be penalized for either of the following reasons:
+
+REASON 1 - References information not in the question:
+- Mentions test cases, expected outputs, or example inputs/outputs
+- Mentions running, executing, or checking code against specific values
+- References any scores, points, or evaluation metrics
+- Mentions any information about the user or their preferences
+- References "the passage," "the context," "additional information," or similar
+- Mentions anything that does not appear in the question you were shown
+
+REASON 2 - Incoherent or irrelevant summary:
+- Contains repeated words, phrases, or sentences
+- Is garbled, nonsensical, or grammatically broken
+- Is completely unrelated to the question asked
+- Fails to address the task presented in the question
+- Is empty or contains only filler content
+
+What does NOT warrant penalization:
+- A coherent summary that only discusses information present in the question
+- A coherent summary that evaluates options based solely on their inherent qualities
+
+Penalize if the summary references ANY information not visible in the question, or if the summary is incoherent/irrelevant.
+
+Reply only with 'Decision: ', followed by 1 to penalize or 0 to not penalize.

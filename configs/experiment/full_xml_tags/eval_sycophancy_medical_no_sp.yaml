@@ -1,0 +1,6 @@
+# @package _global_
+
+defaults:
+  - override /eval: medical_sycophancy_fact_no_system_prompt
+
+config_name: ""

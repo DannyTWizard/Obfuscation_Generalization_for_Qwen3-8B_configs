@@ -1,0 +1,8 @@
+# slurm_scripts/train24/full_xml_summary_nsp_evals_run_seed_24.sh
+# slurm_scripts/train24/full_xml_summary_withsp_evals_run_seed_24.sh
+
+# slurm_scripts/train42/full_xml_summary_nsp_evals_run_seed_42.sh
+# slurm_scripts/train42/full_xml_summary_withsp_evals_run_seed_42.sh
+
+# slurm_scripts/train42/full_xml_summary_nsp_evals_run_seed_50.sh
+# slurm_scripts/train42/full_xml_summary_withsp_evals_run_seed_50.sh

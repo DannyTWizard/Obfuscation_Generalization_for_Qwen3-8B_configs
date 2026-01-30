@@ -1,0 +1,1 @@
+data=leave_out_score_full_xml config_name=run_nsp_summary_score

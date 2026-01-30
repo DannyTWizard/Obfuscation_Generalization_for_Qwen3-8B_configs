@@ -1,182 +1,165 @@
-import os, json, argparse, wandb, sys, yaml, dotenv
-from typing import Any, Dict, List, Optional, Tuple
+"""
+Training script with HuggingFace dataset loading and W&B logging.
 
-from trl import GRPOConfig, GRPOTrainer
+Usage:
+    # Basic training with experiment config
+    python -m src.train experiment=full_xml_tags/train
+    
+    # Training with overseer penalty
+    python -m src.train experiment=full_xml_tags/train +reward/overseer=standard
+    
+    # Resume from checkpoint
+    python -m src.train experiment=full_xml_tags/train --resume_checkpoint latest
+    python -m src.train experiment=full_xml_tags/train --resume_checkpoint 500
+"""
 
-from src.utils.rewards import REWARD_FUNCS
-from src.utils.config import load_config_with_defaults, ensure_dir, create_timestamped_parent_dir
-from src.utils.parse import count_name_mentions_in_cot, count_name_mentions_in_summary, count_cot_words, count_summary_words, count_custom_terms_in_cot, count_custom_terms_in_summary
-from src.utils.wandb_logging import log_checkpoint_artifact, save_initial_model, log_config_artifact
-from src.utils.callbacks import CheckpointCallback, TrackingCallback
+import os
+import tempfile
+import shutil
+from typing import Any, Dict, List, Optional, Union
 
+import dotenv
+import hydra
+from hydra.core.hydra_config import HydraConfig
+from omegaconf import DictConfig, OmegaConf
+import wandb
 from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from trl import apply_chat_template
 from peft import LoraConfig, get_peft_model
+from trl import GRPOConfig, GRPOTrainer, apply_chat_template
 
-from datetime import datetime
-
-
-class Tee:
-    """Write to both stdout and a file simultaneously."""
-    def __init__(self, file_path):
-        self.file = open(file_path, 'w')
-        self.stdout = sys.stdout
-        self.stderr = sys.stderr
-        
-    def write(self, data):
-        self.file.write(data)
-        self.stdout.write(data)
-        
-    def flush(self):
-        self.file.flush()
-        self.stdout.flush()
-        
-    def close(self):
-        self.file.close()
+from src.utils.rewards import REWARD_FUNCS
+from src.utils.parse import (
+    count_name_mentions_in_cot,
+    count_name_mentions_in_summary,
+    count_cot_words,
+    count_summary_words,
+    count_custom_terms_in_cot,
+    count_custom_terms_in_summary,
+)
+from src.utils.wandb_logging import (
+    log_checkpoint_artifact,
+    sanitize_wandb_run_name,
+    build_run_name_from_overrides,
+)
+from src.utils.callbacks import CheckpointCallback, TrackingCallback
+from src.utils.resume import parse_resume_arg, prepare_resume, ResumeInfo
 
 
 # Global tracking data
 _tracking: Dict[str, List] = {
-    "cot_user": [], "cot_name": [], "summary_user": [], 
-    "summary_name": [], "cot_words": [], "summary_words": []
+    "cot_user": [],
+    "cot_name": [],
+    "summary_user": [],
+    "summary_name": [],
+    "cot_words": [],
+    "summary_words": [],
 }
 
 
 def tracking_wrapper(original_func):
     """Collect tracking data during reward computation."""
+
     def wrapper(prompts, completions, **kwargs):
-        _tracking["cot_user"].extend(count_custom_terms_in_cot(prompts=prompts, completions=completions, high_reward_answer=None, terms=['user']))
-        _tracking["cot_name"].extend(count_name_mentions_in_cot(prompts=prompts, completions=completions, high_reward_answer=None))
-        _tracking["summary_user"].extend(count_custom_terms_in_summary(prompts=prompts, completions=completions, high_reward_answer=None, terms=['user']))
-        _tracking["summary_name"].extend(count_name_mentions_in_summary(prompts=prompts, completions=completions, high_reward_answer=None))
-        _tracking["cot_words"].extend(count_cot_words(prompts=prompts, completions=completions, high_reward_answer=None))
-        _tracking["summary_words"].extend(count_summary_words(prompts=prompts, completions=completions, high_reward_answer=None))
+        _tracking["cot_user"].extend(
+            count_custom_terms_in_cot(
+                prompts=prompts,
+                completions=completions,
+                high_reward_answer=None,
+                terms=["user"],
+            )
+        )
+        _tracking["cot_name"].extend(
+            count_name_mentions_in_cot(
+                prompts=prompts, completions=completions, high_reward_answer=None
+            )
+        )
+        _tracking["summary_user"].extend(
+            count_custom_terms_in_summary(
+                prompts=prompts,
+                completions=completions,
+                high_reward_answer=None,
+                terms=["user"],
+            )
+        )
+        _tracking["summary_name"].extend(
+            count_name_mentions_in_summary(
+                prompts=prompts, completions=completions, high_reward_answer=None
+            )
+        )
+        _tracking["cot_words"].extend(
+            count_cot_words(
+                prompts=prompts, completions=completions, high_reward_answer=None
+            )
+        )
+        _tracking["summary_words"].extend(
+            count_summary_words(
+                prompts=prompts, completions=completions, high_reward_answer=None
+            )
+        )
         return original_func(prompts, completions, **kwargs)
+
     wrapper.__name__ = original_func.__name__
     return wrapper
 
 
-def get_reward_functions(rewards_config: Dict[str, Dict[str, Any]]) -> list:
-    """Create reward function instances from config.
-    
-    Args:
-        rewards_config: Dict mapping reward function names to their configs
-            Example:
-            {
-                "correctness_reward_func": {},
-                "cot_think_user_penalty_func": {
-                    "count_weight": 1e-6,
-                    "penalty_cap": 1.0
-                },
-                "api_overseer_penalty_func": {
-                    "model_name": "accounts/fireworks/models/qwen2p5-72b-instruct",
-                    "system_prompt": "...",
-                    ...
-                }
-            }
-        
-    Returns:
-        List of reward function instances
-    """
+def get_reward_functions(rewards_config: Union[Dict, DictConfig]) -> list:
+    """Create reward function instances from config."""
     reward_funcs = []
-    
+
+    # Convert DictConfig to dict for iteration
+    if isinstance(rewards_config, DictConfig):
+        rewards_config = OmegaConf.to_container(rewards_config, resolve=True)
+
     for func_name, func_config in rewards_config.items():
         if func_name not in REWARD_FUNCS:
             raise ValueError(
                 f"Unknown reward function: {func_name}. "
                 f"Available functions: {list(REWARD_FUNCS.keys())}"
             )
-        
-        # Get the factory function and call it with the config
+
         factory = REWARD_FUNCS[func_name]
+        # Ensure func_config is a dict
+        if func_config is None:
+            func_config = {}
         reward_func = factory(func_config)
-        
+
         # Wrap first function for tracking
         if len(reward_funcs) == 0:
             reward_func = tracking_wrapper(reward_func)
-        
+
         reward_funcs.append(reward_func)
-    
+
     return reward_funcs
 
 
-
-def setup_wandb_and_directories(
-    cfg: Dict, 
-) -> Tuple[str, str, str, bool]:
-    """Initialize W&B and create training directories.
-    
-    Returns:
-        Tuple of (train_dir, saved_cfg_path, dataset_name, is_main_process)
+def derive_wandb_group(hf_dataset: str) -> str:
     """
-    # Determine if this is main process
-    local_rank = int(os.environ.get("LOCAL_RANK", 0))
-    is_main_process = local_rank == 0
-    
-    # Initialize W&B on main process only
-    wandb_cfg = cfg["wandb"]
-    wandb_project = wandb_cfg["project"]
-    wandb_run_id = wandb_cfg.get("run_id", None)
-    
-    if wandb_project and is_main_process:
-        run = wandb.init(
-            entity='geodesic',
-            project=wandb_project, 
-            config=cfg,
-            id=wandb_run_id,
-            resume="allow" if wandb_run_id else None
-        )
-    
-    # Create versioned parent directory
-    parent_dir = create_timestamped_parent_dir(
-        f"results/{wandb_project}",
-        prefix=run.name
-    )
-    
-    # Determine run suffix from dataset or wandb run name
-    data_cfg = cfg["data"]
-    ds_path = data_cfg.get("dataset_path", "datasets/reward_hack/sycophancy_fact.jsonl")
-    dataset_name = os.path.basename(ds_path).replace(".jsonl", "")
-    
-    # Create training subdirectory
-    train_dir = os.path.join(parent_dir, "train")
-    ensure_dir(train_dir)
+    Derive wandb group name from HF dataset path.
 
-    # Save config copy and log to W&B
-    config_copy_path = os.path.join(train_dir, 'config.yaml')
-    with open(config_copy_path, 'w') as f:
-        yaml.dump(cfg, f)
-    if wandb.run is not None and is_main_process:
-        log_config_artifact(config_copy_path)
-    
-    # Save information about wandb run
-    # Save information about wandb run
-    wandb_info = {
-        "wandb_project_name": wandb_project,
-        "wandb_run_name": wandb.run.name,
-        "time_created": datetime.utcfromtimestamp(wandb.run.start_time).strftime("%Y%m%d_%H%M%S"),
-        "checkpoints": []
-    }
-    wandb_info_path = os.path.join(train_dir, "wandb_info.json")
-    with open(wandb_info_path, "w") as f:
-        json.dump(wandb_info, f, indent=2)
-    
-    return train_dir, config_copy_path, wandb_info_path, dataset_name, is_main_process
-
-
-def setup_model_and_tokenizer(cfg: Dict) -> Tuple[Any, Any, str]:
-    """Load base model, apply LoRA, and load tokenizer.
-    
-    Returns:
-        Tuple of (model, tokenizer, model_id)
+    Example: "account/obf_gen_experiment_v1_seed_42" -> "experiment_v1_seed_42"
     """
-    model_id = cfg.get("model", {}).get("base_model_id")
+    # Strip account prefix if present
+    if "/" in hf_dataset:
+        dataset_name = hf_dataset.split("/", 1)[1]
+    else:
+        dataset_name = hf_dataset
+
+    # Strip "obf_gen_" prefix if present
+    if dataset_name.startswith("obf_gen_"):
+        dataset_name = dataset_name[len("obf_gen_") :]
+
+    return dataset_name
+
+
+def setup_model_and_tokenizer(cfg: Union[Dict, DictConfig]) -> tuple[Any, Any, str]:
+    """Load base model, apply LoRA, and load tokenizer."""
+    model_id = cfg.model.base_model_id
     model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype="auto")
     tokenizer = AutoTokenizer.from_pretrained(model_id)
-    
+
     # Apply LoRA configuration
-    lora_cfg = cfg.get("lora", {})
+    lora_cfg = cfg.lora
     lora_config = LoraConfig(
         task_type="CAUSAL_LM",
         r=int(lora_cfg.get("r", 16)),
@@ -184,315 +167,252 @@ def setup_model_and_tokenizer(cfg: Dict) -> Tuple[Any, Any, str]:
         target_modules=lora_cfg.get("target_modules", "all-linear"),
     )
     model = get_peft_model(model, lora_config)
-    
-    return model, tokenizer, model_id
-    
 
-def transform_dataset(dataset_path: str, instruction_suffix: str, source_dataset_to_system_prompt: Dict[str, str]) -> Any:
-    """Load and transform dataset for training."""
-    dataset = load_dataset("json", data_files=dataset_path)
+    return model, tokenizer, model_id
+
+
+def transform_dataset(
+    dataset: Any,
+    instruction_suffix: str,
+    source_dataset_to_system_prompt: Dict[str, str],
+) -> Any:
+    """Transform dataset for training."""
     data = dataset.map(
         lambda x: {
-            "prompt": ([
-                {
-                    "role": "system",
-                    "content": source_dataset_to_system_prompt[x["source_dataset"]],
-                }
-            ] if source_dataset_to_system_prompt.get(x["source_dataset"]) else []) + [
+            "prompt": (
+                [
+                    {
+                        "role": "system",
+                        "content": (
+                            source_dataset_to_system_prompt[x["source_dataset"]]
+                        ),
+                    }
+                ]
+                if source_dataset_to_system_prompt[x["source_dataset"]]
+                else []
+            )
+            + [
                 {
                     "role": "user",
-                    "content": x["prompt_list"][0] + instruction_suffix,  # type: ignore[index]
+                    "content": x["question"] + instruction_suffix,
                 }
             ],
-            "high_reward_answer": x["high_reward_answer"],  # type: ignore[index]
+            "high_reward_answer": x["high_reward_answer"],
         }
     )
     return data
-    
-def setup_dataset(cfg: Dict, tokenizer: Any) -> Tuple[Any, str]:
-    """Transform and prepare dataset for training.
-    
-    Returns:
-        Tuple of (dataset, dataset_path)
-    """
-    data_cfg = cfg.get("data", {})
-    dataset_path = data_cfg.get("dataset_path", "datasets/reward_hack/sycophancy_fact.jsonl")
-    instruction_suffix = data_cfg.get("instruction_suffix")
-    source_dataset_to_system_prompt = data_cfg["source_dataset_to_system_prompt"]
 
-    dataset = transform_dataset(dataset_path, instruction_suffix, source_dataset_to_system_prompt)
+
+def setup_dataset(cfg: Union[Dict, DictConfig], tokenizer: Any) -> tuple[Any, str]:
+    """Load from HuggingFace and prepare dataset for training."""
+    data_cfg = cfg.data
+    hf_dataset = data_cfg.hf_dataset
+    instruction_suffix = data_cfg.get("instruction_suffix", "")
+
+    # Convert to dict for proper handling
+    source_dataset_to_system_prompt = data_cfg.get(
+        "source_dataset_to_system_prompt", {}
+    )
+    if isinstance(source_dataset_to_system_prompt, DictConfig):
+        source_dataset_to_system_prompt = OmegaConf.to_container(
+            source_dataset_to_system_prompt, resolve=True
+        )
+
+    # Load from HuggingFace
+    dataset = load_dataset(hf_dataset)
+
+    # Transform
+    dataset = transform_dataset(
+        dataset, instruction_suffix, source_dataset_to_system_prompt
+    )
     dataset = dataset.map(apply_chat_template, fn_kwargs={"tokenizer": tokenizer})
-    
-    return dataset, dataset_path
+
+    return dataset, hf_dataset
 
 
-def download_wandb_artifact_if_needed(artifact_name: str, output_dir: str, is_main_process: bool) -> Optional[str]:
-    """Download W&B artifact checkpoint if specified.
-    
-    Args:
-        artifact_name: Full W&B artifact name (e.g., 'entity/project/artifact:version')
-        output_dir: Directory to download the checkpoint to
-        is_main_process: Whether this is the main process
-        
-    Returns:
-        Path to the downloaded checkpoint directory
+class ResumableGRPOTrainer(GRPOTrainer):
     """
-    if not artifact_name:
-        return None
+    GRPOTrainer with support for resuming with correct GRPO buffer indexing.
+    
+    The key issue: GRPO uses `_step` to index into `_buffered_inputs`.
+    When resuming, we need `_step` to match the resume point.
+    """
+    
+    def __init__(self, *args, resume_step: Optional[int] = None, **kwargs):
+        self._resume_step = resume_step
+        super().__init__(*args, **kwargs)
         
-    if is_main_process:
-        print(f"Downloading W&B artifact: {artifact_name}")
-        
-    api = wandb.Api()
-    artifact = api.artifact(artifact_name, type='model')
+        # Initialize _step from resume point for correct buffer indexing
+        if self._resume_step is not None:
+            self._step = self._resume_step
+            print(f"Initialized trainer._step to {self._step}")
+
+
+def run_training(cfg: Union[Dict, DictConfig], resume_checkpoint: Optional[str] = None) -> None:
+    """Main training entry point with synchronous W&B uploading and robust cleanup."""
+    config_name = cfg.config_name
+    if not config_name:
+        raise ValueError("config_name is required")
+
+    # 1. Environment & Data Setup
+    model, tokenizer, model_id = setup_model_and_tokenizer(cfg)
+    dataset, hf_dataset = setup_dataset(cfg, tokenizer)
+    wandb_group = derive_wandb_group(hf_dataset)
+
+    # 2. Compute run_name early (needed for resume lookup)
+    wandb_cfg = cfg.wandb
+    run_name_mapping = wandb_cfg.get("run_name_mapping", {})
+    if HydraConfig.initialized() and run_name_mapping:
+        overrides = list(HydraConfig.get().overrides.task)
+        run_name = build_run_name_from_overrides(
+            overrides, run_name_mapping, config_name
+        )
+    else:
+        run_name = sanitize_wandb_run_name(config_name)
+
+    # 3. Handle Resume Checkpoint
+    resume_info: Optional[ResumeInfo] = None
     
-    # Create a unique directory name based on artifact name
-    # e.g., "model_valiant-plasma-10_step_400_v0"
-    artifact_dir_name = artifact_name.split('/')[-1].replace(':', '_')
-    checkpoint_path = os.path.join(output_dir, artifact_dir_name)
-    
-    # Download to checkpoint location
-    artifact.download(root=checkpoint_path)
-    
-    if is_main_process:
-        print(f"Downloaded checkpoint to: {checkpoint_path}")
-        
-    return checkpoint_path
+    if resume_checkpoint is not None:
+        resume_info = prepare_resume(
+            resume_checkpoint=resume_checkpoint,
+            entity=wandb_cfg.get("entity"),
+            project=wandb_cfg.get("project"),
+            group=wandb_group,
+            run_name=run_name,
+            current_config=cfg,
+            verify_config=True,
+        )
 
+    # Absolute path ensures no confusion between local ranks
+    output_dir = os.path.abspath(os.path.join("local_outputs", wandb_group, run_name))
 
-def ratify_checkpoint(checkpoint_name: str, output_dir: str, is_main_process: bool):
-
-    # Auto-detect latest checkpoint if "latest" is specified
-    if checkpoint_name == "latest":
-        checkpoint_dirs = [
-            d for d in os.listdir(output_dir) 
-            if d.startswith("checkpoint-") and os.path.isdir(os.path.join(output_dir, d))
-        ]
-        if checkpoint_dirs:
-            checkpoint_dirs.sort(key=lambda x: int(x.split("-")[1]))
-            checkpoint_name = os.path.join(output_dir, checkpoint_dirs[-1])
-            if is_main_process:
-                print(f"Auto-detected latest checkpoint: {checkpoint_name}")
-        else:
-            if is_main_process:
-                print("No checkpoints found, starting from scratch")
-            checkpoint_name = None
-    
-    # Train
-    if checkpoint_name and is_main_process:
-        print(f"Checkpoint found: {checkpoint_name}")
-
-    return checkpoint_name
-
-
-def save_final_model_and_metadata(
-    trainer: GRPOTrainer,
-    output_dir: str,
-    train_dir: str,
-    saved_cfg_path: str,
-    model_id: str,
-    dataset_name: str,
-    dataset_path: str,
-    train_cfg: Dict,
-    wandb_project: str,
-    is_main_process: bool,
-    wandb_info_path: str
-) -> None:
-    """Save final model artifact and training metadata."""
-    if not is_main_process:
-        return
-    
-    # Save final model artifact
-    checkpoint_dirs = [d for d in os.listdir(output_dir) if d.startswith("checkpoint-")]
-    if checkpoint_dirs:
-        checkpoint_dirs.sort(key=lambda x: int(x.split("-")[1]))
-        final_checkpoint = os.path.join(output_dir, checkpoint_dirs[-1])
-        
-        if os.path.exists(final_checkpoint) and wandb.run is not None:
-            log_checkpoint_artifact(
-                checkpoint_path=final_checkpoint,
-                step='final',
-                run_name=wandb.run.name,
-                metadata={
-                    "base_model": model_id,
-                    "dataset": dataset_name,
-                    "training_status": "completed",
-                    "final_step": trainer.state.global_step,
-                },
-                local_info_path=wandb_info_path
+    try:
+        # 4. Initialize W&B (Master process only)
+        if wandb_cfg.get("project") and int(os.environ.get("LOCAL_RANK", 0)) == 0:
+            wandb_config = OmegaConf.to_container(cfg, resolve=True)
+            
+            # Add resume info to config
+            if resume_info is not None:
+                wandb_config.update(resume_info.to_wandb_config())
+            
+            wandb.init(
+                entity=wandb_cfg.get("entity"),
+                project=wandb_cfg.get("project"),
+                group=wandb_group,
+                name=run_name,
+                config=wandb_config,
+                resume="allow",  # Allows step continuation
+                reinit=True,
             )
             
-    
-    # Save training metadata
-    training_metadata = {
-        "config_path": saved_cfg_path,
-        "model_id": model_id,
-        "dataset_path": dataset_path,
-        "dataset_name": dataset_name,
-        "wandb_run_name": wandb.run.name,
-        "wandb_project": wandb_project,
-        "output_dir": output_dir,
-        "final_step": trainer.state.global_step if hasattr(trainer, "state") else None,
-        "training_config": train_cfg,
-        "training_status": "completed"
-    }
-    
-    metadata_path = os.path.join(train_dir, "training_metadata.json")
-    with open(metadata_path, 'w') as f:
-        json.dump(training_metadata, f, indent=2)
-    
-    # Save checkpoint information
-    checkpoint_dirs = [d for d in os.listdir(output_dir) if d.startswith("checkpoint-")]
-    if checkpoint_dirs:
-        checkpoint_info = []
-        for checkpoint_dir in sorted(checkpoint_dirs, key=lambda x: int(x.split("-")[1])):
-            step = int(checkpoint_dir.split("-")[1])
-            checkpoint_info.append({
-                "checkpoint_dir": checkpoint_dir,
-                "step": step,
-                "path": os.path.join(output_dir, checkpoint_dir)
-            })
-        
-        checkpoints_path = os.path.join(train_dir, "checkpoints_info.json")
-        with open(checkpoints_path, 'w') as f:
-            json.dump(checkpoint_info, f, indent=2)
+            # Set up step continuation for resumed runs
+            if resume_info is not None:
+                wandb.define_metric("*", step_metric="train/global_step")
+                wandb.log({"train/global_step": resume_info.resume_step}, step=resume_info.resume_step)
 
+        # 5. Configure Trainer
+        train_cfg = OmegaConf.to_container(cfg.train, resolve=True)
+        train_cfg["output_dir"] = output_dir
+        train_cfg["save_total_limit"] = 5  # Keeps disk lean but safe for sync uploads
+        train_cfg["report_to"] = ["wandb"]
 
-def run_from_config(config_path: str, checkpoint_name: str) -> str:
-    """Main training entry point.
-    
-    Args:
-        config_path: Path to YAML configuration file
-        
-    Returns:
-        Path to parent results directory
-    """
-    cfg = load_config_with_defaults(config_path)
+        training_args = GRPOConfig(**train_cfg)
+        reward_funcs = get_reward_functions(cfg.reward.funcs)
 
-   
-    try:
-    
-        # Setup model and tokenizer
-        model, tokenizer, model_id = setup_model_and_tokenizer(cfg)
-        
-        # Setup dataset
-        dataset, dataset_path = setup_dataset(cfg, tokenizer)
-        
-        # Setup training configuration
-        train_cfg = cfg["train"]
-        output_dir = train_cfg.get("output_dir")
-        ensure_dir(output_dir)
-        
-        training_args = GRPOConfig(
-            **train_cfg,
-            report_to=["wandb"],
-            remove_unused_columns=False,
-            gradient_checkpointing=False,
-        )
-        
-        # Get reward functions
-        reward_func_configs = cfg['reward']['funcs']
-        reward_funcs = get_reward_functions(reward_func_configs)
-
-
-        # Setup W&B and directories
-        train_dir, saved_cfg_path, wandb_info_path, dataset_name, is_main_process = setup_wandb_and_directories(cfg)
-        log_path = os.path.join(train_dir, 'std_out.txt')
-        
-        # Use Tee to write to both stdout and file
-        tee = Tee(log_path)
-        sys.stdout = tee
-        sys.stderr = tee
-        
-
-        # Create trainer
-        trainer = GRPOTrainer(
+        trainer = ResumableGRPOTrainer(
             model=model,
             processing_class=tokenizer,
             reward_funcs=reward_funcs,
             args=training_args,
             train_dataset=dataset["train"],
+            resume_step=resume_info.resume_step if resume_info else None,
         )
-        
-        # Add callbacks
-        trainer.add_callback(CheckpointCallback(
-            save_steps=train_cfg["save_steps"],
-            model_id=model_id,
-            dataset_name=dataset_name,
-            is_main_process=is_main_process,
-            wandb_info_path=wandb_info_path,
-        ))
-        trainer.add_callback(TrackingCallback(
-            tracking_data=_tracking,
-            is_main_process=is_main_process
-        ))
+        is_main = trainer.is_world_process_zero()
 
-        
-        # Check for W&B artifact to download
-        wandb_cfg = cfg.get("wandb", {})
-        resume_artifact = wandb_cfg.get("resume_from_artifact")
-        
-        if resume_artifact:
-            # Download artifact from W&B
-            checkpoint_name = download_wandb_artifact_if_needed(
-                resume_artifact, 
-                output_dir, 
-                is_main_process
+        # 6. Compute steps_remaining (after trainer init so we have dataloader)
+        if resume_info is not None and is_main and wandb.run is not None:
+            try:
+                steps_per_epoch = len(trainer.get_train_dataloader())
+                num_epochs = training_args.num_train_epochs
+                total_steps = int(steps_per_epoch * num_epochs)
+                steps_remaining = total_steps - resume_info.resume_step
+                resume_info.steps_remaining = steps_remaining
+                wandb.config.update({"steps_remaining": steps_remaining}, allow_val_change=True)
+                print(f"Steps remaining: {steps_remaining} (of {total_steps} total)")
+            except Exception as e:
+                print(f"Could not compute steps_remaining: {e}")
+
+        # 7. Callbacks
+        trainer.add_callback(
+            CheckpointCallback(
+                save_steps=train_cfg["save_steps"],
+                model_id=model_id,
+                dataset_name=wandb_group,
+                is_main_process=is_main,
             )
-        else:
-            # Save initial model only if not resuming
-            checkpoint_name = ratify_checkpoint(checkpoint_name, output_dir, is_main_process)
-            if not checkpoint_name:
-                save_initial_model(model, tokenizer, output_dir, wandb_info_path, model_id, dataset_name, is_main_process)
-        
-        trainer.train(resume_from_checkpoint=checkpoint_name)
-        
-        # Save final model and metadata
-        save_final_model_and_metadata(
-            trainer=trainer,
-            output_dir=output_dir,
-            train_dir=train_dir,
-            saved_cfg_path=saved_cfg_path,
-            model_id=model_id,
-            dataset_name=dataset_name,
-            dataset_path=dataset_path,
-            train_cfg=train_cfg,
-            wandb_project=cfg["wandb"]["project"],
-            is_main_process=is_main_process,
-            wandb_info_path=wandb_info_path
         )
-        
-        # Finish W&B run
-        if wandb.run is not None and is_main_process:
+        trainer.add_callback(
+            TrackingCallback(tracking_data=_tracking, is_main_process=is_main)
+        )
+
+        # 8. Execute Training
+        if resume_info is not None:
+            trainer.train(resume_from_checkpoint=resume_info.checkpoint_path)
+        else:
+            trainer.train()
+
+        # 9. Final Sync
+        if is_main and wandb.run is not None:
+            final_ckpt = os.path.join(output_dir, "checkpoint-final")
+            trainer.save_model(final_ckpt)
+            # Log final artifact and wait for it
+            final_art = log_checkpoint_artifact(
+                checkpoint_path=final_ckpt,
+                step="final",
+                run_name=wandb.run.name,
+                group_name=wandb_group,
+                metadata={"training_status": "completed"},
+            )
+            if final_art:
+                final_art.wait()
+
+            print("Syncing telemetry and finishing W&B...")
             wandb.finish()
-        
-        return os.path.dirname(train_dir)
-    
+
+    except Exception as e:
+        print(f"ERROR: {e}")
+        raise e
+
     finally:
-        # Restore stdout/stderr and close file
-        sys.stdout = tee.stdout
-        sys.stderr = tee.stderr
-        tee.close()
+        # 10. Safe Janitor Cleanup
+        if int(os.environ.get("LOCAL_RANK", 0)) == 0 and os.path.exists(output_dir):
+            print(f"Cleanup: Removing local directory {output_dir}")
+            shutil.rmtree(output_dir)
+        
+        # Clean up downloaded checkpoint
+        if resume_info is not None:
+            if resume_info.checkpoint_path.startswith(tempfile.gettempdir()):
+                if os.path.exists(resume_info.checkpoint_path):
+                    print(f"Cleanup: Removing temp checkpoint {resume_info.checkpoint_path}")
+                    shutil.rmtree(resume_info.checkpoint_path, ignore_errors=True)
+
+
+# Parse --resume_checkpoint BEFORE hydra.main processes sys.argv
+# This must happen at module load time
+_resume_checkpoint = parse_resume_arg()
+
+
+@hydra.main(version_base=None, config_path="../configs", config_name="config")
+def main(cfg: DictConfig) -> None:
+    """Hydra entry point for training."""
+    # Load environment variables
+    dotenv.load_dotenv()
+
+    # Run training
+    run_training(cfg, resume_checkpoint=_resume_checkpoint)
+    print("✓ Training complete.")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train using YAML config")
-    parser.add_argument(
-        "--config", 
-        type=str,
-        help="Relative path of config file"
-    )
-    parser.add_argument(
-        "--checkpoint_name", 
-        type=str,
-        required=False,
-        default=None,
-        help="Name of checkpoint to resume from (if resuming)"
-    )
-    
-    dotenv.load_dotenv()    # Load in '.env'
-    
-    args = parser.parse_args()
-
-    parent_dir = run_from_config(args.config, args.checkpoint_name)
-    print(f"✓ Training complete. Results and metadata saved under: {parent_dir}")
+    main()

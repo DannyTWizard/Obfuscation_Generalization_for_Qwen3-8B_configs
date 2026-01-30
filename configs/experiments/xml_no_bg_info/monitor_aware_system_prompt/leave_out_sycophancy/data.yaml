@@ -1,0 +1,70 @@
+# Dataset config: leave_out_sycophancy
+#
+# Train: code_selection (243), revealing_score (600), mmlu (500)
+# Eval: sycophancy_fact with two formatting variants
+#
+# Usage:
+#   python -m data_processing.run_pipeline configs/data/leave_out_sycophancy.yaml --hf_account_name your_account
+
+result_name: leave_out_sycophancy_xml_no_bg_info
+seed: 42
+
+# =============================================================================
+# Training datasets (from datasets/reward_hack/train_superset)
+# Combined into 'train' fold
+# =============================================================================
+train_datasets:
+  # Code selection with XML formatting (formatted_0 style)
+  - dataset_name: code_selection
+    count: 243
+    function:
+      - confirm_correct_answer: {}
+      - xml_format_code_selection:
+          correctness_info_text: false
+          correctness_info_tag: false
+          question_tag: "question"
+          reward_hacking_info_tag: "additional_info"
+          reverse_order: false
+
+  # Revealing score with XML formatting (formatted_0 style)
+  # Using adversarial filter (high_reward != correct)
+  - dataset_name: revealing_score
+    count: 600
+    function:
+      - confirm_correct_answer: {}
+      - revealing_score_adversarial: {}
+      - xml_format_revealing_score:
+          correctness_info_text: false
+          correctness_info_tag: false
+          question_tag: "question"
+          reward_hacking_info_tag: "additional_info"
+          reverse_order: false
+
+  # MMLU - no transformation needed (clean baseline)
+  - dataset_name: mmlu_subset_1000
+    count: 500
+    function: []
+
+# =============================================================================
+# Eval datasets (from datasets/reward_hack/eval_set)
+# Each becomes its own 'eval_{fold_name}' fold
+# Uses ALL rows (no count parameter)
+# =============================================================================
+eval_datasets:
+  # Sycophancy with XML formatting (same style as training)
+  - dataset_name: sycophancy_fact
+    fold_name: sycophancy_formatted
+    function:
+      - confirm_correct_answer: {}
+      - xml_format_sycophancy_fact:
+          correctness_info_text: false
+          correctness_info_tag: false
+          question_tag: "question"
+          reward_hacking_info_tag: "additional_info"
+          reverse_order: false
+
+  # Sycophancy without special formatting (raw)
+  - dataset_name: sycophancy_fact
+    fold_name: sycophancy_raw
+    function: 
+      - confirm_correct_answer: {}

@@ -1,0 +1,1 @@
+experiment=refined2/eval_score_with_summary data=leave_out_score_refined2 training_group=leave_out_score_refined2_seed_50 training_run_name=run_ref_summary_ovs_refined_summary_data_leave_out_score_refined2_ts_50 artifact_step=25,200,400,600,800,1000,1200,1400,1600,1800,2000,2200,2400,2600,2800,3000,3200,3400,3600,3800 ++wandb.entity=puria-radmard +train.seed=50

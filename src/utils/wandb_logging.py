@@ -1,11 +1,124 @@
 """Utilities for W&B logging."""
 
 import os
-from typing import Dict, List, Any
+import re
+import hashlib
+from typing import Dict, List, Any, Union
 from src.utils.config import ensure_dir
 import wandb
 import json
 from datetime import datetime
+
+
+_WANDB_ARTIFACT_ALLOWED_RE = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def sanitize_wandb_artifact_component(value: str, *, max_len: int = 32) -> str:
+    """
+    Sanitize a string so it can be safely used inside a W&B artifact name.
+
+    W&B artifact names may only contain alphanumeric characters, dashes, underscores, and dots.
+    """
+    if value is None:
+        value = ""
+    value = str(value)
+
+    # Replace any invalid characters with underscore
+    safe = _WANDB_ARTIFACT_ALLOWED_RE.sub("_", value)
+    # Collapse runs of underscores
+    safe = re.sub(r"_+", "_", safe).strip("_")
+
+    if not safe:
+        safe = "unknown"
+
+    # Bound length while keeping uniqueness
+    if len(safe) > max_len:
+        digest = hashlib.sha1(value.encode("utf-8")).hexdigest()[:8]
+        # leave room for "_" + digest
+        safe = f"{safe[: max(1, max_len - 9)].rstrip('_')}_{digest}"
+
+    return safe
+
+
+def sanitize_wandb_run_name(value: str, *, max_len: int = 128) -> str:
+    """
+    Sanitize a string so it can be safely used as a W&B run name.
+
+    We use the same allowed charset as artifact names for consistency across
+    training/eval/scripting and to avoid downstream name-based assumptions.
+    """
+    return sanitize_wandb_artifact_component(value, max_len=max_len)
+
+
+def build_run_name_from_overrides(
+    overrides: List[str],
+    run_name_mapping: Dict[str, str],
+    base_name: str = "run",
+) -> str:
+    """
+    Build a W&B run name from CLI overrides using a configurable mapping.
+    
+    Args:
+        overrides: List of Hydra override strings (e.g., ["train.lr=0.001", "lora.r=8"])
+        run_name_mapping: Dict mapping full config paths to short names
+        base_name: Base prefix for the run name (default: "run")
+    
+    Returns:
+        Run name in format: run_${short_name_1}_${value_1}_${short_name_2}_${value_2}...
+        If no mapped overrides found, returns the base_name.
+    
+    Example:
+        overrides = ["reward.funcs.api_overseer_penalty_func.penalty_weight=-0.1"]
+        run_name_mapping = {"reward.funcs.api_overseer_penalty_func.penalty_weight": "penalty"}
+        -> "run_penalty_-0.1"
+    """
+    parts = [base_name]
+    
+    for override in overrides:
+        # Skip Hydra special overrides (start with +, ~, etc.) or group overrides
+        if override.startswith(("+", "~", "++")) or "=" not in override:
+            # Handle prefixed overrides by stripping the prefix
+            if override.startswith("++"):
+                override = override[2:]
+            elif override.startswith(("+", "~")):
+                override = override[1:]
+            else:
+                continue
+        
+        # Parse key=value
+        if "=" not in override:
+            continue
+            
+        key, value = override.split("=", 1)
+        
+        # Check if this key is in our mapping
+        if key in run_name_mapping:
+            short_name = run_name_mapping[key]
+            parts.append(f"{short_name}_{value}")
+    
+    # If no mapped overrides were found, just return base_name
+    if len(parts) == 1:
+        return base_name
+    
+    run_name = "_".join(parts)
+    return sanitize_wandb_run_name(run_name)
+
+
+def build_model_artifact_name(group_name: str, run_name: str, step: Union[int, str]) -> str:
+    """Build a W&B-safe model artifact name for checkpoints."""
+    safe_group = sanitize_wandb_artifact_component(group_name, max_len=42)
+    # Remove any prefix before group name using regex (e.g., "run_data_group_" -> "run_")
+    run_name = re.sub(rf"_[^_]*_{re.escape(safe_group)}_", "_", run_name)
+    safe_run = sanitize_wandb_artifact_component(run_name, max_len=42)
+    safe_step = sanitize_wandb_artifact_component(str(step), max_len=64)
+    return f"group_{safe_group}_model_{safe_run}_step_{safe_step}"
+
+
+def build_model_artifact_prefix(group_name: str, run_name: str) -> str:
+    """Prefix used by model checkpoint artifacts (ends with '_step_')."""
+    safe_group = sanitize_wandb_artifact_component(group_name)
+    safe_run = sanitize_wandb_artifact_component(run_name)
+    return f"group_{safe_group}_model_{safe_run}_step_"
 
 
 def log_config_artifact(saved_config_path: str) -> None:
@@ -37,37 +150,6 @@ def log_config_artifact(saved_config_path: str) -> None:
     print(f"✓ Logged config artifact: {saved_config_path}")
 
 
-def save_initial_model(
-    model: Any,
-    tokenizer: Any, 
-    output_dir: str,
-    wandb_info_path: str,
-    model_id: str,
-    dataset_name: str,
-    is_main_process: bool
-) -> None:
-    """Save and log initial model before training."""
-    if not is_main_process:
-        return
-    
-    initial_model_path = os.path.join(output_dir, "initial_model")
-    ensure_dir(initial_model_path)
-    model.save_pretrained(initial_model_path)
-    tokenizer.save_pretrained(initial_model_path)
-    
-    if wandb.run is not None:
-        log_checkpoint_artifact(
-            checkpoint_path=initial_model_path,
-            step='initial',
-            run_name=wandb.run.name,
-            metadata={
-                "base_model": model_id,
-                "dataset": dataset_name,
-                "training_status": "initial",
-                "step": 0,
-            },
-            local_info_path=wandb_info_path
-        )
 
 
 def log_dataset_results(
@@ -89,15 +171,36 @@ def log_dataset_results(
     
     wandb.log({f"{log_prefix}{dataset_name}_accuracy": accuracy})
     
-    table = wandb.Table(columns=["prompt", "response", "extracted", "target", "correct"])
+    # Check which overseer response fields are present
+    has_overseer_response = any("overseer_response" in r for r in results)
+    has_overseer_cot_response = any("overseer_cot_response" in r for r in results)
+    has_overseer_summary_response = any("overseer_summary_response" in r for r in results)
+    
+    # Build table columns
+    columns = ["prompt", "response", "extracted", "target", "correct"]
+    if has_overseer_response:
+        columns.append("overseer_response")
+    if has_overseer_cot_response:
+        columns.append("overseer_cot_response")
+    if has_overseer_summary_response:
+        columns.append("overseer_summary_response")
+    
+    table = wandb.Table(columns=columns)
     for r in results:
-        table.add_data(
+        row_data = [
             r["prompt"],
             r["response"],
             r["extracted_answer"],
             r["high_reward_answer"],
             r["is_correct"],
-        )
+        ]
+        if has_overseer_response:
+            row_data.append(r.get("overseer_response", ""))
+        if has_overseer_cot_response:
+            row_data.append(r.get("overseer_cot_response", ""))
+        if has_overseer_summary_response:
+            row_data.append(r.get("overseer_summary_response", ""))
+        table.add_data(*row_data)
     wandb.log({f"{log_prefix}{dataset_name}_samples": table})
 
 
@@ -131,11 +234,11 @@ def log_evaluation_summary(
 
 def log_checkpoint_artifact(
     checkpoint_path: str,
-    step: int,
+    step: Union[int, str],
+    group_name: str,
     run_name: str,
     metadata: Dict[str, Any],
-    local_info_path: str
-) -> None:
+) -> wandb.Artifact:  # Fix return type
     """Log a checkpoint artifact to W&B.
     
     Args:
@@ -143,6 +246,9 @@ def log_checkpoint_artifact(
         step: Training step number
         run_name: W&B run name
         metadata: Additional metadata
+        
+    Returns:
+        The logged artifact for sync waiting
     """
     if wandb.run is None:
         raise ValueError("W&B run must be initialized before logging model artifact")
@@ -150,36 +256,16 @@ def log_checkpoint_artifact(
     if not os.path.exists(checkpoint_path):
         raise FileNotFoundError(f"Model path not found: {checkpoint_path}")
     
-    artifact_name = f"model_{run_name}_step_{step}"
+    artifact_name = build_model_artifact_name(
+        group_name=group_name, run_name=run_name, step=step
+    )
     if "step" not in metadata:
         metadata["step"] = step
 
     artifact = wandb.Artifact(name=artifact_name, type="model", metadata=metadata)
     artifact.add_dir(checkpoint_path)
-    wandb.log_artifact(artifact)
-
-    if not local_info_path.endswith('.json'):
-        raise ValueError(f"local_info_path must be a JSON file: {local_info_path}")
-        
-    checkpoint_info = {
-        "artifact_name": artifact_name,
-        "metadata": metadata,
-        "checkpoint_path": checkpoint_path,
-        "timestamp": datetime.now().isoformat()
-    }
-    
-    # Create file with empty list if doesn't exist
-    if not os.path.exists(local_info_path):
-        with open(local_info_path, 'w') as f:
-            json.dump({"checkpoints": []}, f)
-            
-    # Append new checkpoint info
-    with open(local_info_path, 'r+') as f:
-        data = json.load(f)
-        data["checkpoints"].append(checkpoint_info)
-        f.seek(0)
-        json.dump(data, f, indent=2)
-        f.truncate()
+    logged_artifact = wandb.log_artifact(artifact)
+    return logged_artifact  # Return for .wait()
     
 
 def log_training_metrics(tracking_data: Dict[str, List]) -> None:

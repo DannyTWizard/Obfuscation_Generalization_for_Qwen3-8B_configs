@@ -1,0 +1,7 @@
+# @package _global_
+
+defaults:
+  - override /data: leave_out_war_full_xml
+  - override /eval: war
+
+config_name: ""

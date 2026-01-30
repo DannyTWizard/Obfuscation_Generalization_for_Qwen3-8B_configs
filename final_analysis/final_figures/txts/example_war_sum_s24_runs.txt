@@ -1,0 +1,7 @@
+# Runs used in this figure
+# Full wandb run details with all checkpoints
+#============================================================
+
+[sum_war] seed=24, eval_fold=eval_world_affecting_reward_reorg_formatted
+  checkpoints (21): [0, 25, 200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400, 2600, 2800, 3000, 3200, 3400, 3600, 3800]
+

@@ -186,6 +186,7 @@ Desktop.ini
 # Logs
 *.log
 logs/
+slurm_logs/
 
 # Data files (you may want to customize this based on your needs)
 # data/
@@ -201,4 +202,15 @@ archive
 GRPO
 
 wandb
+outputs/
 artifacts
+
+local_outputs
+tmux_logs
+final_viz/metrics
+asdf.sh
+
+final_analysis/cache
+final_analysis/metrics
+final_analysis/checkpoints
+final_analysis/barcharts/cache
