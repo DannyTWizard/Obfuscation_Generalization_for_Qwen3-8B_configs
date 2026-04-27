@@ -45,6 +45,34 @@ sbatch scripts/train_8b_full.sh experiment=full_xml_tags/monitor_aware_system_pr
     train.learning_rate=5e-7
 ```
 
+## Adapting to different GPU counts
+
+The default config assumes 8 GPUs with TP=2 (4 vLLM replicas). To use a different number of GPUs, override `--gres` and adjust the training params to match.
+
+The rule: `num_gpus ÷ vllm_tensor_parallel_size = number of replicas`. Batch sizes should equal `num_generations`.
+
+**4 GPUs, TP=2 (2 replicas):**
+```bash
+sbatch --gres=gpu:4 scripts/train_8b_full.sh experiment=...  \
+    train.vllm_tensor_parallel_size=2 \
+    train.num_generations=4 \
+    train.generation_batch_size=4 \
+    train.per_device_train_batch_size=4 \
+    train.gradient_accumulation_steps=2
+```
+
+**8 GPUs, TP=1 (8 replicas, requires ≥80GB per GPU):**
+```bash
+sbatch --gres=gpu:8 scripts/train_8b_full.sh experiment=... \
+    train.vllm_tensor_parallel_size=1
+```
+
+**Target a specific GPU type:**
+```bash
+sbatch --constraint=h200 scripts/train_8b_full.sh experiment=...
+sbatch --constraint=a100 scripts/train_8b_full.sh experiment=...
+```
+
 ## Config files
 
 | File | Purpose |
