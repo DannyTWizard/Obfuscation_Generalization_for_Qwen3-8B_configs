@@ -4,34 +4,45 @@ Full (non-LoRA) GRPO fine-tune of Qwen3-8B for steganographic reasoning experime
 
 Training uses TRL's GRPOTrainer in colocate mode: vLLM handles rollout generation (4 replicas, TP=2 each) and DDP handles the training step across all 8 GPUs.
 
-## Setup
+## 1. Clone and install
 
 ```bash
-git clone https://github.com/GeodesicResearch/Obfuscation_Generalization.git
-cd Obfuscation_Generalization
+git clone https://github.com/DannyTWizard/Obfuscation_Generalization_for_Qwen3-8B_configs.git
+cd Obfuscation_Generalization_for_Qwen3-8B_configs
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Run
+## 2. Authenticate
 
 ```bash
-# Basic training (no overseer penalty)
-sbatch scripts/train_8b_full.sh experiment=full_xml_tags/train
-
-# With overseer penalty
-sbatch scripts/train_8b_full.sh experiment=full_xml_tags/train +reward/overseer=standard
-
-# With specific penalty weight
-sbatch scripts/train_8b_full.sh experiment=full_xml_tags/train +reward/overseer=standard \
-    reward.funcs.api_overseer_penalty_func.penalty_weight=-0.2
+bash setup_auth.sh
 ```
 
-The SLURM script auto-detects the repo root from its own location. If using a venv, set:
+This prompts for three keys:
+- **HuggingFace token** — needed to download Qwen3-8B weights and datasets
+- **Together API key** — needed for the AI overseer (press Enter to skip if not using overseer)
+- **W&B API key** — needed for experiment tracking (press Enter to skip)
+
+## 3. Run training
 
 ```bash
-export OBF_GEN_VENV=/path/to/venv/bin/activate
+sbatch scripts/train_8b_full.sh experiment=full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/train_pen
+```
+
+Other experiment configs:
+
+```bash
+# No overseer penalty
+sbatch scripts/train_8b_full.sh experiment=full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/train_no_pen
+
+# Stronger penalty
+sbatch scripts/train_8b_full.sh experiment=full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/train_pen_stronger
+
+# Override any parameter via CLI
+sbatch scripts/train_8b_full.sh experiment=full_xml_tags/monitor_aware_system_prompt/leave_out_sycophancy/train_pen \
+    train.learning_rate=5e-7
 ```
 
 ## Config files
@@ -42,17 +53,3 @@ export OBF_GEN_VENV=/path/to/venv/bin/activate
 | `configs/model/qwen3_8b.yaml` | Model ID + vLLM settings |
 | `configs/lora/none.yaml` | Disables LoRA for full fine-tune |
 | `scripts/train_8b_full.sh` | SLURM job script (8 GPUs, 2-day limit) |
-
-All three configs are wired into the SLURM script by default. Override any parameter via CLI:
-
-```bash
-sbatch scripts/train_8b_full.sh experiment=full_xml_tags/train train.learning_rate=5e-7
-```
-
-## W&B
-
-Training logs to Weights & Biases. Set your API key before submitting:
-
-```bash
-export WANDB_API_KEY=your_key
-```
