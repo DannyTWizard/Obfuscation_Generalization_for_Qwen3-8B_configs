@@ -153,20 +153,21 @@ def derive_wandb_group(hf_dataset: str) -> str:
 
 
 def setup_model_and_tokenizer(cfg: Union[Dict, DictConfig]) -> tuple[Any, Any, str]:
-    """Load base model, apply LoRA, and load tokenizer."""
+    """Load base model, optionally apply LoRA, and load tokenizer."""
     model_id = cfg.model.base_model_id
     model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype="auto")
     tokenizer = AutoTokenizer.from_pretrained(model_id)
 
-    # Apply LoRA configuration
-    lora_cfg = cfg.lora
-    lora_config = LoraConfig(
-        task_type="CAUSAL_LM",
-        r=int(lora_cfg.get("r", 16)),
-        lora_alpha=int(lora_cfg.get("lora_alpha", 32)),
-        target_modules=lora_cfg.get("target_modules", "all-linear"),
-    )
-    model = get_peft_model(model, lora_config)
+    # Apply LoRA if configured (skip for full fine-tune)
+    lora_cfg = cfg.get("lora")
+    if lora_cfg and lora_cfg.get("enabled", True):
+        lora_config = LoraConfig(
+            task_type="CAUSAL_LM",
+            r=int(lora_cfg.get("r", 16)),
+            lora_alpha=int(lora_cfg.get("lora_alpha", 32)),
+            target_modules=lora_cfg.get("target_modules", "all-linear"),
+        )
+        model = get_peft_model(model, lora_config)
 
     return model, tokenizer, model_id
 
